@@ -174,7 +174,7 @@ try {
     editorState.mode === 'editor' && editorState.runtime?.title === CATALOG_NAME && editorState.runtime?.saveLabel === 'Saved',
     `título: ${editorState.runtime?.title} · ${timings.createToEditorSavedMs} ms · aviso durante a criação: "${(creatingText ?? '').trim() || '(nenhum visto)'}"`);
   j.step('criar o primeiro catálogo leva 2 cliques (Novo catálogo → opção) além de digitar o nome', clicks.counts['criar catálogo'] === 2, JSON.stringify(clicks.counts));
-  const saveStatus = page.locator('[data-vnext-shell] [data-save-state][data-save-phase]').first();
+  const saveStatus = page.locator('[data-vnext-shell] header [data-save-phase]').first();
   const saveText = ((await saveStatus.textContent().catch(() => '')) ?? '').trim();
   measures.editorStatus = await measureAll({ status: saveStatus, voltar: page.getByRole('button', { name: 'Voltar aos catálogos' }) });
   j.step('a barra de cima diz "Salvo"', saveText === 'Salvo', `texto: "${saveText}"`);

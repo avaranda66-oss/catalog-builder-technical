@@ -2,6 +2,8 @@
 // Sem rede, sem produção: tudo roda em http://127.0.0.1:5190 contra fixtures/father-harness.html.
 import { realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -12,9 +14,29 @@ export const HOST = '127.0.0.1';
 export const PORT = 5190;
 export const DEFAULT_BASE_URL = `http://${HOST}:${PORT}`;
 export const HARNESS_PATH = '/tests/vnext/proof/father-journeys/fixtures/father-harness.html';
-export const OUT = resolve(ROOT, 'scratch/father-journeys');
+export const OUTPUT_ROOT = resolve(ROOT, 'scratch/father-journeys');
+export const RUN_ID = process.env.FATHER_RUN_ID || `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
+if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,159}$/.test(RUN_ID)) throw new Error('FATHER_RUN_ID deve ser um nome simples, sem diretórios.');
+export const EXECUTION_ID = process.env.FATHER_EXECUTION_ID || randomUUID();
+export const OUT = resolve(OUTPUT_ROOT, 'runs', RUN_ID);
 export const SHOTS = resolve(OUT, 'shots');
 export const RESULTS = resolve(OUT, 'results');
+const IDENTITY_PATH = '/__father-journeys/identity.json';
+const SERVICE = 'father-journeys-v2';
+const canonicalRoot = realpathSync(ROOT);
+const startedAt = new Date().toISOString();
+const gitRead = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const git = {
+  head: gitRead('rev-parse', 'HEAD'),
+  branch: gitRead('rev-parse', '--abbrev-ref', 'HEAD'),
+  dirty: gitRead('status', '--porcelain', '--untracked-files=normal').length > 0,
+};
+let serverIdentity;
+let browserVersion;
+
+export function runMetadata() {
+  return { id: RUN_ID, executionId: EXECUTION_ID, startedAt, root: canonicalRoot, git, nodeVersion: process.version, browserVersion, server: serverIdentity };
+}
 
 /** VP=1280 no ambiente troca a janela para 1280×720 (padrão 1366×768). */
 export const VP = process.env.VP === '1280' ? { width: 1280, height: 720 } : { width: 1366, height: 768 };
@@ -29,42 +51,72 @@ export const rel = (path) => relative(ROOT, path).split('\\').join('/');
 
 let currentBaseUrl = (process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
 
-async function responds(baseUrl) {
-  try {
-    const response = await fetch(baseUrl + HARNESS_PATH, { signal: AbortSignal.timeout(2500) });
-    return response.ok;
-  } catch {
-    return false;
+const sameRoot = (other) => typeof other === 'string' && (process.platform === 'win32'
+  ? other.toLowerCase() === canonicalRoot.toLowerCase() : other === canonicalRoot);
+
+async function verifyServer(url) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname) || parsed.pathname !== '/') {
+    throw new Error('BASE_URL deve apontar à origem HTTP de um harness local.');
   }
+  let identity;
+  try {
+    const response = await fetch(`${parsed.origin}${IDENTITY_PATH}`, { signal: AbortSignal.timeout(2500), cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    identity = await response.json();
+  } catch (error) {
+    throw new Error(`O servidor ${parsed.origin} não tem identidade verificável de father-journeys. Remova BASE_URL para iniciar um servidor próprio. ${error.message}`);
+  }
+  if (identity.service !== SERVICE || !sameRoot(identity.root) || identity.git?.head !== git.head
+    || (process.env.FATHER_SERVER_ID && identity.serverId !== process.env.FATHER_SERVER_ID)) {
+    throw new Error(`Servidor de outro worktree, commit ou execução em ${parsed.origin}; nenhum processo foi encerrado.`);
+  }
+  return identity;
 }
 
 /**
- * Reutiliza um servidor que já responda (BASE_URL ou 127.0.0.1:5190); senão sobe o vite aqui.
+ * Inicia um Vite próprio; uma porta ocupada é preservada e o Vite escolhe a seguinte.
+ * BASE_URL explícita só é aceita depois de verificar worktree, HEAD e identidade do servidor.
  * fs.allow inclui realpathSync(node_modules) porque node_modules é uma junção.
  */
 export async function ensureServer() {
-  const startedAt = Date.now();
-  if (await responds(currentBaseUrl)) {
+  const start = Date.now();
+  if (process.env.BASE_URL) {
+    serverIdentity = await verifyServer(currentBaseUrl);
     return { baseUrl: currentBaseUrl, reused: true, startedMs: 0, close: async () => {} };
   }
-  if (process.env.BASE_URL) throw new Error(`BASE_URL=${process.env.BASE_URL} não responde ao harness (${HARNESS_PATH})`);
   const { createServer } = await import('vite');
+  serverIdentity = { service: SERVICE, root: canonicalRoot, git, serverId: randomUUID(), startedAt: new Date().toISOString() };
   const server = await createServer({
     root: ROOT,
+    plugins: [{
+      name: 'father-journeys-identity',
+      configureServer(vite) {
+        vite.middlewares.use((request, response, next) => {
+          if (request.url?.split('?')[0] !== IDENTITY_PATH) { next(); return; }
+          response.setHeader('Content-Type', 'application/json');
+          response.setHeader('Cache-Control', 'no-store');
+          response.end(JSON.stringify(serverIdentity));
+        });
+      },
+    }],
     server: {
       host: HOST,
       port: PORT,
-      strictPort: true,
+      strictPort: false,
       fs: { allow: [ROOT, realpathSync(resolve(ROOT, 'node_modules'))] },
     },
     logLevel: 'error',
   });
-  await server.listen();
-  currentBaseUrl = DEFAULT_BASE_URL;
+  try { await server.listen(); }
+  catch (error) { await server.close(); throw error; }
+  const address = server.httpServer.address();
+  if (!address || typeof address === 'string') { await server.close(); throw new Error('Vite não abriu uma porta TCP local.'); }
+  currentBaseUrl = `http://${HOST}:${address.port}`;
   return {
     baseUrl: currentBaseUrl,
     reused: false,
-    startedMs: Date.now() - startedAt,
+    startedMs: Date.now() - start,
     close: () => server.close(),
   };
 }
@@ -102,6 +154,7 @@ export function observe(page, log) {
 
 export async function launch({ width = VP.width, height = VP.height } = {}) {
   const browser = await chromium.launch({ headless: true });
+  browserVersion = browser.version();
   const context = await browser.newContext({
     viewport: { width, height },
     locale: 'pt-BR',
@@ -134,10 +187,24 @@ export async function aria(page, locator) {
 export const state = (page) => page.evaluate(() => window.__FATHER__.state());
 
 export async function waitSaved(page, timeout = 15000) {
-  await page.waitForFunction(() => {
-    const runtime = window.__FATHER__?.state().runtime;
-    return Boolean(runtime) && runtime.dirty === false && runtime.savePhase === 'idle';
-  }, null, { timeout });
+  try {
+    await page.waitForFunction(() => {
+      const runtime = window.__FATHER__?.state().runtime;
+      return Boolean(runtime) && runtime.dirty === false && runtime.savePhase === 'idle';
+    }, null, { timeout });
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => {
+      const snapshot = window.__FATHER__?.state();
+      return {
+        dirty: snapshot?.runtime?.dirty, savePhase: snapshot?.runtime?.savePhase, saveLabel: snapshot?.runtime?.saveLabel,
+        saveDispatchCount: snapshot?.saveDispatchCount,
+        textEditorOpen: Boolean(document.querySelector('[data-text-edit-session]')),
+        cellEditorOpen: Boolean(document.querySelector('[data-cell-inline-editor]')),
+        focusedInspectorField: document.activeElement?.getAttribute('data-inspector-field'),
+      };
+    }).catch(() => ({ pageUnavailable: true }));
+    throw new Error(`Salvamento não confirmado em ${timeout} ms: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
 }
 
 export async function waitLibrary(page, timeout = 60000) {
@@ -171,19 +238,51 @@ export async function visibleText(page, selector) {
   return (selector ? page.locator(selector) : page.locator('body')).innerText();
 }
 
+/** Normalizes the historical result formats without counting the same finding step twice. */
+export function collectFindings(result) {
+  const candidates = [
+    ...(result.findingSteps ?? []),
+    ...(result.softFindings ?? []),
+    ...(result.steps ?? []).filter((step) => step.finding).map((step) => ({
+      ...(typeof step.finding === 'object' ? step.finding : { severity: step.finding }),
+      name: step.name, detail: step.detail,
+    })),
+    ...(result.findings ?? []),
+  ];
+  const found = new Map();
+  for (const finding of candidates) {
+    const name = finding.name ?? finding.title ?? finding.text ?? '';
+    const key = finding.id || name;
+    if (!key) continue;
+    const severity = ({ critical: 'P0', high: 'P1', medium: 'P2', low: 'P3' })[finding.severity] ?? finding.severity ?? 'P3';
+    if (!found.has(key)) found.set(key, { ...finding, name, severity });
+  }
+  return [...found.values()];
+}
+
+/** A declared dependency cannot override an observed failure or a P0/P1 finding. */
+export function assessJourneyStatus(result) {
+  const functionalFailures = (result.steps ?? []).filter((step) => step.ok === false && !step.finding && !step.pending);
+  if (!['pass', 'pending', 'fail'].includes(result.status) || result.status === 'fail' || functionalFailures.length
+    || collectFindings(result).some((finding) => /^P[01]$/.test(finding.severity))) return 'fail';
+  return result.status === 'pending' || result.pendingReason || (result.steps ?? []).some((step) => step.pending) ? 'pending' : 'pass';
+}
+
 export async function writeJourneyResult(journey, { status, title, steps = [], evidence = [], findings = [], log, extra = {} }) {
   await mkdir(RESULTS, { recursive: true });
   const path = resolve(RESULTS, `${journey}${VP_SUFFIX}.json`);
   const payload = {
     journey,
     title,
-    status,
     viewport: VP,
     at: new Date().toISOString(),
     steps,
     evidence,
     findings,
     ...extra,
+    status: assessJourneyStatus({ ...extra, status, steps, findings }),
+    findingSummary: collectFindings({ ...extra, steps, findings }),
+    run: runMetadata(),
     log: log ? {
       consoleErrors: consoleErrors(log),
       consoleWarnings: consoleWarnings(log),
@@ -229,7 +328,7 @@ export function journey(name, title) {
       findings.push({ text, severity, where });
     },
     async finish(log, { pending = false, extra = {} } = {}) {
-      const status = pending ? 'pending' : steps.every((step) => step.ok) ? 'pass' : 'fail';
+      const status = assessJourneyStatus({ ...extra, status: pending ? 'pending' : 'pass', pendingReason: pending, steps, findings });
       const path = await writeJourneyResult(name, {
         status,
         title,

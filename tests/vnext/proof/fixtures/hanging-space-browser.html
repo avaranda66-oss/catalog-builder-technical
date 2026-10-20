@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chromium — espaços pendurados e overflow real</title>
+    <style>
+      body { margin: 24px; color: #111827; font: 14px Arial, sans-serif; }
+      h1 { font-size: 20px; }
+      h2 { margin: 0 0 6px; font-size: 14px; }
+      section { margin-bottom: 20px; break-inside: avoid; }
+      [data-flow-root] {
+        position: relative; width: 5.5ch; padding: 0; border: 0;
+        font: 20px/24px monospace; font-variant-ligatures: none;
+        overflow: visible; outline: 1px solid #94a3b8;
+      }
+      [data-flow-root] p { margin: 0; padding: 0; }
+      @page { size: A4; margin: 12mm; }
+    </style>
+  </head>
+  <body>
+    <h1>Geometria real: espaços, palavras, NBSP e imagem</h1>
+    <div id="root"></div>
+    <script type="module" src="./hanging-space-browser.tsx"></script>
+  </body>
+</html>

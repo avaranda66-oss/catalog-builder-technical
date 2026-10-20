@@ -1,10 +1,10 @@
 // J4 — "Edita à mão sem travar", pelos olhos do pai, só pela interface visível.
 // Dois catálogos: um "Em branco" (A) e um "Ficha técnica essencial" (B).
 //   A1 colar bloco 12 × 4 do Excel numa página vazia (Ctrl+V de verdade; se o navegador não deixar, evento paste)
-//   A2 inserir "Tabela", dois cliques na célula, digitar "Parâmetro" + Enter (edição na célula é Onda 2 (2A): registra o que acontece HOJE)
+//   A2 inserir "Tabela", dois cliques na célula, digitar "Parâmetro" + Enter (Conteúdo da célula + Enter, Tab e Esc)
 //   B1 "Tabela" + dois cliques na célula (mesma checagem no modelo Ficha técnica)
 //   B2 colar pelo botão "Colar tabela do Excel" / caixa "Cole aqui" numa página nova vazia
-//   B3 transformar um texto em "Título" (Onda 2 (2B): registra o que o pai vê hoje)
+//   B3 transformar um texto em "Título" (aplicar, Desfazer e Refazer)
 //   B4 adicionar página, excluir pelo menu ⋯ (texto da confirmação), mover, Ctrl+Z
 //   B5 zoom 100 % e 125 % pelo controle e Ctrl+roda; tamanho do texto em px
 //   B6 campo X com "12,5" e "abc": nada trava; Desfazer e Salvar continuam funcionando
@@ -18,7 +18,7 @@ import {
   aria, baseUrl, consoleErrors, createCatalog, ensureServer, freshDb, harnessUrl, journey, launch,
   shot, state, visibleText, waitSaved, writeJourneyResult,
 } from './lib.mjs';
-import { pendingStep as eyesPendingStep, scanJargon as eyesScanJargon, unexplainedMm } from './fixtures/father-eyes.mjs';
+import { scanJargon as eyesScanJargon, unexplainedMm } from './fixtures/father-eyes.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TSV_12x4 = await readFile(resolve(HERE, 'fixtures/tsv/excel-12x4.tsv'), 'utf8');
@@ -49,11 +49,6 @@ let reloadDetected = false;
 async function checkReload(where) {
   const gone = await page.evaluate(() => window.__PROOF_MARK !== true).catch(() => false);
   if (gone) { reloadDetected = true; (measurements.reloads ??= []).push(where); }
-}
-
-/** Passo que depende de recurso da Onda 2: fica PENDENTE (ok: null), nunca verde, nunca vermelho. */
-function pendingStep(name, reason, detail) {
-  eyesPendingStep(j, name, detail ? `${reason} · HOJE: ${detail}` : reason);
 }
 
 /**
@@ -137,6 +132,24 @@ async function inspectIssues(label) {
       }
       if (await dialog.count()) await page.keyboard.press('Escape');
       await page.waitForTimeout(200);
+      // "Ir até lá" abre a grade e um aviso persistente. Restaura a superfície
+      // antes de testar os gestos do pai; não clicar através desse aviso.
+      const overlap = await page.evaluate(() => {
+        const notice = document.querySelector('[data-editor-notices] [data-editor-notice]')?.getBoundingClientRect();
+        const table = document.querySelector('[data-editor-object-id][data-selected="true"]')?.getBoundingClientRect();
+        return notice && table ? Math.max(0, Math.min(notice.right, table.right) - Math.max(notice.left, table.left))
+          * Math.max(0, Math.min(notice.bottom, table.bottom) - Math.max(notice.top, table.top)) : 0;
+      });
+      if (overlap > 0) findingStep(`${label}: aviso de localização cobre parte da tabela e exige fechar antes de editar`, false,
+        `sobreposição medida: ${Math.round(overlap)} px²; conhecido FR-12/2C; botão Fechar usado sem force`, 'P2');
+      const closeNotice = page.locator('[data-editor-notices]').getByRole('button', { name: 'Fechar', exact: true });
+      out.cleanup = { closedNotice: await closeNotice.count() > 0, returnedToObject: false };
+      if (out.cleanup.closedNotice) await closeNotice.first().click();
+      const backToObject = page.getByRole('button', { name: 'Voltar ao objeto', exact: true });
+      if (await backToObject.count() > 0) {
+        await backToObject.click();
+        out.cleanup.returnedToObject = true;
+      }
     }
   }
   measurements[`issues:${label}`] = out;
@@ -377,6 +390,7 @@ try {
   const reassuringA2 = !issuesA2.panel || (/Nada impede o PDF/.test(issuesA2.panel) && /linhas vazias/.test(issuesA2.panel));
   findingStep('A2 o aviso amarelo que aparece ao inserir "Tabela" (se houver) é sobre linhas vazias, diz que nada impede o PDF e não fala de área segura',
     !scaryA2 && reassuringA2, `chip: "${issuesA2.chip || '-'}" · painel: "${issuesA2.panel ?? '-'}" · "Localizar" selecionou: ${issuesA2.located === newTable?.id ? 'a tabela nova' : (issuesA2.located ?? '-')}`, 'P2');
+  await waitSaved(page, 20000);
   const hit = page.locator(`[data-editor-object-id="${newTable?.id}"]`);
   await hit.dblclick({ position: { x: 30, y: 30 } });
   countClick('A2 editar célula (caminho esperado)', 2);
@@ -389,102 +403,48 @@ try {
   await cell.dblclick();
   countClick('A2 editar célula (caminho esperado)', 2);
   await page.waitForTimeout(400);
-  const afterDbl = await page.evaluate(() => {
-    const active = document.activeElement;
-    const session = document.querySelector('[data-cell-edit-session]');
-    const rect = session?.getBoundingClientRect();
-    const typeSelect = session?.querySelector('[data-cell-content-type]');
-    const label = typeSelect?.selectedOptions?.[0]?.textContent?.trim() ?? null;
-    return {
-      active: active ? `${active.tagName}${active.getAttribute('aria-label') ? `[${active.getAttribute('aria-label')}]` : ''}` : null,
-      cellEditorShown: Boolean(session),
-      cellEditorInViewport: rect ? rect.top >= 0 && rect.bottom <= window.innerHeight : false,
-      cellEditorTop: rect ? Math.round(rect.top) : null,
-      contentType: typeSelect?.value ?? null, contentTypeLabel: label,
-      hasTextField: Boolean(session?.querySelector('[data-cell-rich-text]')),
-    };
-  });
-  measurements.afterCellDblclickA = afterDbl;
-  const saveTextAfterDbl = ((await page.locator('[data-save-state]').first().textContent().catch(() => '')) ?? '').trim();
-  if (saveTextAfterDbl === 'Salvo') j.step('A2 só abrir a célula (sem digitar nada) não marca "Alterações não salvas"', true);
-  else pendingStep('A2 só abrir a célula (sem digitar nada) não marca "Alterações não salvas"', 'pendente Onda 2 (2A): FR-22 (sujo só se o rascunho difere)', `o topo mostra "${saveTextAfterDbl}" antes de qualquer tecla`);
-  await page.keyboard.type('Parâmetro');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(500);
+  const inline = page.getByRole('textbox', { name: 'Conteúdo da célula, linha 2, coluna 1', exact: true });
+  await inline.waitFor({ state: 'visible' });
+  const inlineBox = await inline.boundingBox();
+  j.step('A2 o campo Conteúdo da célula abre sobre a grade, visível e com foco',
+    Boolean(inlineBox) && inlineBox.y >= 0 && inlineBox.y + inlineBox.height <= viewport.height
+      && await inline.evaluate((el) => el === document.activeElement), JSON.stringify(inlineBox));
+  j.step('A2 abrir a célula sem digitar não altera o documento',
+    !(await state(page)).runtime.dirty, (await page.locator('[data-save-state]').first().innerText()).trim());
+  await inline.fill('Parâmetro');
+  await inline.press('Enter');
+  await page.waitForTimeout(300);
   st = await state(page);
-  const typedLanded = JSON.stringify(allObjects(st).find((o) => o.id === newTable?.id)?.table.cells ?? []).includes('Parâmetro');
-  const typedAnywhere = await page.evaluate(() => [...document.querySelectorAll('input, textarea')].some((el) => el.value.includes('Parâmetro')));
-  const frozen = !(await page.getByRole('button', { name: 'Tabela', exact: true }).isEnabled().catch(() => false));
-  const afterTyping = await page.evaluate(() => ({ active: document.activeElement?.tagName, mode: document.querySelector('[data-cell-edit-session]') ? 'cell-edit' : document.querySelector('[data-table-grid-overlay]') ? 'table-grid' : 'select' }));
-  const noticeA2b = await notices();
-  measurements.afterTypingA = { typedLanded, typedAnywhere, frozen, afterTyping, notice: noticeA2b.text.slice(0, 160) };
-  j.addEvidence(await shot(page, 'j04-editar-a-mao-02-celula-depois-de-digitar'));
-  if (typedLanded) {
-    j.step('A2 digitar "Parâmetro" + Enter escreve na célula', true, 'edição na célula já funciona nesta base');
-  } else {
-    pendingStep('A2 digitar "Parâmetro" + Enter escreve na célula', 'pendente Onda 2 (2A): edição dentro da célula (FR-30/34)',
-      `depois dos dois cliques na célula o foco fica em ${afterDbl.active}; abre no painel lateral "Tipo de conteúdo" = "${afterDbl.contentTypeLabel}" (${afterDbl.contentType}), ${afterDbl.cellEditorInViewport ? 'visível' : `FORA da janela (topo a ${afterDbl.cellEditorTop} px de ${viewport.height})`}; o que foi digitado ${typedAnywhere ? 'ficou num campo lateral' : 'não foi para lugar nenhum e nenhuma mensagem explicou'}; mensagem: "${noticeA2b.text.slice(0, 120) || '-'}"`);
-  }
-  j.step('A2 nada travou depois de digitar na célula (botões continuam ativos, sem erro de página)',
-    !frozen && log.pageErrors.length === 0, JSON.stringify(afterTyping));
-  j.step('A2 o texto digitado não se perdeu em silêncio (ou entrou na célula, ou nunca foi aceito, ou está num campo)',
-    typedLanded || typedAnywhere || !afterDbl.hasTextField,
-    typedLanded ? 'entrou na célula' : typedAnywhere ? 'está num campo lateral' : 'nenhum campo de texto aceitou: nada foi digitado de fato');
+  const textAt = (snapshot, row, column) => {
+    const table = allObjects(snapshot).find((o) => o.id === newTable.id)?.table;
+    const content = table?.cells.find((c) => c.rowId === table.rows[row]?.id && c.columnId === table.columns[column]?.id)?.content;
+    return content?.type === 'richText' ? content.value.paragraphs.map((p) => p.inlines.map((i) => i.text ?? '\n').join('')).join('\n')
+      : content?.type === 'technicalCode' ? content.value : '';
+  };
+  j.step('A2 Enter salva Parâmetro na linha 2, coluna 1', textAt(st, 1, 0) === 'Parâmetro');
+  await page.keyboard.type('Faixa');
+  const below = page.getByRole('textbox', { name: 'Conteúdo da célula, linha 3, coluna 1', exact: true });
+  await below.waitFor({ state: 'visible' });
+  j.step('A2 Enter desce para a linha seguinte e uma tecla inicia a edição', await below.inputValue() === 'Faixa');
+  await below.press('Tab');
+  await page.waitForTimeout(250);
+  st = await state(page);
+  j.step('A2 Tab salva Faixa na linha 3, coluna 1', textAt(st, 2, 0) === 'Faixa');
+  const beforeCancel = textAt(st, 2, 1);
+  await page.keyboard.type('Descartar');
+  const right = page.getByRole('textbox', { name: 'Conteúdo da célula, linha 3, coluna 2', exact: true });
+  await right.waitFor({ state: 'visible' });
+  j.step('A2 Tab avança para a coluna da direita', await right.inputValue() === 'Descartar');
+  await right.press('Escape');
+  st = await state(page);
+  j.step('A2 Esc cancela apenas a digitação da célula atual e mantém as anteriores',
+    textAt(st, 2, 1) === beforeCancel && textAt(st, 1, 0) === 'Parâmetro' && textAt(st, 2, 0) === 'Faixa'
+      && await page.locator('[data-cell-inline-editor]').count() === 0);
+  measurements.inlineKeyboard = { enter: textAt(st, 1, 0), tab: textAt(st, 2, 0), escaped: textAt(st, 2, 1), inlineBox };
+  j.addEvidence(await shot(page, 'j04-editar-a-mao-02-celula-enter-tab-esc'));
+  j.step('A2 o editor segue responsivo após Enter, Tab e Esc',
+    log.pageErrors.length === 0 && await page.getByRole('button', { name: 'Tabela', exact: true }).isEnabled());
 
-  // Caminho que existe HOJE para escrever numa célula: Tipo de conteúdo → Texto → digitar → Concluir.
-  const editorSession = page.locator('[data-cell-edit-session]');
-  if (await editorSession.count()) {
-    const typeSelect = editorSession.locator('[data-cell-content-type]');
-    const typeOptions = await typeSelect.locator('option').allInnerTexts().catch(() => []);
-    measurements.cellContentTypeOptions = typeOptions;
-    await typeSelect.selectOption('richText');
-    countClick('A2 editar célula (caminho de hoje)', 2);
-    const textField = editorSession.locator('[data-cell-rich-text]');
-    await textField.click();
-    countClick('A2 editar célula (caminho de hoje)', 1);
-    await textField.fill('Parâmetro');
-    const concluir = page.getByRole('button', { name: 'Concluir', exact: true }).first();
-    const concluirVisible = await concluir.isVisible().catch(() => false);
-    const concluirRect = concluirVisible ? await concluir.boundingBox() : null;
-    if (concluirVisible) { await concluir.click(); countClick('A2 editar célula (caminho de hoje)', 1); } else { await textField.press('Enter'); }
-    await page.waitForTimeout(500);
-    st = await state(page);
-    const landedNow = JSON.stringify(allObjects(st).find((o) => o.id === newTable?.id)?.table.cells ?? []).includes('Parâmetro');
-    const noticeA2c = await notices();
-    const totalClicks = (clicks['A2 editar célula (caminho esperado)'] ?? 0) + (clicks['A2 editar célula (caminho de hoje)'] ?? 0);
-    j.step('A2 pelo caminho de hoje (Tipo de conteúdo → Texto → Concluir) o texto entra na célula', landedNow,
-      `cliques: ${totalClicks} · Concluir visível: ${concluirVisible} (y=${concluirRect ? Math.round(concluirRect.y) : '-'} de ${viewport.height}) · mensagem: "${noticeA2c.text.slice(0, 120)}"`);
-    measurements.cellEditClicksToday = totalClicks;
-    j.addEvidence(await shot(page, 'j04-editar-a-mao-03-celula-caminho-de-hoje'));
-    // Uma palavra digitada numa tabela nova já gera erro vermelho "Bloqueia publicação"?
-    const chipAfterType = await issuesChip();
-    const tableProblems = (await inspector.innerText().catch(() => '')).replace(/\s+/g, ' ');
-    const badgeAfterType = await page.locator(`[data-editor-object-id="${newTable?.id}"] [data-editor-diagnostic-badge]`).first()
-      .getAttribute('data-editor-diagnostic-badge', { timeout: 1000 }).catch(() => null);
-    const blockedByTyping = badgeAfterType === 'ERROR' || /Bloqueia publicação|excede a altura/i.test(tableProblems) || /[1-9]\d* a corrigir/.test(chipAfterType);
-    measurements.afterTypingDiagnostics = { chipAfterType, badgeAfterType, tableProblems: tableProblems.slice(-300) };
-    findingStep('A2 digitar uma palavra numa célula da tabela nova NÃO gera erro vermelho "Bloqueia publicação" (a linha cresce sozinha)',
-      !blockedByTyping, `chip: "${chipAfterType || '-'}" · marca no objeto: ${badgeAfterType ?? '-'} · painel: "…${tableProblems.slice(-200)}"`, 'P1');
-    if (blockedByTyping) {
-      const adjust = page.getByRole('button', { name: 'Ajustar altura', exact: true }).first();
-      if (await adjust.isVisible().catch(() => false)) {
-        await measure(adjust, 'A2 botão Ajustar altura');
-        const tlAdjust = await noticeTimeline(() => adjust.click());
-        countClick('A2 corrigir o erro (Ajustar altura)', 1);
-        await page.waitForTimeout(500);
-        const chipAfterAdjust = await issuesChip();
-        const badgeAfterAdjust = await page.locator(`[data-editor-object-id="${newTable?.id}"] [data-editor-diagnostic-badge]`).first()
-          .getAttribute('data-editor-diagnostic-badge', { timeout: 1000 }).catch(() => null);
-        st = await state(page);
-        measurements.afterAdjustHeight = { notice: tlAdjust.first?.text ?? null, chipAfterAdjust, badgeAfterAdjust, frame: allObjects(st).find((o) => o.id === newTable?.id)?.frame };
-        j.step('A2 "Ajustar altura" (o botão oferecido no painel) tira o erro sem travar',
-          badgeAfterAdjust !== 'ERROR' && !/[1-9]\d* a corrigir/.test(chipAfterAdjust) && log.pageErrors.length === 0,
-          `mensagem: "${tlAdjust.first?.text?.slice(0, 140) ?? '-'}" · chip: "${chipAfterAdjust || '-'}" · marca: ${badgeAfterAdjust ?? '-'}`);
-      } else {
-        j.step('A2 há um botão "Ajustar altura" visível para corrigir o erro', false, 'botão não encontrado no painel');
-      }
-    }
-  }
   const jargonA2 = await scanJargon('A2 edição de célula');
   j.step('A2 sem jargão/inglês na tela durante a edição da célula', jargonA2.length === 0, jargonA2.join(', ') || '-');
   await page.keyboard.press('Escape');
@@ -510,18 +470,10 @@ try {
     `objetos: ${pageObjects(st).map((o) => o.type).join(', ')}`);
   measurements.chipB0 = await issuesChip();
   const targetsB0 = await measureTargets('B0 editor recém-aberto');
-  if (targetsB0.small.length) {
-    pendingStep('Alvos na tela ≥ 24 px (botões principais)', 'pendente Onda 2 (2C): escala 60+ (botões 44 px, alças 24 px) (FR-16b/17)',
-      `${targetsB0.small.length} de ${targetsB0.total} alvos visíveis abaixo de 24 px: ${targetsB0.small.slice(0, 8).map((t) => `${t.name} ${t.w}×${t.h}`).join('; ')}`);
-  } else {
-    j.step('Alvos na tela ≥ 24 px (botões principais)', true, `${targetsB0.total} alvos, nenhum abaixo de 24 px`);
-  }
-  if (targetsB0.tinyText.length) {
-    pendingStep(`Letras dos botões ≥ ${MIN_BUTTON_FONT_PX} px`, 'pendente Onda 2 (2C): escala 60+ (letras 15 px) (FR-16b/17)',
-      `${targetsB0.tinyText.length} botões/campos com letra menor: ${targetsB0.tinyText.slice(0, 8).map((t) => `${t.name} ${t.fontPx}px`).join('; ')}`);
-  } else {
-    j.step(`Letras dos botões ≥ ${MIN_BUTTON_FONT_PX} px`, true);
-  }
+  findingStep('Alvos na tela ≥ 24 px (botões principais)', targetsB0.small.length === 0,
+    JSON.stringify(targetsB0.small.slice(0, 8)), 'P2');
+  findingStep(`Letras dos botões ≥ ${MIN_BUTTON_FONT_PX} px`, targetsB0.tinyText.length === 0,
+    JSON.stringify(targetsB0.tinyText.slice(0, 8)), 'P2');
 
   // ---- B1: "Tabela" + dois cliques na célula no modelo ----
   const timelineB1 = await noticeTimeline(() => page.getByRole('button', { name: 'Tabela', exact: true }).click());
@@ -542,18 +494,14 @@ try {
   await page.waitForTimeout(400);
   await page.getByRole('gridcell', { name: 'Linha 2, coluna 2' }).dblclick();
   await page.waitForTimeout(400);
-  const afterDblB = await page.evaluate(() => ({
-    cellEditorShown: Boolean(document.querySelector('[data-cell-edit-session]')),
-    contentType: document.querySelector('[data-cell-content-type]')?.value ?? null,
-    active: document.activeElement?.tagName,
-  }));
-  await page.keyboard.type('Parâmetro');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(400);
+  const inlineB = page.getByRole('textbox', { name: 'Conteúdo da célula, linha 2, coluna 2', exact: true });
+  await inlineB.waitFor({ state: 'visible' });
+  await inlineB.fill('Parâmetro');
+  await inlineB.press('Enter');
+  await page.waitForTimeout(300);
   st = await state(page);
   const landedB = JSON.stringify(allObjects(st).find((o) => o.id === tableB1?.id)?.table.cells ?? []).includes('Parâmetro');
-  if (landedB) j.step('B1 digitar na célula escreve na célula (modelo Ficha técnica)', true);
-  else pendingStep('B1 digitar na célula escreve na célula (modelo Ficha técnica)', 'pendente Onda 2 (2A): edição dentro da célula (FR-30/34)', `${JSON.stringify(afterDblB)}; o texto digitado não entrou na célula`);
+  j.step('B1 digitar na célula + Enter escreve no modelo Ficha técnica', landedB);
   j.step('B1 nada travou (sem erro de página; botão Tabela ativo)',
     log.pageErrors.length === 0 && await page.getByRole('button', { name: 'Tabela', exact: true }).isEnabled());
   await page.keyboard.press('Escape');
@@ -630,16 +578,27 @@ try {
     const text = document.querySelector('[data-vnext-shell]')?.innerText ?? '';
     return { hits: ['Título', 'Subtítulo', 'Corpo', 'Negrito', 'Tamanho', 'Estilo do texto', 'Cor do texto', 'Alinhamento'].filter((w) => text.includes(w)) };
   });
-  const titleControl = page.getByRole('button', { name: /^Título$/ }).or(page.getByRole('option', { name: /^Título$/ })).or(page.getByRole('radio', { name: /^Título$/ }));
-  const titleControlCount = await titleControl.count();
-  measurements.textStyleControls = { ...styleControls, titleControlCount, inspectorText: inspectorText.slice(0, 300) };
-  j.addEvidence(await shot(page, 'j04-editar-a-mao-07-texto-selecionado-sem-estilo'));
-  if (titleControlCount > 0) {
-    j.step('B3 há um controle "Título" para o texto selecionado', true, `controles: ${styleControls.hits.join(', ')}`);
-  } else {
-    pendingStep('B3 transformar o texto em "Título"', 'pendente Onda 2 (2B): estilo de texto (Título/Subtítulo/Corpo/Nota, negrito, cor, alinhamento) (FR-14/15)',
-      `o pai vê no painel: "${inspectorText.slice(0, 160)}" · palavras de estilo na tela: ${styleControls.hits.join(', ') || 'nenhuma'}; nenhum botão/opção "Título" para escolher`);
-  }
+  const titleControl = inspector.getByRole('button', { name: /^Título(?:\s|$)/ });
+  const bodyControl = inspector.getByRole('button', { name: /^Corpo(?:\s|$)/ });
+  j.step('B3 há controles Título e Corpo para o texto selecionado',
+    await titleControl.isVisible() && await bodyControl.isVisible(), `controles: ${styleControls.hits.join(', ')}`);
+  const originalText = JSON.stringify(textObj.text);
+  await bodyControl.click();
+  const bodyStyle = allObjects(await state(page)).find((o) => o.id === textObj.id).style;
+  await titleControl.click();
+  st = await state(page);
+  const titleObject = allObjects(st).find((o) => o.id === textObj.id);
+  j.step('B3 clicar Título aplica 16 pt e negrito, sem alterar o texto',
+    titleObject.style.fontSizePt === 16 && titleObject.style.fontWeight === 700
+      && JSON.stringify(titleObject.text) === originalText && await titleControl.getAttribute('aria-pressed') === 'true',
+    JSON.stringify(titleObject.style));
+  await page.getByRole('button', { name: 'Desfazer última alteração' }).click();
+  const undoneStyle = allObjects(await state(page)).find((o) => o.id === textObj.id).style;
+  j.step('B3 um Desfazer devolve o estilo Corpo', JSON.stringify(undoneStyle) === JSON.stringify(bodyStyle));
+  await page.getByRole('button', { name: 'Refazer última alteração' }).click();
+  j.step('B3 Refazer restaura Título', allObjects(await state(page)).find((o) => o.id === textObj.id).style.fontSizePt === 16);
+  measurements.textStyleControls = { ...styleControls, bodyStyle, titleStyle: titleObject.style, undoneStyle };
+  j.addEvidence(await shot(page, 'j04-editar-a-mao-07-texto-com-estilo-titulo'));
   await textHit.dblclick();
   await page.waitForTimeout(300);
   const textArea = page.getByRole('textbox', { name: 'Editar conteúdo do texto' });
@@ -728,9 +687,14 @@ try {
   await page.getByRole('button', { name: 'Página 1', exact: true }).click();
   await page.waitForTimeout(300);
   const zoomGroup = page.getByRole('group', { name: 'Zoom da página' });
-  j.step('B5 o controle de zoom está visível com Ajustar à largura / 75% / 100% / 125%',
-    await zoomGroup.isVisible() && (await zoomGroup.getByRole('button').count()) === 4);
-  await measure(zoomGroup.getByRole('button', { name: '100%', exact: true }), 'B5 botão 100%');
+  const zoomSelect = zoomGroup.getByRole('combobox', { name: 'Zoom', exact: true });
+  const zoomOptions = await zoomSelect.locator('option').allTextContents();
+  j.step('B5 o controle de zoom está visível com Ajustar à largura / 75% / 100% / 125% e botões de aproximar/afastar',
+    await zoomGroup.isVisible() && await zoomSelect.isVisible()
+      && ['Ajustar à largura', '75%', '100%', '125%'].every((label) => zoomOptions.includes(label))
+      && await zoomGroup.getByRole('button', { name: 'Diminuir o zoom', exact: true }).isVisible()
+      && await zoomGroup.getByRole('button', { name: 'Aumentar o zoom', exact: true }).isVisible());
+  await measure(zoomSelect, 'B5 seletor de zoom');
   const textProbe = page.locator(`section[data-page-id] [data-object-id="${textObj.id}"] [data-flow-root]`).first();
   const bodyCellProbe = page.locator(`[data-table-id="${templateTable?.table.id}"] [role=cell] [data-flow-root]`).first();
   const zoomMetrics = {};
@@ -738,7 +702,7 @@ try {
   const fitCell = await measureText(bodyCellProbe, 'B5 fonte da célula do modelo a Ajustar à largura');
   zoomMetrics.fit = { zoom: Number(await page.locator('[data-stage-zoom]').getAttribute('data-stage-zoom')), textPx: fitText.effectiveFontPx, cellPx: fitCell.effectiveFontPx, cellLineBoxPx: fitCell.lineBoxPx };
   for (const label of ['100%', '125%']) {
-    await zoomGroup.getByRole('button', { name: label, exact: true }).click();
+    await zoomSelect.selectOption({ label });
     countClick(`B5 zoom ${label}`, 1);
     await page.waitForTimeout(500);
     const z = await page.evaluate(() => ({
@@ -751,7 +715,7 @@ try {
     const t = await measureText(textProbe, `B5 fonte do título a ${label}`);
     const c = await measureText(bodyCellProbe, `B5 fonte da célula do modelo a ${label}`);
     zoomMetrics[label] = { ...z, textPx: t.effectiveFontPx, cellPx: c.effectiveFontPx, cellLineBoxPx: c.lineBoxPx };
-    j.step(`B5 botão ${label} aplica o zoom (página com ${z.pageWidthPx} px de largura; a janela não ganha rolagem horizontal)`,
+    j.step(`B5 escolher ${label} aplica o zoom (página com ${z.pageWidthPx} px de largura; a janela não ganha rolagem horizontal)`,
       Math.abs(z.zoom - parseInt(label, 10) / 100) < 0.01 && !z.windowOverflow && z.pageWidthPx > 0, JSON.stringify(zoomMetrics[label]));
     j.addEvidence(await shot(page, `j04-editar-a-mao-10-zoom-${label.replace('%', '')}`));
   }
@@ -760,7 +724,7 @@ try {
     (zoomMetrics['100%'].cellPx ?? 0) >= MIN_BODY_FONT_PX && (zoomMetrics['125%'].cellPx ?? 0) > (zoomMetrics['100%'].cellPx ?? 0), JSON.stringify(zoomMetrics));
   // Ctrl+roda: a partir de 75 %, cada dente para cima sobe um degrau (75 → 100 → Ajustar à largura, se ficar entre
   // 100 e 125 nesta janela → 125); cada dente para baixo desce um degrau. Os degraus são ordenados pelo valor do zoom.
-  await zoomGroup.getByRole('button', { name: '75%', exact: true }).click();
+  await zoomSelect.selectOption({ label: '75%' });
   await page.waitForTimeout(300);
   const canvas = page.locator('.vnext-canvas-area');
   const canvasBox = await canvas.boundingBox();
@@ -794,7 +758,7 @@ try {
   measurements.wheelZoom = wheel;
   j.step('B5 Ctrl + roda sobre a página sobe o zoom em degraus até 125 % e desce um degrau na volta (e não mexe no zoom do navegador)',
     upOk && reached125 && downOk && wheel.browserZoomUnchanged, `${wheel.method} · ${wheel.steps.map((s) => `${s.choice}=${s.zoom}`).join(' → ')}`);
-  await zoomGroup.getByRole('button', { name: 'Ajustar à largura', exact: true }).click();
+  await zoomSelect.selectOption({ label: 'Ajustar à largura' });
   await page.waitForTimeout(400);
 
   // ---- B6: campo X com "12,5" e "abc" ----
@@ -859,7 +823,7 @@ try {
   const minHandle = Math.min(...handles.map((h) => Math.min(h.w, h.h)), Infinity);
   if (handles.length === 0) j.step('Alças de redimensionar visíveis ao selecionar o texto', false, 'nenhuma alça [data-resize-handle] encontrada');
   else if (minHandle >= MIN_TARGET_PX) j.step('Alças de redimensionar ≥ 24 px', true, `${handles.length} alças, menor lado ${minHandle} px`);
-  else pendingStep('Alças de redimensionar ≥ 24 px', 'pendente Onda 2 (2C): alças 24 px (FR-16b/17)', `${handles.length} alças de ${minHandle} px (Ajustar à largura)`);
+  else findingStep('Alças de redimensionar ≥ 24 px', false, `${handles.length} alças de ${minHandle} px`, 'P2');
   await measureTargets('B6 fim, texto selecionado');
   measurements.clicks = clicks;
   const jargonEnd = await scanJargon('B6 fim');

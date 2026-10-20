@@ -1,0 +1,49 @@
+{
+  "productHead": "063d9966defe94bd37f4e472986ba6b4a525c1fa",
+  "productChanges": [
+    {
+      "path": "src/vnext/ai-catalog/CatalogNativeComposer.tsx",
+      "sha256": "A85A088E2854198DFB763FA2BC662CEBE84189295F563EAEE44FFD3F9A34E454"
+    },
+    {
+      "path": "src/vnext/app/styles.css",
+      "sha256": "C05C3DE606F1AAFB279B39A8AF4A2189D78507C34AAB1B7B8A1423865DE1944A"
+    },
+    {
+      "path": "src/vnext/app/translation-review-locale.css",
+      "sha256": "88EF63EAFB218400F85CBC5E47D8B4D69D6B49BAC76408265DF67EA0C327C952"
+    }
+  ],
+  "unchangedDuringGates": true,
+  "gates": [
+    {
+      "gate": "lint",
+      "exitCode": 0,
+      "durationSeconds": 32.8702182,
+      "at": "2026-10-18T16:47:26.2241392Z",
+      "log": "scratch/continuacao/lint-final.log"
+    },
+    {
+      "gate": "typecheck",
+      "exitCode": 0,
+      "durationSeconds": 24.4359148,
+      "at": "2026-10-18T16:47:50.6869253Z",
+      "log": "scratch/continuacao/typecheck-final.log"
+    },
+    {
+      "gate": "test",
+      "exitCode": 0,
+      "durationSeconds": 246.8096062,
+      "at": "2026-10-18T16:51:57.4998497Z",
+      "log": "scratch/continuacao/test-final.log"
+    },
+    {
+      "gate": "build",
+      "exitCode": 0,
+      "durationSeconds": 35.5927487,
+      "at": "2026-10-18T16:52:33.0951571Z",
+      "log": "scratch/continuacao/build-final.log"
+    }
+  ],
+  "pass": true
+}

@@ -55,7 +55,7 @@ try {
     afterOpen.mode === 'editor' && afterOpen.runtime?.catalogId !== null, `em ${openMs} ms`);
   j.step('o catálogo recebeu o nome digitado', afterOpen.runtime?.title === 'Catálogo de teste',
     `título: ${afterOpen.runtime?.title}`);
-  const saveState = page.locator('[data-save-state][data-save-phase]').first();
+  const saveState = page.locator('header [data-save-phase]').first();
   const saveText = ((await saveState.textContent().catch(() => '')) ?? '').trim();
   j.step('aparece "Salvo" no editor', saveText === 'Salvo' && afterOpen.runtime?.saveLabel === 'Saved',
     `texto: "${saveText}" · saveLabel: ${afterOpen.runtime?.saveLabel}`);

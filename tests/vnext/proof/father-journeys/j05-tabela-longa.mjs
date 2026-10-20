@@ -1,22 +1,21 @@
 // J5 — "Tabela longa": o pai cola uma tabela de faixas com 40 linhas (cabeçalho + 40) numa página vazia.
-// "Continuar na próxima página" é Onda 2 (2I, FR-35): a prova registra o que aparece HOJE, se o pai entende
-// o que fazer, e exige que Publicar / PDF bloqueie com explicação clara, sem travar e sem perder trabalho.
+// O pai continua pela interface, confere os cabeçalhos, desfaz e publica um PDF real no harness local.
 //   1 catálogo "Em branco" → Ctrl+V de 41 linhas × 4 colunas na página vazia → o que aparece?
-//   2 a tabela passa do fim da página? há aviso? existe algum "Continuar na próxima página"?
-//   3 Publicar / PDF → "Revisar e publicar" → bloqueado com item claro; "Imprimir / salvar PDF" desligado
-//   4 "Corrigir este item" leva à tabela; "Voltar ao editor" devolve um editor que responde
-//   5 o mesmo pelo botão "Colar tabela do Excel" numa página nova (mensagem igual?)
-//   6 Ctrl+Z tira a tabela longa; tudo salvo; zero erros de console
+//   2 "Continuar na próxima página" preserva as 40 linhas e repete o cabeçalho
+//   3 um Desfazer restaura tudo; Refazer devolve todas as partes
+//   4 Publicar / PDF fica Pronto; PDF A4 com cabeçalho repetido e as 40 faixas pesquisáveis
+//   5 tudo salvo; zero erros de console (backend simulado do harness)
 //   node tests/vnext/proof/father-journeys/j05-tabela-longa.mjs
 //   VP=1280 node tests/vnext/proof/father-journeys/j05-tabela-longa.mjs
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  baseUrl, consoleErrors, createCatalog, ensureServer, freshDb, harnessUrl, journey, launch, shot, state, visibleText, waitSaved,
+  OUT, VP_SUFFIX, rel, baseUrl, consoleErrors, createCatalog, ensureServer, freshDb, harnessUrl, journey, launch, shot, state, visibleText, waitSaved,
   writeJourneyResult,
 } from './lib.mjs';
-import { pendingStep as eyesPendingStep, scanJargon as eyesScanJargon, unexplainedMm } from './fixtures/father-eyes.mjs';
+import { scanJargon as eyesScanJargon, unexplainedMm } from './fixtures/father-eyes.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TSV_40 = await readFile(resolve(HERE, 'fixtures/tsv/faixas-40.tsv'), 'utf8');
@@ -27,7 +26,7 @@ const JARGON_ALLOW = ['Zoom', 'Catalog', 'Builder'];
 const server = await ensureServer();
 const { browser, context, page, log, viewport } = await launch();
 page.setDefaultTimeout(8000);
-const j = journey('j05-tabela-longa', 'J5 — tabela de faixas com 40 linhas: o que aparece hoje; Publicar / PDF bloqueia com explicação');
+const j = journey('j05-tabela-longa', 'J5 — continuar tabela de 40 linhas, repetir cabeçalho, desfazer e publicar PDF A4 pesquisável');
 const measurements = {};
 const jargonSeen = [];
 const clicks = {};
@@ -43,10 +42,6 @@ let reloadDetected = false;
 async function checkReload(where) {
   const gone = await page.evaluate(() => window.__PROOF_MARK !== true).catch(() => false);
   if (gone) { reloadDetected = true; (measurements.reloads ??= []).push(where); }
-}
-
-function pendingStep(name, reason, detail) {
-  eyesPendingStep(j, name, detail ? `${reason} · HOJE: ${detail}` : reason);
 }
 
 /** Passo de usabilidade: quando falha vira ACHADO (ok: false, finding: severidade). Só P0/P1 derrubam a jornada. */
@@ -182,291 +177,124 @@ try {
   await page.goto(harnessUrl({ db }));
   await createCatalog(page, { name: 'J5 — tabela longa', starter: 'Em branco' });
   await mark();
-  let st = await state(page);
-  j.step('0 catálogo "Em branco" abre salvo, com uma página vazia',
-    st.runtime.saveLabel === 'Saved' && st.runtime.document.pages.length === 1 && pageObjects(st).length === 0);
-
-  // ---- 1. Colar as 40 linhas (Ctrl+V) na página vazia ----
   await clickEmptyPageSpot();
-  countClick('1 colar 40 linhas (Ctrl+V)', 1);
   let written;
   const notice1 = await noticeTimeline(async () => { written = await realPaste(TSV_40); });
-  await page.waitForTimeout(1500); // dá tempo para a altura ser medida e ajustada (pendingTableFit)
-  st = await state(page);
+  await page.waitForTimeout(1500);
+  let st = await state(page);
   let longTable = pageObjects(st).find((o) => o.type === 'table');
   let method = 'Ctrl+V real';
   if (!longTable) {
-    const synthetic = await syntheticPaste(TSV_40);
+    await syntheticPaste(TSV_40);
     await page.waitForTimeout(1500);
     st = await state(page);
     longTable = pageObjects(st).find((o) => o.type === 'table');
-    method = `evento paste sintético (${JSON.stringify(synthetic)}; clipboard real: ${written})`;
+    method = `evento paste sintético; clipboard real: ${written}`;
   }
+  const original = tableSummary(longTable);
   measurements.pasteMethod = method;
-  const sum1 = tableSummary(longTable);
-  measurements.table1 = sum1;
-  j.step(`1 Ctrl+V cria a tabela com ${TSV_LINES} linhas (cabeçalho + 40) e 4 colunas, sem travar`,
-    Boolean(longTable) && sum1.rows === TSV_LINES && sum1.columns === 4 && sum1.headerRows === 1 && log.pageErrors.length === 0,
-    `${method} · ${JSON.stringify(sum1)}`);
   measurements.notice1 = notice1;
-  j.step('1 aparece uma mensagem visível em menos de 1 s dizendo o que aconteceu',
-    Boolean(notice1) && notice1.visible && notice1.afterMs < 1000, notice1 ? `${notice1.afterMs} ms · ${notice1.tone} · "${notice1.text.slice(0, 220)}"` : 'nenhuma mensagem em 4 s');
-  const drawn1 = longTable ? await drawnTable(longTable.table.id, longTable.id) : { error: 'sem tabela' };
-  measurements.drawn1 = drawn1;
-  const chip1 = await issuesChip();
-  measurements.chip1 = chip1;
-  await waitSaved(page, 20000).catch(() => {});
+  j.step('1 colar cria 41 linhas (cabeçalho + 40) e quatro colunas',
+    Boolean(longTable) && original.rows === TSV_LINES && original.columns === 4 && original.headerRows === 1, JSON.stringify(original));
+  await waitSaved(page, 20000);
   st = await state(page);
-  j.step('1 o trabalho não se perdeu: a tabela longa foi salva sozinha ("Salvo")',
-    st.runtime.saveLabel === 'Saved' && !st.runtime.dirty && Boolean(st.runtime.stored?.pages?.[0]?.objects?.some((o) => o.id === longTable?.id)),
-    `saveLabel: ${st.runtime.saveLabel} · salvo no servidor: ${Boolean(st.runtime.stored?.pages?.[0]?.objects?.some((o) => o.id === longTable?.id))}`);
-  j.addEvidence(await shot(page, 'j05-tabela-longa-01-colada-40-linhas'));
+  longTable = pageObjects(st).find((o) => o.id === longTable.id);
+  const sourceDocument = structuredClone(st.runtime.document);
+  j.step('1 a tabela original fica salva antes da continuação', !(await state(page)).runtime.dirty);
+  j.addEvidence(await shot(page, 'j05-tabela-longa-01-antes-de-continuar'));
 
-  // ---- 2. O que o pai vê: passa do fim da folha? há aviso? dá para continuar na próxima página? ----
-  const overflowSeen = (drawn1.rowsBeyondPage ?? 0) > 0 || !(sum1?.fitsPage ?? true);
-  j.step('2 a tabela de 41 linhas não cabe numa folha A4 (linhas passam do fim da página)', overflowSeen,
-    `linhas desenhadas: ${drawn1.rowsDrawn} · dentro da folha: ${drawn1.rowsInsidePage} · além: ${drawn1.rowsBeyondPage} (${drawn1.beyondPagePx} px) · fim do quadro: ${sum1?.bottomMm} mm de 297`);
-  const inspector = page.getByRole('complementary', { name: /Inspector|Propriedades/ });
-  const showDiag = inspector.getByRole('button', { name: /^(Mostrar|Diagnósticos)$/ }).first();
-  if (await showDiag.count()) { await showDiag.click(); countClick('2 ver o aviso', 1); }
+  const cellText = (content) => content.type === 'richText'
+    ? content.value.paragraphs.map((p) => p.inlines.map((i) => i.text ?? '\n').join('')).join('\n')
+    : content.type === 'technicalCode' ? content.value : content.type === 'measurement' ? content.valueText : '';
+  const rowsOf = (table, role) => table.rows.filter((r) => role === 'header' ? r.role === 'header' : r.role !== 'header')
+    .map((row) => table.columns.map((column) => cellText(table.cells.find((c) => c.rowId === row.id && c.columnId === column.id)?.content ?? { type: 'empty' })));
+  const expectedHeader = rowsOf(longTable.table, 'header'), expectedBody = rowsOf(longTable.table, 'body');
+  await page.locator(`[data-editor-object-id="${longTable.id}"]`).click({ position: { x: 10, y: 10 } });
+  const continueButton = page.getByRole('button', { name: 'Continuar na próxima página', exact: true });
+  await continueButton.waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForFunction(() => {
+    const b = document.querySelector('[data-editor-action="continue-table-next-page"]');
+    return b && !b.disabled && b.getAttribute('aria-disabled') !== 'true';
+  }, null, { timeout: 15000 });
+  j.step('2 a tabela longa oferece Continuar na próxima página', await continueButton.isEnabled());
+  const splitStarted = Date.now();
+  await continueButton.click(); countClick('2 continuar tabela', 1);
+  await page.waitForFunction(() => window.__FATHER__.state().runtime.document.pages.length > 1, null, { timeout: 20000 });
+  await waitSaved(page, 20000);
+  st = await state(page);
+  const splitDocument = structuredClone(st.runtime.document);
+  const parts = st.runtime.document.pages.flatMap((p) => p.objects.filter((o) => o.type === 'table').map((o) => ({ pageId: p.id, object: o })));
+  const actualBody = parts.flatMap(({ object }) => rowsOf(object.table, 'body'));
+  measurements.continuation = { ms: Date.now() - splitStarted, pages: st.runtime.document.pages.length, parts: parts.map(({ pageId, object }) => ({ pageId, ...tableSummary(object) })) };
+  j.step('2 a tabela continua em páginas seguintes e cada parte cabe no A4',
+    parts.length >= 2 && parts.length === st.runtime.document.pages.length && parts.every(({ object }) => tableSummary(object).fitsPage),
+    JSON.stringify(measurements.continuation));
+  j.step('2 todas as 40 linhas permanecem na mesma ordem, sem perda ou duplicação',
+    actualBody.length === 40 && JSON.stringify(actualBody) === JSON.stringify(expectedBody));
+  j.step('2 cada continuação repete o cabeçalho e o seu estilo',
+    parts.every(({ object }) => JSON.stringify(rowsOf(object.table, 'header')) === JSON.stringify(expectedHeader)
+      && JSON.stringify(object.table.style.rowRoles?.header) === JSON.stringify(longTable.table.style.rowRoles?.header)));
+  j.addEvidence(await shot(page, 'j05-tabela-longa-02-continuada'));
+  await page.getByRole('button', { name: 'Página 2', exact: true }).click();
   await page.waitForTimeout(300);
-  const diagText = (await inspector.innerText().catch(() => '')).replace(/\s+/g, ' ');
-  measurements.diagnosticsPanel = diagText.slice(0, 500);
-  const warnedOnPage = Boolean(drawn1.badge) || /a corrigir/.test(chip1) && !/^0 a corrigir/.test(chip1) || /fora da página|ultrapassa/i.test(diagText);
-  j.step('2 o editor avisa, sem o pai procurar, que parte da tabela está fora da página (chip "a corrigir", "!" no objeto ou painel)',
-    warnedOnPage, `chip: "${chip1}" · marca no objeto: ${JSON.stringify(drawn1.badge)} · painel: "${diagText.slice(0, 200)}"`);
-  const tellsWhatToDo = /próxima página|outra página|várias páginas|dividir|continuar/i.test(`${notice1?.text ?? ''} ${diagText}`);
-  const continuation = await continuationControl();
-  measurements.continuationControl = continuation;
-  if (continuation) {
-    j.step('2 existe um controle "Continuar na próxima página" para a tabela longa', true, continuation);
-  } else {
-    pendingStep('2 "Continuar na próxima página" divide a tabela em duas páginas com cabeçalho repetido',
-      'pendente Onda 2 (2I): "Continuar na próxima página" para tabela maior que A4 (FR-35)',
-      `nenhum botão/menu com esse nome na tela; a mensagem de hoje ${tellsWhatToDo ? 'fala' : 'NÃO fala'} em outra página; o pai lê: "${(notice1?.text ?? '').slice(0, 160)}" e, no painel, "${diagText.slice(0, 160)}"`);
-  }
-  const jargon2 = await scanJargon('2 tabela longa + diagnósticos');
-  j.step('2 sem jargão/inglês na tela com a tabela longa e o painel de diagnósticos aberto', jargon2.length === 0, jargon2.join(', ') || '-');
-  j.addEvidence(await shot(page, 'j05-tabela-longa-02-aviso-e-diagnostico'));
+  const headerDrawn = await page.locator(`[data-table-id="${parts[1].object.table.id}"] [role=columnheader]`).allTextContents();
+  j.step('2 o cabeçalho repetido aparece também na página desenhada', JSON.stringify(headerDrawn.map((t) => t.trim())) === JSON.stringify(expectedHeader[0]));
+  j.addEvidence(await shot(page, 'j05-tabela-longa-03-cabecalho-segunda-pagina'));
 
-  // ---- 3. Publicar / PDF deve bloquear com explicação clara, sem travar ----
-  const publish = page.getByRole('button', { name: /^(Publicar \/ PDF|Salvando…)$/ });
-  j.step('3 botão "Publicar / PDF" visível no topo', await publish.isVisible());
-  const t0 = Date.now();
-  await publish.click();
-  countClick('3 publicar', 1);
+  await page.getByRole('button', { name: 'Desfazer última alteração' }).click();
+  st = await state(page);
+  j.step('3 um Desfazer restaura a tabela inteira e remove as páginas de continuação',
+    JSON.stringify(st.runtime.document) === JSON.stringify(sourceDocument));
+  await page.getByRole('button', { name: 'Refazer última alteração' }).click();
+  st = await state(page);
+  j.step('3 Refazer restaura todas as partes e os cabeçalhos',
+    JSON.stringify(st.runtime.document) === JSON.stringify(splitDocument));
+  await waitSaved(page, 20000);
+
+  const publishStarted = Date.now();
+  await page.getByRole('button', { name: 'Publicar / PDF', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Revisar e publicar' });
   await dialog.waitFor({ timeout: 15000 });
-  const openedMs = Date.now() - t0;
-  const statusLine = dialog.locator('p[role=status], p[role=alert]').first();
-  await page.waitForFunction(() => {
-    const el = document.querySelector('.vnext-publication-dialog p[role=status], .vnext-publication-dialog p[role=alert]');
-    return el && /bloqueada|Pronto para imprimir|mudou/.test(el.textContent ?? '');
-  }, null, { timeout: 30000 });
-  const verdictMs = Date.now() - t0;
-  const verdict = (await statusLine.innerText()).replace(/\s+/g, ' ').trim();
+  await page.waitForFunction(() => ['READY', 'BLOCKED'].includes(document.querySelector('[data-publication-host]')?.getAttribute('data-publication-status')),
+    null, { timeout: 30000 });
   const publicationStatus = await page.locator('[data-publication-host]').getAttribute('data-publication-status');
-  const items = await dialog.locator('[data-publication-diagnostic]').evaluateAll((lis) => lis.map((li) => ({
-    code: li.getAttribute('data-publication-diagnostic'), severity: li.getAttribute('data-severity'),
-    location: li.querySelector('.vnext-diagnostic-location')?.textContent?.trim() ?? '',
-    kind: li.querySelector('.vnext-diagnostic-kind')?.textContent?.trim() ?? '',
-    message: li.querySelector('.vnext-diagnostic-message')?.textContent?.trim() ?? '',
-    hasFixButton: Boolean([...li.querySelectorAll('button')].find((b) => /Corrigir este item/.test(b.textContent ?? ''))),
-  })));
-  const printButton = dialog.getByRole('button', { name: 'Imprimir / salvar PDF' });
-  const printDisabled = await printButton.isDisabled();
-  measurements.publication = { openedMs, verdictMs, verdict, publicationStatus, items, printDisabled };
-  j.step('3 "Revisar e publicar" abre e dá o veredito em menos de 15 s', verdictMs < 15000, `abriu em ${openedMs} ms · veredito em ${verdictMs} ms`);
-  j.step('3 Publicar bloqueia (não trava): "Publicação bloqueada. Corrija os itens abaixo…" e "Imprimir / salvar PDF" desligado',
-    publicationStatus === 'BLOCKED' && /Publicação bloqueada/.test(verdict) && printDisabled, `${publicationStatus} · "${verdict}" · imprimir desligado: ${printDisabled}`);
-  const tableItem = items.find((item) => /tabela/i.test(item.location) || /tabela|objeto/i.test(item.message));
-  j.step('3 o item bloqueante aponta a tabela (onde) e explica em português o que está errado',
-    Boolean(tableItem) && tableItem.severity === 'ERROR' && /Página 1/.test(tableItem.location) && tableItem.message.length > 20,
-    JSON.stringify(items).slice(0, 500));
-  const tellsSplit = items.some((item) => /próxima página|outra página|várias páginas|dividir|continuar/i.test(item.message));
-  if (!continuation) {
-    pendingStep('3 a explicação do bloqueio diz ao pai o caminho (continuar/dividir em outra página)',
-      'pendente Onda 2 (2I): sem "Continuar na próxima página" a mensagem só pode mandar mover/reduzir (FR-35)',
-      `o pai lê: "${tableItem?.message ?? '-'}"; fala em outra página: ${tellsSplit}`);
-  } else {
-    j.step('3 a explicação do bloqueio diz ao pai o caminho (continuar/dividir em outra página)', tellsSplit, tableItem?.message ?? '-');
+  const diagnostics = await dialog.locator('[data-publication-diagnostic]').evaluateAll((nodes) => nodes.map((n) => ({ code: n.dataset.publicationDiagnostic, text: n.innerText })));
+  const print = dialog.getByRole('button', { name: 'Imprimir / salvar PDF', exact: true });
+  measurements.publication = { status: publicationStatus, ms: Date.now() - publishStarted, diagnostics };
+  j.step('4 a publicação fica Pronto e permite imprimir depois de continuar a tabela',
+    publicationStatus === 'READY' && await print.isEnabled(), JSON.stringify(measurements.publication));
+  j.addEvidence(await shot(page, 'j05-tabela-longa-04-publicacao'));
+  if (publicationStatus !== 'READY') throw new Error('A tabela continuada ainda bloqueia a publicação; PDF não gerado.');
+  await page.evaluate(() => { window.__J5_PRINTS = 0; window.print = () => { window.__J5_PRINTS += 1; }; });
+  await print.click();
+  await page.waitForFunction(() => window.__J5_PRINTS === 1 && document.querySelector('[data-publication-host]')?.getAttribute('data-print-approved') === 'true', null, { timeout: 15000 });
+  const pdfDir = resolve(OUT, 'pdf'); await mkdir(pdfDir, { recursive: true });
+  const pdfPath = resolve(pdfDir, `j05-tabela-longa${VP_SUFFIX}.pdf`);
+  await page.emulateMedia({ media: 'print' });
+  await page.pdf({ path: pdfPath, format: 'A4', preferCSSPageSize: true, printBackground: true, displayHeaderFooter: false,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' }, scale: 1 });
+  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  const pdf = await getDocument({ data: new Uint8Array(await readFile(pdfPath)), isEvalSupported: false, useSystemFonts: false }).promise;
+  const pdfPages = [];
+  for (let n = 1; n <= pdf.numPages; n += 1) {
+    const p = await pdf.getPage(n), content = await p.getTextContent();
+    pdfPages.push({ widthPt: p.view[2] - p.view[0], heightPt: p.view[3] - p.view[1], text: content.items.map((item) => item.str ?? '').join(' ') });
   }
-  const dialogText = (await dialog.innerText()).replace(/\s+/g, ' ');
-  const jargon3 = eyesScanJargon(dialogText, { allow: JARGON_ALLOW }).map((h) => h.term);
-  if (jargon3.length) jargonSeen.push({ where: '3 Revisar e publicar', words: jargon3 });
-  j.step('3 sem jargão/inglês na janela "Revisar e publicar"', jargon3.length === 0, jargon3.join(', ') || '-');
-  const dialogFont = await dialog.locator('.vnext-diagnostic-message').first().evaluate((el) => Math.round(parseFloat(getComputedStyle(el).fontSize) * 10) / 10).catch(() => null);
-  measurements.publicationMessageFontPx = dialogFont;
-  j.step('3 a explicação do bloqueio tem letra legível (≥ 13 px)', (dialogFont ?? 0) >= 13, `${dialogFont} px`);
-  j.addEvidence(await shot(page, 'j05-tabela-longa-03-publicar-bloqueado'));
-
-  // ---- 4. "Corrigir este item" leva à tabela; "Voltar ao editor" devolve um editor que responde ----
-  const fixButton = dialog.getByRole('button', { name: 'Corrigir este item' }).first();
-  const fixVisible = await fixButton.isVisible().catch(() => false);
-  if (fixVisible) {
-    await fixButton.click();
-    countClick('4 corrigir este item', 1);
-    await page.waitForTimeout(600);
-    const afterFix = await page.evaluate(() => ({
-      dialogOpen: Boolean(document.querySelector('[data-publication-host]')),
-      selected: document.querySelector('[data-editor-object-id][data-selected="true"]')?.getAttribute('data-editor-object-id') ?? null,
-      panel: document.querySelector('[data-vnext-shell] aside h2')?.textContent?.trim() ?? null,
-    }));
-    measurements.afterFix = afterFix;
-    j.step('4 "Corrigir este item" fecha a revisão e deixa a tabela selecionada no editor',
-      !afterFix.dialogOpen && afterFix.selected === longTable?.id && /Tabela/.test(afterFix.panel ?? ''), JSON.stringify(afterFix));
-  } else {
-    j.step('4 há um botão "Corrigir este item" no bloqueio', false, 'botão não encontrado');
-  }
-  // Reabrir e voltar pelo botão "Voltar ao editor".
-  await publish.click();
-  countClick('4 voltar ao editor', 1);
-  await dialog.waitFor({ timeout: 15000 });
-  await dialog.getByRole('button', { name: 'Voltar ao editor' }).click();
-  countClick('4 voltar ao editor', 1);
-  await page.waitForTimeout(400);
-  const dialogGone = (await page.locator('[data-publication-host]').count()) === 0;
-  const objectsBefore = allObjects(await state(page)).length;
-  await page.getByRole('button', { name: 'Texto', exact: true }).click();
-  await page.waitForTimeout(500);
-  st = await state(page);
-  const objectsAfter = allObjects(st).length;
-  j.step('4 "Voltar ao editor" fecha a janela e o editor continua respondendo (inserir "Texto" cria um objeto)',
-    dialogGone && objectsAfter === objectsBefore + 1, `janela fechada: ${dialogGone} · objetos: ${objectsBefore} → ${objectsAfter}`);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(200);
-  await page.keyboard.press('Control+z');
-  await page.waitForTimeout(400);
-
-  // ---- 4b. O pai clica no único botão oferecido, "Ajustar altura": o que acontece? ----
-  await page.locator(`[data-editor-object-id="${longTable.id}"]`).click({ position: { x: 10, y: 10 } });
-  await page.waitForTimeout(300);
-  let adjust = page.getByRole('button', { name: 'Ajustar altura', exact: true }).first();
-  if (!(await adjust.isVisible().catch(() => false))) {
-    const show = inspector.getByRole('button', { name: /^(Mostrar|Diagnósticos)$/ }).first();
-    if (await show.count()) await show.click();
-    await page.waitForTimeout(300);
-    adjust = page.getByRole('button', { name: 'Ajustar altura', exact: true }).first();
-  }
-  const adjustVisible = await adjust.isVisible().catch(() => false);
-  measurements.adjustHeightOffered = adjustVisible;
-  if (adjustVisible) {
-    const noticeAdjust = await noticeTimeline(() => adjust.click());
-    countClick('4b ajustar altura', 1);
-    await page.waitForTimeout(600);
-    st = await state(page);
-    const afterAdjust = tableSummary(allObjects(st).find((o) => o.id === longTable.id));
-    const chipAdjust = await issuesChip();
-    const drawnAdjust = await drawnTable(longTable.table.id, longTable.id);
-    measurements.afterAdjustHeight = { notice: noticeAdjust?.text ?? null, tone: noticeAdjust?.tone ?? null, frame: afterAdjust?.frame, bottomMm: afterAdjust?.bottomMm, fitsPage: afterAdjust?.fitsPage, chip: chipAdjust, drawn: drawnAdjust };
-    j.step('4b "Ajustar altura" responde sem travar e sem perder a tabela (mensagem visível, tabela continua lá)',
-      Boolean(afterAdjust) && Boolean(noticeAdjust) && log.pageErrors.length === 0,
-      `mensagem: "${noticeAdjust?.text?.slice(0, 160) ?? '-'}" · quadro: ${afterAdjust?.bottomMm} mm de 297 (cabe: ${afterAdjust?.fitsPage}) · chip: "${chipAdjust}"`);
-    // Publicar de novo: continua bloqueado? com que explicação?
-    await publish.click();
-    countClick('4b publicar de novo', 1);
-    await dialog.waitFor({ timeout: 15000 });
-    await page.waitForFunction(() => {
-      const el = document.querySelector('.vnext-publication-dialog p[role=status], .vnext-publication-dialog p[role=alert]');
-      return el && /bloqueada|Pronto para imprimir|mudou/.test(el.textContent ?? '');
-    }, null, { timeout: 30000 });
-    const items2 = await dialog.locator('[data-publication-diagnostic]').evaluateAll((lis) => lis.map((li) => ({
-      code: li.getAttribute('data-publication-diagnostic'), severity: li.getAttribute('data-severity'),
-      location: li.querySelector('.vnext-diagnostic-location')?.textContent?.trim() ?? '',
-      message: li.querySelector('.vnext-diagnostic-message')?.textContent?.trim() ?? '',
-    })));
-    const status2 = await page.locator('[data-publication-host]').getAttribute('data-publication-status');
-    measurements.publicationAfterAdjust = { status: status2, items: items2 };
-    j.addEvidence(await shot(page, 'j05-tabela-longa-03b-publicar-depois-de-ajustar-altura'));
-    if (!continuation) {
-      pendingStep('4b depois de "Ajustar altura" o pai consegue publicar (tabela continua na página seguinte)',
-        'pendente Onda 2 (2I) (FR-35)',
-        `"Ajustar altura" leva o quadro a ${afterAdjust?.bottomMm} mm (folha: 297) e Publicar fica ${status2} com: ${items2.map((i) => `"${i.message}"`).join(' / ') || '-'}`);
-    } else {
-      j.step('4b depois de "Ajustar altura" o pai consegue publicar', status2 === 'READY', JSON.stringify(items2));
-    }
-    await dialog.getByRole('button', { name: 'Voltar ao editor' }).click();
-    await page.waitForTimeout(400);
-    await clickEmptyPageSpot();
-    await page.keyboard.press('Control+z');
-    await page.waitForTimeout(500);
-    st = await state(page);
-    const reverted = tableSummary(allObjects(st).find((o) => o.id === longTable.id));
-    j.step('4b Ctrl+Z desfaz o "Ajustar altura" (quadro volta a caber na folha) sem travar', Boolean(reverted) && reverted.fitsPage, `quadro: ${reverted?.bottomMm} mm`);
-  } else {
-    j.step('4b há um botão "Ajustar altura" oferecido no painel da tabela', false, 'não encontrado');
-  }
-
-  // ---- 5. O mesmo pelo botão "Colar tabela do Excel", numa página nova ----
-  await clickEmptyPageSpot();
-  await page.getByRole('button', { name: 'Adicionar nova página após a página atual' }).click();
-  countClick('5 colar pelo botão', 1);
-  await page.waitForTimeout(400);
-  await page.getByRole('button', { name: 'Colar tabela do Excel', exact: true }).click();
-  countClick('5 colar pelo botão', 1);
-  const pasteArea = page.getByRole('region', { name: 'Colar tabela do Excel' });
-  await pasteArea.waitFor({ timeout: 5000 });
-  const box = pasteArea.getByRole('textbox', { name: 'Cole aqui (Ctrl+V)' });
-  await realPaste(TSV_40);
-  await page.waitForTimeout(600);
-  if (!(await box.inputValue()).includes('\t')) await box.fill(TSV_40);
-  const summaryText = await pasteArea.locator('[data-paste-table-summary]').first().innerText().catch(() => '');
-  const areaText = (await pasteArea.innerText()).replace(/\s+/g, ' ');
-  measurements.pasteAreaSummary = summaryText;
-  const warnsBeforeCreate = /não cabe|várias páginas|outra página|mais de uma página|passa|ultrapassa/i.test(areaText);
-  measurements.pasteAreaWarnsBeforeCreate = warnsBeforeCreate;
-  j.step(`5 a caixa "Cole aqui" reconhece "${TSV_LINES} linhas × 4 colunas" com prévia`,
-    new RegExp(`${TSV_LINES} linhas × 4 colunas`).test(summaryText) && await pasteArea.getByRole('table', { name: 'Prévia da tabela' }).isVisible(), `resumo: "${summaryText}"`);
-  j.addEvidence(await shot(page, 'j05-tabela-longa-04-caixa-colar-40-linhas'));
-  const notice5 = await noticeTimeline(() => pasteArea.getByRole('button', { name: 'Criar tabela' }).click());
-  countClick('5 colar pelo botão', 1);
-  await page.waitForTimeout(1500);
-  st = await state(page);
-  const longTable2 = pageObjects(st, 1).find((o) => o.type === 'table');
-  const sum5 = tableSummary(longTable2);
-  measurements.notice5 = notice5;
-  measurements.table5 = sum5;
-  j.step(`5 "Criar tabela" põe a tabela de ${TSV_LINES} linhas na página nova e avisa (sem travar)`,
-    Boolean(longTable2) && sum5.rows === TSV_LINES && Boolean(notice5) && notice5.visible && log.pageErrors.length === 0,
-    `${JSON.stringify(sum5)} · mensagem: ${notice5 ? `${notice5.afterMs} ms · "${notice5.text.slice(0, 200)}"` : 'nenhuma'}`);
-  if (!continuation) {
-    pendingStep('5 ao colar 41 linhas, a caixa ou a mensagem avisa que não cabe numa folha e oferece continuar na próxima página',
-      'pendente Onda 2 (2I) (FR-35)',
-      `antes de criar, a caixa ${warnsBeforeCreate ? 'avisa' : 'NÃO avisa'} que não cabe; depois, a mensagem é: "${(notice5?.text ?? '-').slice(0, 160)}"`);
-  }
-  await waitSaved(page, 20000).catch(() => {});
-
-  // ---- 6. Ctrl+Z tira a tabela longa; tudo salvo; console limpo ----
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(150);
-  await clickEmptyPageSpot();
-  await page.keyboard.press('Control+z');
-  await page.waitForTimeout(500);
-  st = await state(page);
-  const undone = !pageObjects(st, 1).some((o) => o.id === longTable2?.id);
-  j.step('6 Ctrl+Z tira a tabela longa colada pelo botão (sem travar)', undone, `objetos na página 2: ${pageObjects(st, 1).length}`);
-  await waitSaved(page, 20000).catch(() => {});
-  st = await state(page);
-  j.step('6 tudo salvo ao fim ("Salvo")', st.runtime.saveLabel === 'Saved' && !st.runtime.dirty, `saveLabel: ${st.runtime.saveLabel}`);
-  const chipEnd = await issuesChip();
-  measurements.chipEnd = chipEnd;
-  measurements.clicks = clicks;
-  const jargonEnd = await scanJargon('6 fim');
-  j.step('6 sem jargão/inglês na tela ao fim', jargonEnd.length === 0, jargonEnd.join(', ') || '-');
-  j.addEvidence(await shot(page, 'j05-tabela-longa-05-fim'));
+  const pdfText = pdfPages.map((p) => p.text).join(' '), pdfCodes = pdfText.match(/\bF\d{2}\b/g) ?? [];
+  await pdf.destroy();
+  measurements.pdf = { path: rel(pdfPath), pages: pdfPages, codes: pdfCodes };
+  j.step('4 o PDF contém todas as partes em A4, cabeçalho em cada página e 40 faixas pesquisáveis',
+    pdfPages.length === parts.length && pdfPages.every((p) => Math.abs(p.widthPt - 595.28) < 1.5 && Math.abs(p.heightPt - 841.89) < 1.5 && p.text.includes('Faixa'))
+      && pdfCodes.length === 40 && new Set(pdfCodes).size === 40 && pdfText.includes('F01') && pdfText.includes('F40')
+      && !/A COMPLETAR|Voltar ao editor|Imprimir \/ salvar PDF/.test(pdfText), rel(pdfPath));
+  await dialog.getByRole('button', { name: 'Voltar ao editor', exact: true }).click();
+  await waitSaved(page, 20000);
   await checkReload('fim');
-
-  // Ruído do servidor de desenvolvimento (outro agente salvando src/ no mesmo worktree → HMR/500 do vite) não é erro do
-  // aplicativo, mas fica registrado por inteiro para quem ler julgar.
   const errors = consoleErrors(log);
-  const isDevServerNoise = (e) => /\[hmr\]|\[vite\]|server responded with a status of 500/.test(e.text);
-  const appErrors = errors.filter((e) => !isDevServerNoise(e));
-  const noise = errors.filter(isDevServerNoise);
-  measurements.devServerNoise = noise.map((e) => e.text.slice(0, 200));
-  j.step('zero erros de console (do aplicativo) e de página em toda a jornada', appErrors.length === 0 && log.pageErrors.length === 0,
-    `console: ${appErrors.map((e) => e.text).join(' | ') || '-'} · página: ${log.pageErrors.join(' | ') || '-'} · ruído do vite (HMR/500) ignorado: ${noise.length}`);
-  if (noise.length) j.finding(`ruído do servidor vite durante a prova (${noise.length} mensagens HMR/500; outro processo salvou src/ no worktree)`, { severity: 'low', where: 'ambiente' });
-  if (jargonSeen.length) j.finding(`palavras técnicas/inglês vistas: ${JSON.stringify(jargonSeen)}`, { severity: 'medium', where: 'editor/publicação' });
+  j.step('5 zero erros de console e de página', errors.length === 0 && log.pageErrors.length === 0,
+    JSON.stringify({ errors, pageErrors: log.pageErrors }));
+
 } catch (error) {
   j.step('execução sem exceção', false, String(error?.stack ?? error).slice(0, 900));
   await shot(page, 'j05-tabela-longa-99-erro').then((p) => j.addEvidence(p)).catch(() => {});

@@ -1,0 +1,133 @@
+{
+  "recordedOn": "2026-10-18",
+  "scope": "Local, provedores controlados; sem producao ou aceite observado",
+  "productHead": "2a0cd75017e3e620629fe708225811fcf90ea952",
+  "testedUncommittedOn": "063d9966defe94bd37f4e472986ba6b4a525c1fa",
+  "unchangedDuringGates": true,
+  "productChanges": [
+    {
+      "path": "src/vnext/ai-catalog/CatalogNativeComposer.tsx",
+      "sha256": "A85A088E2854198DFB763FA2BC662CEBE84189295F563EAEE44FFD3F9A34E454"
+    },
+    {
+      "path": "src/vnext/app/styles.css",
+      "sha256": "C05C3DE606F1AAFB279B39A8AF4A2189D78507C34AAB1B7B8A1423865DE1944A"
+    },
+    {
+      "path": "src/vnext/app/translation-review-locale.css",
+      "sha256": "88EF63EAFB218400F85CBC5E47D8B4D69D6B49BAC76408265DF67EA0C327C952"
+    }
+  ],
+  "gates": [
+    {
+      "gate": "lint",
+      "exitCode": 0,
+      "durationSeconds": 32.8702182,
+      "at": "2026-10-18T16:47:26.2241392Z",
+      "log": "scratch/continuacao/lint-final.log"
+    },
+    {
+      "gate": "typecheck",
+      "exitCode": 0,
+      "durationSeconds": 24.4359148,
+      "at": "2026-10-18T16:47:50.6869253Z",
+      "log": "scratch/continuacao/typecheck-final.log"
+    },
+    {
+      "gate": "test",
+      "exitCode": 0,
+      "durationSeconds": 246.8096062,
+      "at": "2026-10-18T16:51:57.4998497Z",
+      "log": "scratch/continuacao/test-final.log"
+    },
+    {
+      "gate": "build",
+      "exitCode": 0,
+      "durationSeconds": 35.5927487,
+      "at": "2026-10-18T16:52:33.0951571Z",
+      "log": "scratch/continuacao/build-final.log"
+    }
+  ],
+  "pass": true,
+  "lintErrors": 0,
+  "lintWarnings": 268,
+  "testFiles": 430,
+  "passed": 5151,
+  "failed": 0,
+  "pending": 1,
+  "pendingCases": [
+    {
+      "file": "tests/acceptance/company-acceptance-critical-journeys.test.tsx",
+      "name": "W3-I Company Acceptance — critical journeys [BLOCKED BY TEST INFRA][BROWSER E2E] drives NEW/EDIT/DELETE/PUBLISH through Chromium and validates the downloaded export"
+    }
+  ],
+  "rawTestReportSha256": "c6a9949c92fea2f527a8918be815a8da540c27ca9a6e05176a8b51da4fe12a15",
+  "buildNote": "Vite 15.48s; total 35.6s; aviso de chunks maiores que 500kB",
+  "browser": "Rodada final em execucao; ver relatorio de jornadas",
+  "codeRabbit": "Duas revisoes focadas concluidas com zero achados; ver JSON de revisao e limites de escopo.",
+  "previousCheckpoint": {
+    "recordedOn": "2026-10-18",
+    "scope": "Local; sem producao, Gemini real ou aceite observado",
+    "productHead": "063d9966defe94bd37f4e472986ba6b4a525c1fa",
+    "lint": {
+      "gate": "lint",
+      "exitCode": 0,
+      "durationSeconds": 38.1019862,
+      "at": "2026-10-17T23:51:23.0312822Z"
+    },
+    "typecheck": {
+      "gate": "typecheck",
+      "exitCode": 0,
+      "durationSeconds": 23.2212833,
+      "at": "2026-10-17T23:52:08.0836021Z"
+    },
+    "test": {
+      "gate": "test",
+      "exitCode": 0,
+      "durationSeconds": 278.0298987,
+      "at": "2026-10-17T23:57:12.8311625Z"
+    },
+    "build": {
+      "gate": "build",
+      "exitCode": 0,
+      "durationSeconds": 61.4189521,
+      "at": "2026-10-18T16:29:59.3043723Z"
+    },
+    "lintErrors": 0,
+    "lintWarnings": 268,
+    "testFiles": 430,
+    "passed": 5147,
+    "failed": 0,
+    "pending": 1,
+    "pendingCases": [
+      {
+        "file": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/tests/acceptance/company-acceptance-critical-journeys.test.tsx",
+        "name": "W3-I Company Acceptance — critical journeys [BLOCKED BY TEST INFRA][BROWSER E2E] drives NEW/EDIT/DELETE/PUBLISH through Chromium and validates the downloaded export",
+        "status": "skipped"
+      }
+    ],
+    "buildNote": "Vite completou em33,84s; aviso de chunks maiores que500kB",
+    "browser": "Em execucao; ver resumo de jornadas",
+    "codeRabbit": "Segunda tentativa concluida, 0 achados nos6arquivos dos commits001da19 e063d996; base1859373. Escopo nao cobre todos os merges."
+  },
+  "postProofSourceChecks": {
+    "recordedOn": "2026-10-20",
+    "lint": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 268,
+      "log": "scratch/continuacao/lint-proof-final.log"
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "log": "scratch/continuacao/typecheck-proof-final.log"
+    },
+    "e2eBuild": {
+      "exitCode": 0,
+      "viteSeconds": 31.73,
+      "log": "scratch/continuacao/build-e2e-final.log",
+      "output": "dist/e2e",
+      "published": false
+    }
+  }
+}

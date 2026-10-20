@@ -1,111 +1,87 @@
-# Provas "father-journeys" (jornadas do pai)
+# Provas father-journeys
 
-Suíte de provas de uso real do Catalog Builder, vistas pelos olhos de quem vai usar o produto no dia a dia
-(o "pai"). Cada jornada abre o aplicativo num navegador de verdade (Chromium sem janela), clica como uma
-pessoa clicaria e grava o que viu: capturas de tela, nomes dos botões, textos, erros de console.
+Jornadas do Catalog Builder no Chromium headless: cliques pela interface, capturas, textos, verificações do documento e erros do navegador. O harness monta componentes reais com persistência local e provedores controlados. Não usa serviços externos, Supabase, login ou chave de IA.
 
-Tudo roda **local**: sem internet, sem Supabase, sem login, sem chave de IA. Nada toca produção.
+## Executar
 
-## Como rodar
+Na raiz deste worktree, em PowerShell:
 
-```bash
-# todas as jornadas, em série (um Chromium por vez), com tabela e resumo no final
+```powershell
+# Todas, inclusive J-IA1, em série: um Chromium por vez.
 node tests/vnext/proof/father-journeys/run-all.mjs
 
-# só algumas (prefixo do arquivo)
-node tests/vnext/proof/father-journeys/run-all.mjs j00 j03
+# Seleção por prefixo. J2/J3 compartilham j02.
+node tests/vnext/proof/father-journeys/run-all.mjs j00 j02 jia1
 
-# uma prova só
-node tests/vnext/proof/father-journeys/j00-smoke.mjs
+# Uma jornada.
+node tests/vnext/proof/father-journeys/j09-idiomas.mjs
 
-# janela menor (1280×720; padrão 1366×768). As capturas ganham o sufixo @1280
-VP=1280 node tests/vnext/proof/father-journeys/j00-smoke.mjs
+# Janela menor; remover a variável para voltar ao padrão.
+$env:VP='1280'
+node tests/vnext/proof/father-journeys/run-all.mjs
+Remove-Item Env:VP
 
-# reutilizar um servidor vite já aberto (por exemplo, o que outra pessoa deixou de pé)
-BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/run-all.mjs
+# J12 usa arquivo empresarial externo; é possível indicar outro caminho local.
+$env:PCON_XLSX='C:/caminho/PCON-MASTER-ENGLISHV2.xlsx'
+node tests/vnext/proof/father-journeys/run-all.mjs j12
+Remove-Item Env:PCON_XLSX
+
+# FR-37, medida separada e descritiva: 69 linhas × 7 colunas sem dividir.
+# Usa o mesmo servidor próprio e escreve results/measure-fr37.json (ou @1280).
+node tests/vnext/proof/father-journeys/measure-fr37.mjs
 ```
 
-- **Porta:** `127.0.0.1:5190`. Se já houver algo respondendo ali (ou em `BASE_URL`), a prova reutiliza;
-  senão sobe o `vite` sozinha, na raiz do repositório, e fecha ao terminar.
-- `node_modules` pode ser uma junção (link) do Windows: o servidor já libera o caminho real
-  (`fs.allow` com `realpathSync`), não precisa configurar nada.
-- `run-all.mjs` devolve código de saída 1 **só** se alguma jornada estiver `fail`. `pending` não falha.
+O padrão é 1366×768; VP=1280 usa 1280×720. A suíte sai com código 1 quando existe fail. Uma dependência pending não torna a jornada verde nem causa, sozinha, código 1. A saída não zero do processo sempre é fail no agregado.
 
-## Onde ficam os resultados
+Execute em série, com os arquivos estabilizados e espaço livre suficiente. Não editar o aplicativo durante as provas: HMR pode invalidar o estado observado. O arquivo real de J12 não acompanha o repositório; sua ausência é falha de execução, nunca uma importação concluída.
 
-Tudo em `scratch/father-journeys/` (pasta ignorada pelo git):
+## Servidor e identidade
 
-| Caminho | O que é |
+Cada comando inicia um Vite próprio na raiz resolvida deste worktree. Tenta 127.0.0.1:5190; se a porta estiver ocupada, escolhe a próxima livre. Não reutiliza nem encerra o servidor que já ocupava a porta. O servidor próprio fecha ao terminar; o caminho real de node_modules é permitido para suportar a junção do Windows.
+
+O runner compartilha seu servidor com seus processos filhos por BASE_URL, identificador da execução e identificador do servidor. Antes de usar BASE_URL, a biblioteca consulta /__father-journeys/identity.json e confere o serviço, caminho absoluto do worktree, HEAD e, quando recebido do runner, identificador do servidor. Um Vite antigo sem essa identidade ou de outro checkout é recusado. Não apontar BASE_URL para um servidor de aplicação comum; remover a variável permite iniciar o servidor correto.
+
+## Resultados e rastreabilidade
+
+Cada comando recebe um runId único. As saídas ficam em scratch/father-journeys/runs/<runId>/, ignorado pelo Git:
+
+| Caminho dentro da execução | Conteúdo |
 |---|---|
-| `results/<jornada>.json` | passos (ok/falhou + detalhe), evidências, achados, log de console, nomes acessíveis vistos |
-| `results/<jornada>@1280.json` | o mesmo, quando rodou com `VP=1280` |
-| `shots/<nome>.png` / `shots/<nome>@1280.png` | capturas de tela |
-| `summary.json` / `summary@1280.json` | agregado do `run-all.mjs`: estado por jornada + arquivo de evidência |
+| results/<jornada>.json | Passos, estado, pendências, achados, console e metadados. |
+| results/<jornada>@1280.json | Resultado na janela menor. |
+| shots/ | Capturas desta execução. |
+| pdf/, photos/ | Artefatos produzidos pelas jornadas que os utilizam. |
+| summary.json / summary@1280.json | Agregado do runner. |
 
-## O harness (`fixtures/father-harness.html` + `.tsx`)
+O último resumo também é copiado para scratch/father-journeys/summary.json ou summary@1280.json, sem apagar execuções anteriores. Os caminhos de evidência no JSON são relativos à raiz do repositório e incluem a execução correspondente.
 
-Réplica do modo de produção (`src/vnext/app/bootstrap.tsx`) com persistência local:
+Cada resultado registra run.id, run.executionId, raiz absoluta, Git HEAD/branch/dirty, versões Node/Chromium e identidade do servidor. O runner só aceita JSON com a identidade exata do processo que acabou de executar; arquivo antigo ou de outro processo é falha. git.dirty=true significa que o HEAD sozinho não reproduz os arquivos locais: preserve também o diff/commit e os dados externos usados.
 
-- Biblioteca (`CatalogLibrary`) com os modelos oficiais e o editor (`VNextApp`, modo simples) exatamente
-  como o pai vê em `/v2`; voltar e abrir recarregam a página, como na produção.
-- O "servidor" é o `localStorage` desta origem. Imagens ficam em memória + `localStorage`. A recuperação
-  local usa um banco com o nome passado em `?db=` (use um nome novo por prova).
-- IA: um composer **falso**, que nunca pede chave. `?ia=limite` responde como o servidor responde quando o
-  limite diário acabou; `?ia=off` responde como um servidor sem IA configurada.
-- Tradução: provedor controlado (resposta padrão, local).
-- `?user=B` muda a identidade do "funcionário". Duas abas no mesmo navegador com `?user=A` e `?user=B`
-  compartilham o mesmo `localStorage` = mesma empresa, mesmo servidor.
-- `window.__FATHER__` expõe `state()`, `holdSaves(true|false)`, `releaseHeld()`, `flushRecovery()`,
-  `recoveryRecords()`, `open(id)`, `library()`, `dispose()` para as provas inspecionarem sem depender
-  da tela.
+`measure-fr37.mjs` fica fora da descoberta de jornadas. Ele cola dados sintéticos de um cabeçalho e 68 sensores, sem dividir a tabela, faz cinco edições inline pela UI e verifica conteúdo, cinco Desfazer e cinco Refazer. Registra cada amostra de Enter até documento/DOM confirmado e duas passagens de `requestAnimationFrame` (aproximação de pintura), mediana, máximo e long tasks quando a API existe. Não inclui abertura da célula, digitação ou autosave no tempo de confirmação, não usa a planilha PCON real e não define limite de desempenho. É medida de desenvolvimento Vite/React StrictMode; não representa hardware do pai nem build de produção.
 
-## Como escrever uma nova jornada
+findingSummary normaliza findings, findingSteps, softFindings e achados anexados aos passos, deduplicando por ID ou nome. O agregado separa failedSteps funcionais, findingDetails e pendingSteps. Contar apenas o array histórico findings perde achados.
 
-1. Crie `jNN-nome-curto.mjs` nesta pasta (o `run-all.mjs` pega tudo que começa com `j` + número).
-2. Use `lib.mjs`:
+## Estados e novas jornadas
 
-```js
-import { ensureServer, launch, harnessUrl, freshDb, journey, shot, state, waitSaved, createCatalog } from './lib.mjs';
-
-const server = await ensureServer();
-const { browser, page, log } = await launch();
-const j = journey('j05-renomear', 'Renomear um catálogo pelo título');
-let status = 'fail';
-try {
-  await page.goto(harnessUrl({ db: freshDb('j05') }));
-  await createCatalog(page, { name: 'Meu primeiro catálogo' });
-  j.step('editor abre salvo', (await state(page)).runtime.saveLabel === 'Saved');
-  j.addEvidence(await shot(page, 'j05-01-editor'));
-  j.finding('o botão X não explica o que faz', { severity: 'medium', where: 'barra de cima' });
-} catch (error) {
-  j.step('execução sem exceção', false, String(error));
-} finally {
-  status = await j.finish(log);      // ou j.finish(log, { pending: 'depende de FR-85' })
-  await browser.close();
-  await server.close();
-}
-process.exit(status === 'fail' ? 1 : 0);
-```
-
-3. Prefira seletores por papel e nome (`getByRole('button', { name: 'Novo catálogo' })`), nunca por classe.
-4. Cada passo (`j.step`) é uma afirmação que a pessoa confere na tela. Guarde uma captura por tela importante.
-5. Achados de usabilidade vão em `j.finding(...)`, não derrubam a prova; eles alimentam a síntese.
-
-## Convenções de estado
-
-| Estado | Significa |
+| Estado | Regra |
 |---|---|
-| `pass` | todos os passos rodaram e ficaram verdes **nesta execução** |
-| `fail` | algum passo falhou ou a prova quebrou |
-| `pending` | a jornada depende de um recurso que ainda não existe (ex.: uma FR não implementada); a prova roda até onde dá e declara o motivo |
+| fail | Falha funcional, achado P0/P1, processo não zero ou ausência de resultado válido desta execução. |
+| pending | Existe dependência declarada e nenhuma falha que tenha prioridade. |
+| pass | Critérios executados e sem falha ou dependência. Pode conter achados P2/P3, preservados no resultado. |
 
-**Nunca marque verde o que não rodou.** Se uma prova não foi executada, ela não tem resultado. Se foi
-executada e falhou, fica `fail` com o detalhe. `pending` é só para dependência declarada, com o motivo
-no JSON (`pendingReason`).
+Uma dependência não pode esconder um passo funcional vermelho. Nunca declarar executado o que não rodou. Recursos já integrados devem ter verificações obrigatórias; reserve pending para dependências reais ainda ausentes.
 
-## Limites conhecidos
+Crie jNN-nome.mjs ou jiaNN-nome.mjs; o runner descobre ambos. Use journey, shot, state, waitSaved e createCatalog de lib.mjs, além de pendingStep, findingStep e finishJourneyGraded de fixtures/father-eyes.mjs. Prefira seletores por papel/nome, capture cada etapa importante e feche navegador e servidor em finally. waitSaved apenas observa: ao expirar, registra diagnóstico de salvamento e edições abertas, sem forçar aprovação.
 
-- O harness replica a montagem de produção, mas o servidor é local: latência, quedas de rede e permissões
-  reais do Supabase não acontecem aqui. Para simular salvamento lento use `__FATHER__.holdSaves(true)`.
-- O aviso do navegador ao fechar a aba com trabalho não salvo existe (como na produção); `lib.mjs` aceita
-  esse diálogo automaticamente e registra no log, para a navegação não travar.
+## Harness e limites
+
+fixtures/father-harness.tsx acompanha a montagem de src/vnext/app/bootstrap.tsx. Mudanças na montagem de produção exigem conferir essa réplica. Biblioteca, editor e revisão são reais; armazenamento e respostas externas são controlados.
+
+- ?db= isola a recuperação IndexedDB; freshDb() cria um nome novo.
+- ?user=A e ?user=B em abas do mesmo contexto compartilham localStorage, para conflito de dois funcionários.
+- ?ia=limite e ?ia=off exercitam indisponibilidade controlada; propostas locais não demonstram qualidade ou disponibilidade do provedor real.
+- window.__FATHER__ oferece state, holdSaves, releaseHeld, flushRecovery, recoveryRecords, open, library e dispose para inspecionar o resultado sem substituir os cliques.
+- Supabase real, permissões, autenticação, sessão expirada e queda real de rede precisam de verificação além do harness. holdSaves simula apenas atraso.
+- page.pdf verifica impressão automatizada; a janela nativa Salvar como PDF no PC do pai e a sessão observada continuam verificações humanas.
+
+O navegador aceita o diálogo de saída com alterações não salvas e o registra no log. A evidência histórica da Equipe B está em docs/qa/2026-10-17-usabilidade-pai.md; só resultados com nova identidade comprovam a integração atual.

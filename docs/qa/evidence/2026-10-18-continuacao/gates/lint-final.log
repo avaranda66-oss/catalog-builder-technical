@@ -1,0 +1,416 @@
+
+> catalog-app@1.0.0 lint
+> eslint "src/**/*.{ts,tsx}" "tests/**/*.{ts,tsx}" --ignore-pattern "src/labs/**"
+
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\App.tsx
+  173:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  197:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\common\BackupModal.tsx
+   54:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\common\DevRealtimeHUD.tsx
+  147:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\A4Canvas.tsx
+   94:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  745:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  746:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\CollaboratorPresenceBar.tsx
+  69:6  warning  React Hook useEffect has missing dependencies: 'activePageIndex' and 'currentCatalog.pages'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  83:6  warning  React Hook useEffect has a missing dependency: 'currentCatalog.pages'. Either include it or remove the dependency array                          react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\ExportPDFModal.tsx
+  55:6  warning  React Hook React.useEffect has a missing dependency: 'currentCatalog'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\PDFImportModal.tsx
+  27:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\PropertiesPanel.tsx
+  312:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\blocks\InsertsVisualBlock.tsx
+  317:25  warning  The value assigned to 'x' is not used in subsequent statements  no-useless-assignment
+  318:25  warning  The value assigned to 'y' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\blocks\TechnicalTableBlock.tsx
+  203:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  246:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\frames\StructuralSectionInteractionFrame.tsx
+  117:6  warning  React Hook useEffect has a missing dependency: 'cancelResize'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\hooks\useVerticalOverflowGuard.ts
+  99:11  warning  The value assigned to 'blockElements' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\inspector\FullPageCoverInspector.tsx
+  132:6  warning  React Hook useEffect has missing dependencies: 'bgSource.kind' and 'bgSource.url'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  154:6  warning  React Hook useEffect has a missing dependency: 'selectedLayer?.imageUrl'. Either include it or remove the dependency array             react-hooks/exhaustive-deps
+  185:6  warning  React Hook useEffect has a missing dependency: 'selectedLayer'. Either include it or remove the dependency array                       react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\inspector\StructuralSectionInspector.tsx
+  97:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\inspector\components\InspectorSegmentedControl.tsx
+  42:9  warning  The value assigned to 'targetIndex' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\inspector\media\GalleryImageSourceControl.tsx
+  51:6  warning  React Hook useEffect has a missing dependency: 'source.url'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\inspector\media\PrimaryImageSourceControl.tsx
+  58:6  warning  React Hook useEffect has a missing dependency: 'source.url'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\editor\picker\ProductKnowledgePickerModal.tsx
+  308:13  warning  Empty block statement  no-empty
+  334:13  warning  Empty block statement  no-empty
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\export\PrintDocumentView.tsx
+  185:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  193:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\guided-help\ContextHelpDrawer.tsx
+  49:6  warning  React Hook React.useEffect has a missing dependency: 'handleClose'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\LibraryView.tsx
+  260:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  285:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  644:72  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  645:89  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\CrossProductTransferModal.tsx
+  165:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\NewModuleModal.tsx
+  112:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\ProductKnowledgeWorkspace.tsx
+  329:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\WorkspaceDocumentsEvidenceTab.tsx
+   97:19  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  107:6   warning  React Hook useEffect has a missing dependency: 'loadDocuments'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  157:19  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  221:19  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  242:19  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  570:67  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\WorkspaceTechnicalDataTab.tsx
+  108:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  382:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\library\product-workspace\WorkspaceTechnicalTablesTab.tsx
+  115:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  169:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  189:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  237:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  345:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  357:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  756:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\technical-table\TechnicalTable.tsx
+   33:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\components\translation\TranslationCenterModal.tsx
+  104:53  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+  126:6   warning  React Hook useEffect has missing dependencies: 'loadCredentialStatus' and 'refreshCoverage'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  177:23  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+  192:6   warning  React Hook useEffect has a missing dependency: 'runLayoutQa'. Either include it or remove the dependency array                                   react-hooks/exhaustive-deps
+  276:52  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+  276:81  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+  281:19  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+  320:19  warning  Unexpected any. Specify a different type                                                                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\asset.schema.ts
+   60:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\canvas-layout.engine.ts
+  153:28  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  311:19  warning  'fixedWidthMm' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\catalog.schema.ts
+  134:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  258:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\composite-content.engine.ts
+   65:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\divergence.ts
+  42:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  92:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  93:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  95:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\product-workspace\validation.ts
+  161:15  warning  The value assigned to 'parsed' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\product-workspace\view-model.ts
+  352:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\structural-interaction.ts
+  39:7  warning  The value assigned to 'rawWidthMm' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\table-core\legacy-table.bridge.ts
+   30:17  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  208:11  warning  The value assigned to 'textValue' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\domain\table-core\publish-safety.audit.ts
+  308:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\hooks\useResolvedAssetUrl.ts
+  45:6  warning  React Hook useEffect has a missing dependency: 'entry'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\legacy-main.tsx
+  24:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\asset.service.ts
+  159:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  288:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  303:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  334:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  357:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  373:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\document-lifecycle.service.ts
+  256:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  302:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  422:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\pdf.service.ts
+  175:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\presence.service.ts
+   82:27  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   83:27  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  147:42  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  327:16  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u    @typescript-eslint/no-unused-vars
+  397:16  warning  'err' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  424:16  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u    @typescript-eslint/no-unused-vars
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\product-knowledge\supabase-product-knowledge.provider.ts
+  39:80   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  39:129  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\product-workbook\product-workbook.repository.ts
+   48:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  182:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\realtime.service.ts
+  12:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\storage.service.ts
+  212:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\supabase.service.ts
+  106:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  185:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  199:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  223:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  232:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  332:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  346:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  411:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  428:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  493:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  549:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  580:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  596:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  614:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  649:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  667:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  729:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  746:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  754:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  755:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  756:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  757:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  768:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  795:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  822:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  827:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  827:89  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  835:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  848:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  854:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  858:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  881:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  894:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  943:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  968:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\services\translation.service.ts
+   56:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  156:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\useAssetStore.ts
+  131:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  298:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  317:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  331:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  353:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  369:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  391:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  410:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\useCatalogStore.ts
+   193:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   375:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   375:81  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  2049:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  2856:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  2874:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  3234:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  3576:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  3739:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\useLibraryStore.ts
+   334:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   860:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1471:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1576:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1709:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1714:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1722:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1726:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1898:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1899:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1992:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1993:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  2051:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\usePresenceStore.ts
+  12:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\useTemplateStore.ts
+   29:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:80  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   38:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  141:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\stores\useTranslationStore.ts
+  167:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  225:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  307:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\block-extractors\features.extractor.ts
+   91:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  151:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  202:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\block-extractors\ordering.extractor.ts
+  54:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\block-extractors\table.extractor.ts
+   27:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   46:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   47:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  172:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  210:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  247:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\coverage.auditor.ts
+  113:9  warning  The value assigned to 'systemLocalizationPercent' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\credential-vault.ts
+   18:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  244:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  323:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  323:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\font-manager.ts
+  261:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\full-catalog-translation.service.ts
+  254:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  422:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  468:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\layout-qa.auditor.ts
+  163:33  warning  Optional chain expressions can return undefined by design - using a non-null assertion is unsafe and wrong  @typescript-eslint/no-non-null-asserted-optional-chain
+  163:76  warning  Optional chain expressions can return undefined by design - using a non-null assertion is unsafe and wrong  @typescript-eslint/no-non-null-asserted-optional-chain
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\translation-applier.registry.ts
+  280:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  451:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  505:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  522:77  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  573:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  575:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  619:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  641:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  654:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  656:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  681:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\src\translation\types.ts
+  134:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  197:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  212:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Usuario\.codex\worktrees\father-ready-continuacao\catalog-builder\tests\stores\save-queue-watchdog.test.ts
+  178:26  warning  The `Function` type accepts any function-like value.
+Prefer explicitly defining any function parameters and return type  @typescript-eslint/no-unsafe-function-type
+  225:26  warning  The `Function` type accepts any function-like value.
+Prefer explicitly defining any function parameters and return type  @typescript-eslint/no-unsafe-function-type
+  241:26  warning  The `Function` type accepts any function-like value.
+Prefer explicitly defining any function parameters and return type  @typescript-eslint/no-unsafe-function-type
+  274:22  warning  The `Function` type accepts any function-like value.
+Prefer explicitly defining any function parameters and return type  @typescript-eslint/no-unsafe-function-type
+  598:25  warning  The `Function` type accepts any function-like value.
+Prefer explicitly defining any function parameters and return type  @typescript-eslint/no-unsafe-function-type
+
+✖ 268 problems (0 errors, 268 warnings)
+

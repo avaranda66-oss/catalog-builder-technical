@@ -1,0 +1,27 @@
+[
+  {
+    "path": "build-final.log",
+    "bytes": 134055,
+    "sha256": "0adf94068de7313812ef8490672d272ac912176a0532100e04b8f221c7d932ac"
+  },
+  {
+    "path": "final-gates.json",
+    "bytes": 1420,
+    "sha256": "a8487943fae047a4c6bdaaccc8c636c98bd13806fb0f99caf39919f35070265c"
+  },
+  {
+    "path": "lint-final.log",
+    "bytes": 37568,
+    "sha256": "f99ca486d5bf9373044a9dbff6d2c56b0069509d99604d797cae097b6e7e1e01"
+  },
+  {
+    "path": "typecheck-final.log",
+    "bytes": 51,
+    "sha256": "2966bd3dfe636b91336be7c352525ad7b300d431a776a014cb1547e87a4b3c0c"
+  },
+  {
+    "path": "vitest-files.json",
+    "bytes": 71247,
+    "sha256": "0ece5059b1ac8963d7f854be166a352e385f867b9976f59fa000eb3a5fe039d5"
+  }
+]

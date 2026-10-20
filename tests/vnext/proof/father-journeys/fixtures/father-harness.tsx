@@ -534,7 +534,12 @@ function renderLibrary(): void {
   mode = 'library';
   renderer.render(
     <React.StrictMode>
-      <CatalogLibrary service={libraryService} onOpen={(catalogId) => navigateTo(catalogId)} />
+      <CatalogLibrary service={libraryService} onOpen={(catalogId) => navigateTo(catalogId)}
+        onOpenWithAssistant={(catalogId) => {
+          const destination = new URL(harnessHref(catalogId), window.location.href);
+          destination.searchParams.set('assistente', '1');
+          window.location.assign(destination.href);
+        }} />
     </React.StrictMode>
   );
 }
@@ -572,6 +577,11 @@ function installEditorRuntime(runtime: VNextPersistenceRuntime, bridge: DefaultA
   bindReusableSession();
   cleanups.push(runtime.workspace.subscribe(() => {
     if (runtime.workspace.getSnapshot().session !== reusableSession) bindReusableSession();
+    // Same binding-to-address rule as bootstrap.syncCatalogAddress, keeping the local fixture route.
+    const binding = runtime.workspace.getSnapshot().binding;
+    if (binding.kind === 'PERSISTED' && new URLSearchParams(window.location.search).get('catalog') !== binding.catalogId) {
+      window.history.replaceState(null, '', harnessHref(binding.catalogId));
+    }
   }));
 
   const translation = new TranslationReviewCoordinator({

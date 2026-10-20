@@ -3,7 +3,7 @@
 // salvamento; reabre OUTRO catálogo (TA-25N): nada bloqueia. Reabre o MESMO: aparece "Recuperação local"
 // em linguagem simples; "Conferir se foi salvo" confirma e nada se perde. Por fim, fecha a aba com um
 // texto ainda sendo digitado (caixa aberta) e confere se esse texto volta.
-// "Salvo às HH:MM" é da Onda 2 (2G, FR-44) → pendente.
+// FR-44: depois de editar, o horário de salvamento confirmado é obrigatório.
 //   BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j07-salvar-reabrir.mjs
 //   VP=1280 BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j07-salvar-reabrir.mjs
 import {
@@ -11,7 +11,7 @@ import {
   waitLibrary, waitSaved,
 } from './lib.mjs';
 import {
-  MIN_BODY_FONT_PX, MIN_TARGET_PX, classifyConsole, clickCounter, findingStep, finishJourneyGraded, measureAll, pendingStep, scanJargon,
+  MIN_BODY_FONT_PX, MIN_TARGET_PX, classifyConsole, clickCounter, findingStep, finishJourneyGraded, measureAll, scanJargon,
   waitMs,
 } from './fixtures/father-eyes.mjs';
 
@@ -29,8 +29,9 @@ const texts = {};
 let page = firstPage;
 let status = 'fail';
 
-const saveStatus = () => page.locator('[data-vnext-shell] [data-save-state][data-save-phase]').first();
-const saveText = async () => ((await saveStatus().textContent().catch(() => '')) ?? '').trim();
+const saveStatus = () => page.locator('[data-vnext-shell] header [data-save-phase]').first();
+const saveText = async () => ((await saveStatus().textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
+const SAVED = /^Salvo(?: às \d{2}:\d{2})?$/;
 const recoveryDialog = () => page.getByRole('dialog', { name: 'Recuperação local' });
 const docIncludes = (snapshot, needle) => JSON.stringify(snapshot.runtime?.document ?? {}).includes(needle);
 const storedIncludes = (snapshot, needle) => JSON.stringify(snapshot.runtime?.stored ?? {}).includes(needle);
@@ -82,6 +83,7 @@ async function appendToFirstText(suffix, { conclude = true } = {}) {
     await box.waitFor({ timeout: 2500 }).catch(() => {});
   }
   if (!(await box.isVisible().catch(() => false))) {
+    await page.getByRole('tab', { name: 'Propriedades', exact: true }).click();
     const panelButton = page.getByRole('complementary', { name: /Propriedades/ }).getByRole('button', { name: /Editar (o )?(texto|conteúdo)/ }).first();
     if (await panelButton.count()) { await panelButton.click(); path = 'botão do painel Propriedades'; }
     await box.waitFor({ timeout: 5000 });
@@ -128,18 +130,17 @@ try {
   const rev1 = await appendToFirstText(' — rev. 1');
   j.step('dois cliques no título abrem a caixa de edição do texto (sem precisar do painel)', rev1.path === 'dois cliques', `caminho que funcionou: ${rev1.path}`);
   const during = await saveText();
-  const savedMs = await waitMs(async () => (await saveText()) === 'Salvo' && !(await state(page)).runtime.dirty, { timeout: 15000 });
+  const savedMs = await waitMs(async () => SAVED.test(await saveText()) && !(await state(page)).runtime.dirty, { timeout: 15000 });
   timings.editToSavedMs = savedMs;
   measures.status = await measureAll({ status: saveStatus(), salvar: page.getByRole('button', { name: /^Salv/ }).first() });
   const afterEdit = await state(page);
   j.step('depois de editar, o status sai de "Salvo" e volta a "Salvo" sozinho em menos de 5 s (a alteração está gravada)',
     savedMs >= 0 && savedMs < 5000 && storedIncludes(afterEdit, 'rev. 1'), `antes: "${before}" · logo depois de "Concluir": "${during}" · "Salvo" após ${savedMs} ms`);
   j.step('o status "Salvo" fica na barra de cima, visível sem rolar', Boolean(measures.status.status?.fullyVisible), JSON.stringify(measures.status.status));
-  pendingStep(j, 'o status mostra a hora ("Salvo às HH:MM")', `pendente Onda 2 (2G, FR-44): hoje mostra só "${await saveText()}"`);
-  if ((measures.status.status?.fontPx ?? 99) < MIN_BODY_FONT_PX) {
-    pendingStep(j, `o status "Salvo" tem letra legível (≥ ${MIN_BODY_FONT_PX} px)`,
-      `pendente Onda 2 (2C, FR-16b escala 60+): hoje o "Salvo" da barra de cima tem ${measures.status.status.fontPx} px (${measures.status.status.heightPx} px de altura)`);
-  }
+  j.step('o status mostra a hora confirmada depois da edição ("Salvo às HH:MM", FR-44)',
+    /^Salvo às \d{2}:\d{2}$/.test(await saveText()), `status: "${await saveText()}"`);
+  j.step(`o status "Salvo" tem letra legível (≥ ${MIN_BODY_FONT_PX} px, FR-16b)`,
+    (measures.status.status?.fontPx ?? 0) >= MIN_BODY_FONT_PX, JSON.stringify(measures.status.status));
   texts.editor = await visibleText(page, '[data-vnext-shell]');
   jargonStep('editor com o catálogo aberto', texts.editor);
   j.addEvidence(await shot(page, 'j07-01-editado-salvo'));
@@ -152,7 +153,7 @@ try {
   await waitSaved(page);
   const reopened = await state(page);
   j.step('fechar a aba depois de "Salvo" e reabrir o mesmo catálogo: a alteração está lá e nenhuma tela de recuperação aparece',
-    cleanReopen && docIncludes(reopened, 'rev. 1') && (await saveText()) === 'Salvo', `tela de recuperação: ${!cleanReopen} · status: "${await saveText()}"`);
+    cleanReopen && docIncludes(reopened, 'rev. 1') && SAVED.test(await saveText()), `tela de recuperação: ${!cleanReopen} · status: "${await saveText()}"`);
 
   // 3. Servidor lento: edita, o salvamento fica preso, fecha a aba no meio.
   await page.evaluate(() => window.__FATHER__.holdSaves(true));
@@ -164,7 +165,7 @@ try {
   const heldState = await state(page);
   measures.statusHeld = await measureAll({ status: saveStatus() });
   j.step('com o servidor lento o status NÃO diz "Salvo" (diz que está salvando) e uma cópia local do PCON-Y18 fica guardada',
-    heldText !== 'Salvo' && heldState.runtime.dirty && records.some((record) => record.catalogId === idA),
+    !SAVED.test(heldText) && heldState.runtime.dirty && records.some((record) => record.catalogId === idA),
     `status: "${heldText}" · cópias locais: ${JSON.stringify(records)}`);
   j.addEvidence(await shot(page, 'j07-02-salvando-servidor-lento'));
   const dialogsBefore = log.dialogs.length;
@@ -183,7 +184,7 @@ try {
     cleanB && stateB.runtime?.title === B && stateB.runtime?.saveLabel === 'Saved',
     `tela de recuperação: ${!cleanB} · título: ${stateB.runtime?.title} · menção ao outro catálogo na tela: ${mentionsA}`);
   await appendToFirstText(' — editado');
-  const savedBMs = await waitMs(async () => (await saveText()) === 'Salvo' && !(await state(page)).runtime.dirty, { timeout: 15000 });
+  const savedBMs = await waitMs(async () => SAVED.test(await saveText()) && !(await state(page)).runtime.dirty, { timeout: 15000 });
   j.step('o TA-25N aceita edição e salva normalmente', savedBMs >= 0 && storedIncludes(await state(page), '— editado'), `${savedBMs} ms`);
   j.addEvidence(await shot(page, 'j07-03-outro-catalogo-sem-bloqueio'));
 
@@ -227,7 +228,7 @@ try {
   const recovered = await state(page);
   const recordsAfter = await page.evaluate(() => window.__FATHER__.recoveryRecords());
   j.step('"Conferir se foi salvo" confirma o salvamento preso e abre o catálogo com a alteração ("rev. 2"), sem diálogo e sem perder nada',
-    closedMs >= 0 && docIncludes(recovered, 'rev. 2') && storedIncludes(recovered, 'rev. 2') && (await saveText()) === 'Salvo',
+    closedMs >= 0 && docIncludes(recovered, 'rev. 2') && storedIncludes(recovered, 'rev. 2') && SAVED.test(await saveText()),
     `diálogo fechou em ${closedMs} ms · status: "${await saveText()}" · cópias locais restantes: ${JSON.stringify(recordsAfter)}`);
   j.step('recuperar = 1 clique na opção recomendada', clicks.counts.recuperar === 1, JSON.stringify(clicks.counts));
   j.addEvidence(await shot(page, 'j07-05-recuperado'));
@@ -281,7 +282,7 @@ try {
         recoveredMs >= 0 && (boxValue.includes('rev. 3 digitando') || onPage), `caixa de edição: "${boxValue.slice(0, 80)}" · na página: ${onPage}`);
       if (boxValue.includes('rev. 3 digitando')) {
         await page.getByRole('button', { name: 'Concluir', exact: true }).first().click();
-        const savedTypingMs = await waitMs(async () => (await saveText()) === 'Salvo' && !(await state(page)).runtime.dirty, { timeout: 15000 });
+        const savedTypingMs = await waitMs(async () => SAVED.test(await saveText()) && !(await state(page)).runtime.dirty, { timeout: 15000 });
         j.step('"Concluir" grava o texto recuperado ("Salvo")', savedTypingMs >= 0 && storedIncludes(await state(page), 'rev. 3 digitando'), `${savedTypingMs} ms`);
       }
     } else {
