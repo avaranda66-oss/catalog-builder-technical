@@ -372,7 +372,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-library-list { display: grid; border-bottom: 1px solid #dbe2ea; }
 .vnext-library-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 24px; min-height: 104px; border-top: 1px solid #dbe2ea; background: transparent; padding: 20px 4px; }
 /* J11: the copy just created stays marked (tint, navy bar and "Cópia nova") until the next action. */
-.vnext-library-row.is-highlighted { background: var(--vnext-accent-surface); box-shadow: inset 4px 0 0 var(--vnext-primary); padding-left: 16px; padding-right: 12px; }
+.vnext-library-row.is-highlighted { background: var(--vnext-accent-surface); box-shadow: inset 4px 0 0 var(--vnext-primary); padding-left: 16px; }
 .vnext-library-origin-badge.is-new { border-color: var(--vnext-primary); background: #fff; color: var(--vnext-primary); }
 .vnext-library-row-main { min-width: 0; }
 .vnext-library-title-line { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 7px; }
