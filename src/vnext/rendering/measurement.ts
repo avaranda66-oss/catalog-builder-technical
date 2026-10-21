@@ -1,5 +1,5 @@
 import type { CatalogDocument, RichText, TableModel } from '../domain/editorial-model';
-import { add,mmToU,pxToQ,sum,uToQ } from '../domain/physical';
+import { add,deviceSnapToleranceQ,mmToU,pxToQ,sum,uToQ } from '../domain/physical';
 import { cumulative,projectRows,resolveRows,type SpanConstraint } from '../table/table-layout';
 import { buildPaint } from './border-paint';
 import { orderedAnchors } from '../table/table-model';
@@ -113,6 +113,10 @@ export function factKey(fact:PhysicalLayoutFact):string {
     case 'paintEdge':return JSON.stringify([fact.kind,fact.pageId,fact.tableId,fact.edgeId]);
   }
 }
+/** Zero at 100%; one device pixel when the page is zoomed or the OS scales the display (see deviceSnapToleranceQ). */
+export function measurementToleranceQ(root:HTMLElement):number {
+  return deviceSnapToleranceQ(root.ownerDocument.defaultView?.devicePixelRatio??1);
+}
 function bounds(element:HTMLElement,origin:DOMRect):Bounds {
   const rect=element.getBoundingClientRect();
   return {xQ:pxToQ(rect.left-origin.left),yQ:pxToQ(rect.top-origin.top),widthQ:pxToQ(rect.width),heightQ:pxToQ(rect.height)};
@@ -122,9 +126,10 @@ export async function captureSnapshot(doc:CatalogDocument,plans:ReadonlyMap<stri
   assertDomIds(root,'data-page-id',doc.pages.map(p=>p.id));
   assertDomIds(root,'data-object-id',doc.pages.flatMap(page=>walkPageObjects(page).map(entry=>entry.object.id)));
   assertDomIds(root,'data-table-id',[...plans.keys()]);
-  const facts:PhysicalLayoutFact[]=[],geometryDiagnostics:Diagnostic[]=[];
+  const facts:PhysicalLayoutFact[]=[],geometryDiagnostics:Diagnostic[]=[],toleranceQ=measurementToleranceQ(root);
   const check=(actual:number,expected:number,description:string,location:Partial<Diagnostic>)=>{
-    if(actual!==expected)geometryDiagnostics.push(diagnostic('RENDER_GEOMETRY_MISMATCH',`${description}: actualQ=${actual}, expectedQ=${expected}`,location));
+    if(Math.abs(actual-expected)>toleranceQ)geometryDiagnostics.push(diagnostic('RENDER_GEOMETRY_MISMATCH',
+      `${description}: actualQ=${actual}, expectedQ=${expected}${toleranceQ?`, toleranceQ=${toleranceQ}`:''}`,location));
   };
   for(const page of doc.pages) {
     const element=findElement(root,'data-page-id',page.id),rect=element.getBoundingClientRect();
