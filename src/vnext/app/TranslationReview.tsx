@@ -241,6 +241,29 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
       if (mounted.current) setSaving(false);
     }
   };
+  // F-09 (usabilidade 2026-10-17): a caixa dos trechos tem pouca altura; na revisão o cabeçalho encolhe e o contador
+  // diz quantos avisos existem dentro dela (os mesmos que cada trecho mostra; o texto em edição conta como está).
+  const compact = snapshot.runs.length > 0;
+  const suggestionTotals = React.useMemo(() => {
+    const totals = { numbers: 0, questions: 0, glossary: 0 };
+    for (const run of snapshot.runs) {
+      const key = translationReviewKey(run.unitId, run.runId);
+      const suggestions = reviewSuggestions(run.sourceText, drafts.current.get(key)?.text ?? run.translatedText, sourceLocale, targetLocale,
+        snapshot.confirmedReadings[key] ?? NO_READINGS);
+      if (!suggestions) continue;
+      if (suggestions.numberFix !== undefined) totals.numbers += 1;
+      totals.questions += suggestions.questions.length;
+      totals.glossary += suggestions.glossary.length;
+    }
+    return totals;
+  // editingKeys muda a cada rascunho e é o que torna os rascunhos (em ref) visíveis a este cálculo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot.runs, snapshot.confirmedReadings, editingKeys, sourceLocale, targetLocale]);
+  const suggestionSummary = [
+    `${suggestionTotals.numbers} ${suggestionTotals.numbers === 1 ? 'ajuste' : 'ajustes'} de números`,
+    `${suggestionTotals.questions} ${suggestionTotals.questions === 1 ? 'pergunta' : 'perguntas'}`,
+    `${suggestionTotals.glossary} ${suggestionTotals.glossary === 1 ? 'termo' : 'termos'} do glossário`,
+  ].join(' · ');
   const accept = () => {
     // Pending verification reconciles the already dispatched copy and cannot change its candidate.
     if (snapshot.pending) { void coordinator.accept(); return; }
@@ -262,14 +285,17 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
       <header><div className="vnext-dialog-heading"><p className="vnext-dialog-eyebrow">Catálogos em outros idiomas</p>
         <h2 id="translation-heading">Centro de Tradução</h2></div>
         <button type="button" className="vnext-btn-quiet" onClick={close} disabled={snapshot.phase === 'creating' || snapshot.pending}>Fechar</button></header>
-      <p id="translation-description" className="vnext-dialog-description">Gere e revise uma cópia em outro idioma. O catálogo original será preservado.</p>
+      <p id="translation-description" className={compact ? 'vnext-dialog-description vnext-translation-description-compact' : 'vnext-dialog-description'}>Gere e revise uma cópia em outro idioma. O catálogo original será preservado.</p>
       <ol className="vnext-translation-steps" aria-label="Etapas da tradução">
         {['Idioma', 'Revisão', 'Cópia salva'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}
           data-state={step > index || snapshot.phase === 'created' ? 'complete' : step === index ? 'current' : 'waiting'}>
           <span aria-hidden="true">{index + 1}</span>{label}
         </li>)}
       </ol>
-      <div className="vnext-translation-languages">
+      {compact ? <p className="vnext-translation-languages-compact" data-translation-languages="compact">
+        <strong>{sourceTitle || 'Catálogo atual'}</strong><span aria-hidden="true">·</span>
+        <span>{sourceLanguage.regional} <span aria-hidden="true">→</span><span className="vnext-translation-description-compact"> para </span>{targetLanguage.regional}</span>
+      </p> : <div className="vnext-translation-languages">
         <div className="vnext-translation-origin"><span>Catálogo original</span><strong>{sourceTitle || 'Catálogo atual'}</strong><p>{sourceLanguage.regional}</p></div>
         <label>Idioma de destino <select aria-label="Idioma de destino" value={targetLocale} disabled={targetLocked}
           onChange={event => {
@@ -278,7 +304,7 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
           }}>
           {targetLocales.map(locale => <option key={locale} value={locale}>{languageLabel(locale).regional}</option>)}
         </select><span className="vnext-translation-locale-note">{targetMetadata?.nativeName}</span></label>
-      </div>
+      </div>}
       {sourceLocale !== 'pt-BR' && <p className="vnext-status" data-tone="warning">A origem precisa estar em português (Brasil). Abra o catálogo original em português na Biblioteca para gerar uma cópia em espanhol ou inglês.</p>}
       {saveProblem && <p role="alert" className="vnext-status" data-tone="error" data-translation-save-problem="">{saveProblem}</p>}
       {snapshot.message && <p role="alert" className="vnext-status" data-tone={snapshot.pending ? 'warning' : 'error'}>{snapshot.message}</p>}
@@ -299,7 +325,8 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
         <div className="vnext-translation-review-intro"><div><h3>Revise a tradução</h3>
           <p>Compare com o original e corrija os textos se necessário. Os dados técnicos devem permanecer iguais.</p></div>
           <div className="vnext-translation-review-progress" role="status"><strong>{reviewedCount} de {snapshot.runs.length} trechos revisados</strong>
-            <span>{snapshot.correctionCount} {snapshot.correctionCount === 1 ? 'correção' : 'correções'}</span></div>
+            <span>{snapshot.correctionCount} {snapshot.correctionCount === 1 ? 'correção' : 'correções'}</span>
+            <span className="vnext-translation-review-suggestions-summary" data-translation-suggestions-summary="">{suggestionSummary}</span></div>
         </div>
         <div className="vnext-translation-runs" role="region" aria-label="Textos para revisão" tabIndex={0}>{groups.map(page => <section className="vnext-translation-page" key={page.pageLabel}>
           <h4>{page.pageLabel}</h4>
