@@ -63,7 +63,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-canvas-meta .vnext-zoom-control { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 4px; }
 .vnext-canvas-meta .vnext-zoom-label { margin-right: 2px; color: #526176; font-size: 12px; font-weight: 600; }
 .vnext-zoom-control .vnext-zoom-step, .vnext-zoom-control .vnext-zoom-select { min-height: 32px; border: 1px solid #ccd5e1; border-radius: 6px; background: #fff; color: #26374d; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
-.vnext-zoom-control .vnext-zoom-step { display: inline-grid; min-width: 32px; place-items: center; padding: 0; }
+.vnext-zoom-control .vnext-zoom-step { display: inline-grid; min-width: 32px; place-items: center; padding: 0; font-size: 15px; }
 .vnext-canvas-meta .vnext-zoom-step span { color: inherit; font-size: 18px; font-weight: 700; line-height: 1; }
 .vnext-zoom-control .vnext-zoom-select { padding: 0 6px; }
 .vnext-zoom-control .vnext-zoom-step:hover:not(:disabled), .vnext-zoom-control .vnext-zoom-select:hover { border-color: #9eacbd; background: #f7f9fc; }
@@ -919,6 +919,8 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   padding-top: 11px;
 }
 .vnext-assistant-dock [role="alert"] { font-size: 15px; color: #ad362d; }
+/* C-05: why "Enviar" is switched off, right under it. */
+.vnext-assistant-dock .ai-send-blocked { margin: -4px 0 12px; color: var(--vnext-warning, #7c5b00); font-size: 15px; line-height: 1.5; }
 @media (max-width: 900px) {
   .vnext-actions .vnext-action-assistant { padding: 0 8px; }
   /* FR-17: only on a small screen the assistant covers the screen, with its own "Fechar". */
@@ -1071,7 +1073,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta div span { font-size: 13px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta > .vnext-canvas-statuses { flex-basis: 260px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta .vnext-zoom-label { font-size: 15px; }
-.vnext-shell[data-simple-by-default="true"] .vnext-zoom-control .vnext-zoom-step { min-width: 40px; min-height: 44px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-zoom-control .vnext-zoom-step { min-width: 40px; min-height: 44px; font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta .vnext-zoom-step span { font-size: 22px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-zoom-control .vnext-zoom-select { min-height: 44px; font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta .vnext-zoom-value { font-size: 13px; }

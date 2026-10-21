@@ -6,6 +6,14 @@ import { trapReviewTab, useReviewDialog } from './review-dialog';
 import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticText } from './publication-diagnostic-presentation';
 import type { Diagnostic } from '../domain';
 
+/**
+ * C-04: "Corrigir este item" closes the review, so the blocked status tells the real way back: fix in the editor and
+ * click "Publicar / PDF" again (there is no "Verificar novamente" in the editor).
+ */
+export const PUBLICATION_BLOCKED_MESSAGE = 'Publicação bloqueada. Clique em “Corrigir este item” para ir até cada problema no editor. '
+  + 'Depois de corrigir, clique em Publicar / PDF de novo.';
+const PUBLICATION_BLOCKED_WITHOUT_LOCATE = 'Publicação bloqueada. Volte ao editor, corrija os itens abaixo e clique em Publicar / PDF de novo.';
+
 /** The browser uses the page title as its suggested PDF filename. */
 function pdfFileTitle(title: string): string {
   return title.replace(/[<>:"/\\|?*]|\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim()
@@ -121,7 +129,8 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
             {waitingMessage ?? 'Salvando o catálogo… A verificação começa sozinha assim que o salvamento terminar.'}</p>
           : !current ? <p role="alert" className="vnext-status" data-tone="warning">O catálogo ou o acesso mudou depois desta verificação. Clique em Verificar novamente.</p>
           : <p role="status" className="vnext-status" data-tone={running ? 'pending' : result?.status === 'READY' ? 'success' : 'error'}>
-            {running ? 'Verificando páginas, textos, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.' : 'Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.'}</p>}
+            {running ? 'Verificando páginas, textos, fontes e imagens…' : result?.status === 'READY' ? 'Pronto para imprimir ou salvar PDF.'
+              : onLocateDiagnostic ? PUBLICATION_BLOCKED_MESSAGE : PUBLICATION_BLOCKED_WITHOUT_LOCATE}</p>}
         {!running && <button type="button" className="vnext-btn-secondary" data-publication-action="recheck" onClick={recheck}>Verificar novamente</button>}
         {result?.diagnostics.length ? <div>
           <h3>{result.status === 'BLOCKED' ? 'Itens para corrigir' : 'Pontos para revisar'}</h3>

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { SaveProjection } from '../../persistence';
 import {
-  editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, type EditorNoticeInput,
+  editorNoticeText, editorNoticeTimeoutMs, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, type EditorNoticeInput,
 } from '../../editor/editor-notices';
 import { fatherSaveExplanation } from '../save-presentation';
 import './EditorNotices.css';
@@ -19,8 +19,9 @@ export interface EditorNoticesProps {
 /**
  * FR-12: one fixed area right under the top bar, above the page, so messages are seen without scrolling.
  * Save problems are bands that stay while they last (they are part of the layout). The latest status message floats
- * over the top of the workspace instead, so it never pushes the page down or pulls it back up: a finished change
- * leaves after 4 s; an error or an instruction stays until the person closes it or the next message replaces it.
+ * over the top of the workspace instead, so it never pushes the page down or pulls it back up: a short finished
+ * change leaves after 4 s; a longer one, which tells what to do next, stays at least 12 s (paused while the pointer
+ * is over it); an error or an instruction stays until the person closes it or the next message replaces it.
  * FR-44: every save problem has its plain explanation here, also in the simple mode. FR-43: a conflict is not a
  * band: the editor shows the blocking SaveConflictDialog (rendered outside the editor shell, see ConflictDialog.tsx).
  */
@@ -52,21 +53,23 @@ export function EditorNotices({ message, onDismissMessage, save, localProtection
 function TransientNotice({ notice, onDismiss }: { notice: EditorNoticeInput; onDismiss: () => void }) {
   const message = editorNoticeText(notice);
   const tone = editorNoticeTone(notice);
+  const timeoutMs = editorNoticeTimeoutMs(notice);
   const [paused, setPaused] = React.useState(false);
   // The editor re-renders often; keep the timer tied to the message, not to the callback identity.
   const dismiss = React.useRef(onDismiss);
   dismiss.current = onDismiss;
   React.useEffect(() => {
-    if (!editorNoticeAutoHides(tone) || paused) return;
-    const timer = globalThis.setTimeout(() => dismiss.current(), SUCCESS_NOTICE_TIMEOUT_MS);
+    if (timeoutMs === null || paused) return;
+    const timer = globalThis.setTimeout(() => dismiss.current(), timeoutMs);
     return () => globalThis.clearTimeout(timer);
-  }, [tone, paused]);
+  }, [timeoutMs, paused]);
   return (
     <div
       className="vnext-editor-notice"
       role="status"
       data-tone={tone}
       data-editor-notice=""
+      data-notice-stays={timeoutMs === null ? 'until-closed' : timeoutMs > SUCCESS_NOTICE_TIMEOUT_MS ? 'long' : 'short'}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}

@@ -55,7 +55,7 @@ export function InspectorNumberField({
             }
           }}
         />
-        <span>mm</span>
+        <span title="milímetros">mm</span>
       </div>
       {error && <span id={errorId} className="vnext-inspector-field-error" data-inspector-error={field}>{error}</span>}
     </label>

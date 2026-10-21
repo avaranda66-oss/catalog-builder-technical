@@ -72,6 +72,8 @@ export function scanJargon(text, { allow = [] } = {}) {
 
 /** "mm" só é problema quando aparece sem o que explica (A4, página, largura, altura, posição…). */
 export function unexplainedMm(text) {
+  // A screen that says once what "mm" means ("mm = milímetros") explains every field unit next to it.
+  if (/\bmm\s*=\s*milímetros/i.test(text)) return [];
   const hits = [];
   const pattern = /[^\n]{0,40}\bmm\b[^\n]{0,20}/g;
   let match;

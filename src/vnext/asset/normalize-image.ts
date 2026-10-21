@@ -19,7 +19,13 @@ export { exifOrientationSwapsAxes, readJpegExifOrientation, type ExifOrientation
 
 export const MAX_UPLOAD_IMAGE_LONG_SIDE_PX = 3000;
 export const NORMALIZED_JPEG_QUALITY = 0.9;
-export const HEIC_PHOTO_MESSAGE = 'Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.';
+/**
+ * C-02/C-03: says what happened, what to do with this photo and where the iPhone setting is. It contains a refusal
+ * ("não é aceito"), so the editor keeps it on screen until the person closes it.
+ */
+export const HEIC_PHOTO_MESSAGE = 'Esta foto está no formato HEIC, do iPhone, que ainda não é aceito. '
+  + 'Envie a foto em JPEG ou peça a quem a tirou. Para as próximas fotos, no iPhone: '
+  + 'Ajustes > Câmera > Formatos > “Mais compatível”.';
 
 const HEIF_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1']);
 const AVIF_BRANDS = new Set(['avif', 'avis']);

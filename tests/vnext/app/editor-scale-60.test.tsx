@@ -137,7 +137,9 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     main(container.querySelector('.vnext-tool-group button'), 'toolbar button');
     main(screen.getByRole('combobox', { name: 'Zoom' }), 'zoom levels');
     main(within(screen.getByRole('tablist', { name: 'Painel da direita' })).getByRole('tab', { name: 'Propriedades' }), '"Propriedades" tab');
-    expect(px(getComputedStyle(screen.getByRole('button', { name: 'Aumentar o zoom' })).minHeight)).toBeGreaterThanOrEqual(44);
+    // J4 P2: the "−" and "+" zoom buttons were 12 px text; they follow the 15 px chrome like the list next to them.
+    main(screen.getByRole('button', { name: 'Aumentar o zoom' }), '"Aumentar o zoom"');
+    main(screen.getByRole('button', { name: 'Diminuir o zoom' }), '"Diminuir o zoom"');
     expect(px(getComputedStyle(container.querySelector('.vnext-canvas-meta strong')!).fontSize)).toBeGreaterThanOrEqual(15);
 
     // With an object selected, the buttons of "Propriedades" are main actions too.
@@ -146,6 +148,17 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     fireEvent.pointerUp(hit, { pointerId: 7, button: 0, clientX: 40, clientY: 40 });
     main(container.querySelector('.vnext-info button'), 'button in "Propriedades"');
     expect(px(getComputedStyle(container.querySelector('.vnext-info h2')!).fontSize)).toBeGreaterThanOrEqual(15);
+  });
+
+  it('says once what "mm" means next to the position and size fields (J4 P2)', () => {
+    const { container } = renderEditor();
+    const hit = container.querySelector<HTMLElement>('[data-editor-object-id="shape-target"]')!;
+    fireEvent.pointerDown(hit, { pointerId: 9, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(hit, { pointerId: 9, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.click(screen.getByRole('button', { name: 'Mais propriedades' }));
+    expect(screen.getByText('Posição e tamanho, em mm (mm = milímetros).')).toBeVisible();
+    const x = screen.getByRole('textbox', { name: 'X mm' });
+    expect(x.parentElement?.querySelector('span')).toHaveAttribute('title', 'milímetros');
   });
 
   it('gives the "Fechar" buttons 44 px and the title error 13 px', () => {

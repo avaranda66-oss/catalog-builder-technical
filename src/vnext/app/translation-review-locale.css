@@ -14,3 +14,14 @@
   .vnext-translation-center .vnext-translation-suggestion-actions { width: 100%; }
   .vnext-translation-center .vnext-translation-suggestion-actions > button { flex: 1 1 auto; }
 }
+
+/* E-02 · confirmação antes de descartar correções da revisão de tradução. */
+.vnext-translation-center .vnext-translation-discard-footer { display: block; }
+.vnext-translation-center .vnext-translation-discard {
+  border: 1px solid var(--vnext-border); border-left: 4px solid var(--vnext-warning); border-radius: var(--vnext-radius-surface);
+  background: var(--vnext-warning-surface, var(--vnext-surface-muted)); color: var(--vnext-text); padding: 12px 16px;
+}
+.vnext-translation-center .vnext-translation-discard > h3 { margin: 0 0 6px; font-size: 17px; line-height: 1.4; }
+.vnext-translation-center .vnext-translation-discard > p { margin: 0 0 12px; font-size: 15px; line-height: 1.6; }
+.vnext-translation-center .vnext-translation-discard-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.vnext-translation-center .vnext-translation-discard-actions > button { min-height: 44px; font-size: 15px; }

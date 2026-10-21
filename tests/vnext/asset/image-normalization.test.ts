@@ -18,6 +18,7 @@ import {
   type ImageReencoder,
 } from '@/vnext/asset/normalize-image';
 import { sniffEncodedImageDimensions, sniffImageDimensions } from '@/vnext/asset/sniff';
+import { classifyEditorNotice, editorNoticeTimeoutMs } from '@/vnext/editor/editor-notices';
 import { imageUploadErrorMessage } from '@/vnext/app/image-upload';
 
 const fixtureDir = resolve(__dirname, 'fixtures');
@@ -182,7 +183,12 @@ describe('FR-40 upload normalization', () => {
     await expect(normalizeImageForUpload(new TextEncoder().encode('%PDF-1.7 fake document')))
       .resolves.toMatchObject({ ok: false, code: 'UNSUPPORTED_MEDIA' });
 
-    expect(HEIC_PHOTO_MESSAGE).toBe('Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.');
+    expect(HEIC_PHOTO_MESSAGE).toBe('Esta foto está no formato HEIC, do iPhone, que ainda não é aceito. '
+      + 'Envie a foto em JPEG ou peça a quem a tirou. Para as próximas fotos, no iPhone: '
+      + 'Ajustes > Câmera > Formatos > “Mais compatível”.');
+    // C-03: a refusal with an instruction stays on screen until the person closes it.
+    expect(classifyEditorNotice(HEIC_PHOTO_MESSAGE)).toBe('error');
+    expect(editorNoticeTimeoutMs(HEIC_PHOTO_MESSAGE)).toBeNull();
     expect(imageUploadErrorMessage('UNSUPPORTED_HEIC')).toBe(HEIC_PHOTO_MESSAGE);
   });
 });

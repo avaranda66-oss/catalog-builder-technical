@@ -6,8 +6,13 @@ import { getTranslationLanguage, VNEXT_TRANSLATION_PROFILES, type VNextTranslati
 import { protectTechnicalTokens } from '../translation/technical-token-protector';
 import { reviewSuggestions, type NumberReadingQuestion, type ReviewSuggestions } from '../translation/review-suggestions';
 import type { LocaleFormatConfirmationOption } from '../translation/locale-number-format';
+import type { ManualSaveResult } from '../persistence/save-coordinator';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
 import './translation-review-locale.css';
+
+/** E-01: what "Gerar tradução" says when the automatic save before translating did not work. */
+export const TRANSLATION_SAVE_NEEDED_MESSAGE = 'Para traduzir, o catálogo precisa estar salvo, e não foi possível salvar agora. '
+  + 'Feche esta janela, confira o aviso de salvamento acima da página e clique em Traduzir novamente.';
 
 const languageNames: Readonly<Record<string, string>> = {
   'pt-BR': 'Português', 'es-ES': 'Espanhol', 'en-US': 'Inglês',
@@ -153,11 +158,26 @@ const ReviewRun = React.memo(function ReviewRun({ run, coordinator, index, disab
   </div>;
 });
 
-export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onClose, onOpenCopy }: {
+export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onClose, onOpenCopy, save }: {
   coordinator: TranslationReviewCoordinator; sourceLocale: string; sourceTitle?: string;
   onClose: () => void; onOpenCopy: (catalogId: string) => void;
+  /**
+   * E-01: present for saved catalogs. The translation only reads the saved version, so "Gerar tradução" saves first
+   * (like "Publicar / PDF") instead of asking the person to save and try again.
+   */
+  save?: () => Promise<ManualSaveResult>;
 }) {
   const snapshot = React.useSyncExternalStore(coordinator.subscribe, coordinator.getSnapshot, coordinator.getSnapshot);
+  const [saving, setSaving] = React.useState(false);
+  const [saveProblem, setSaveProblem] = React.useState('');
+  const savingRef = React.useRef(false);
+  const mounted = React.useRef(true);
+  // Set on every mount: React.StrictMode mounts, unmounts and mounts again.
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  /** E-02: closing with corrections waits for this confirmation. */
+  const [confirmDiscard, setConfirmDiscard] = React.useState(false);
+  const discardReturnFocus = React.useRef<HTMLElement | null>(null);
+  const keepReviewing = React.useRef<HTMLButtonElement>(null);
   const [selectedTarget, setSelectedTarget] = React.useState<VNextTranslationTargetLocale>(snapshot.targetLocale);
   const [reviewAttempt, setReviewAttempt] = React.useState(0);
   const [editingKeys, setEditingKeys] = React.useState<readonly string[]>([]);
@@ -173,7 +193,7 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
     drafts.current.delete(key); setEditingKeys(keys => keys.includes(key) ? keys.filter(item => item !== key) : keys);
   }, []);
   const busy = snapshot.phase === 'generating' || snapshot.phase === 'creating';
-  const targetLocked = busy || snapshot.pending || snapshot.runs.length > 0 || snapshot.phase === 'created';
+  const targetLocked = busy || saving || snapshot.pending || snapshot.runs.length > 0 || snapshot.phase === 'created';
   const targetLocale = targetLocked ? snapshot.targetLocale : selectedTarget;
   const sourceLanguage = languageLabel(sourceLocale);
   const targetLanguage = languageLabel(targetLocale);
@@ -184,7 +204,43 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
   const invalidKeys = new Set(snapshot.invalidRunKeys);
   const step = snapshot.phase === 'creating' || snapshot.phase === 'created' || snapshot.pending ? 2 : snapshot.runs.length > 0 ? 1 : 0;
   const reviewedCount = snapshot.reviewedRunKeys.filter(key => !editingKeys.includes(key)).length;
-  const close = () => { if (coordinator.cancel()) onClose(); };
+  // E-02: corrections typed or applied, and trechos marked as reviewed, are the person's work on this translation.
+  const hasReviewWork = snapshot.runs.length > 0 && !snapshot.pending && snapshot.phase !== 'creating'
+    && (snapshot.correctionCount > 0 || editingKeys.length > 0 || snapshot.invalidRunKeys.length > 0 || snapshot.reviewedRunKeys.length > 0);
+  const discardAndClose = () => { setConfirmDiscard(false); if (coordinator.cancel()) onClose(); };
+  const close = () => {
+    if (confirmDiscard) return;
+    if (!hasReviewWork) { discardAndClose(); return; }
+    discardReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirmDiscard(true);
+  };
+  const continueReviewing = () => {
+    setConfirmDiscard(false);
+    const back = discardReturnFocus.current;
+    discardReturnFocus.current = null;
+    if (back?.isConnected) queueMicrotask(() => { if (back.isConnected) back.focus(); });
+  };
+  React.useEffect(() => { if (confirmDiscard) keepReviewing.current?.focus(); }, [confirmDiscard]);
+  // A confirmation for work that is no longer there (the copy was saved, or the review ended) goes away.
+  if (confirmDiscard && !hasReviewWork) setConfirmDiscard(false);
+  const generate = async () => {
+    if (savingRef.current) return;
+    const target = targetLocale;
+    drafts.current.clear(); setEditingKeys([]); setReviewAttempt(attempt => attempt + 1); setSaveProblem('');
+    if (!save) { void coordinator.generate(target); return; }
+    savingRef.current = true; setSaving(true);
+    try {
+      const result = await save();
+      if (!mounted.current) return;
+      if (!result.ok && result.error.code !== 'SAVE_IN_FLIGHT_NEWER_WORK') { setSaveProblem(TRANSLATION_SAVE_NEEDED_MESSAGE); return; }
+      void coordinator.generate(target);
+    } catch {
+      if (mounted.current) setSaveProblem(TRANSLATION_SAVE_NEEDED_MESSAGE);
+    } finally {
+      savingRef.current = false;
+      if (mounted.current) setSaving(false);
+    }
+  };
   const accept = () => {
     // Pending verification reconciles the already dispatched copy and cannot change its candidate.
     if (snapshot.pending) { void coordinator.accept(); return; }
@@ -199,7 +255,8 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
   return <div className="vnext-translation-backdrop">
     <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="translation-heading" aria-describedby="translation-description" data-translation-review=""
       className="vnext-translation-dialog vnext-translation-center" onKeyDown={event => {
-        if (event.key === 'Escape' && !snapshot.pending && snapshot.phase !== 'creating') close();
+        if (event.key === 'Escape' && confirmDiscard) continueReviewing();
+        else if (event.key === 'Escape' && !snapshot.pending && snapshot.phase !== 'creating') close();
         trapReviewTab(event);
       }}>
       <header><div className="vnext-dialog-heading"><p className="vnext-dialog-eyebrow">Catálogos em outros idiomas</p>
@@ -223,7 +280,9 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
         </select><span className="vnext-translation-locale-note">{targetMetadata?.nativeName}</span></label>
       </div>
       {sourceLocale !== 'pt-BR' && <p className="vnext-status" data-tone="warning">A origem precisa estar em português (Brasil). Abra o catálogo original em português na Biblioteca para gerar uma cópia em espanhol ou inglês.</p>}
+      {saveProblem && <p role="alert" className="vnext-status" data-tone="error" data-translation-save-problem="">{saveProblem}</p>}
       {snapshot.message && <p role="alert" className="vnext-status" data-tone={snapshot.pending ? 'warning' : 'error'}>{snapshot.message}</p>}
+      {saving && <p role="status" className="vnext-status" data-tone="pending">Salvando o catálogo antes de traduzir…</p>}
       {snapshot.phase === 'generating' && <div role="status" className="vnext-status" data-tone="pending">
         <p>Gerando tradução em {targetLanguage.name.toLocaleLowerCase('pt-BR')}… Você poderá revisar os textos antes de salvar a cópia.</p>
         {snapshot.batchProgress ? <>
@@ -259,16 +318,29 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
         <p className="vnext-translation-accept-help">Ao salvar, você confirma a revisão e cria uma cópia independente. Depois, confira se os textos cabem nas páginas antes de publicar.</p>
       </>}
       {snapshot.phase === 'created' && snapshot.copy && <p role="status" className="vnext-status" data-tone="success">Cópia em {targetLanguage.name.toLocaleLowerCase('pt-BR')} salva e aceita. Abra o catálogo para conferir as páginas antes de publicar.</p>}
-      <footer>
+      {confirmDiscard ? <footer className="vnext-translation-discard-footer">
+        <div className="vnext-translation-discard" role="alertdialog" aria-modal="false" data-translation-discard=""
+          aria-labelledby="translation-discard-title" aria-describedby="translation-discard-text">
+          <h3 id="translation-discard-title">Descartar as correções da tradução?</h3>
+          <p id="translation-discard-text">Se fechar agora, a tradução gerada e o que você corrigiu ou marcou como revisado nesta tela
+            serão perdidos. Para guardar a tradução, continue revisando e clique em Salvar cópia traduzida. O catálogo original não muda.</p>
+          <div className="vnext-translation-discard-actions">
+            <button ref={keepReviewing} type="button" className="vnext-btn-primary" data-translation-action="keep-reviewing"
+              onClick={continueReviewing}>Continuar revisando</button>
+            <button type="button" className="vnext-btn-secondary" data-translation-action="discard"
+              onClick={discardAndClose}>Descartar correções e fechar</button>
+          </div>
+        </div>
+      </footer> : <footer>
         {snapshot.phase !== 'created' && <button type="button" className="vnext-btn-secondary" onClick={close} disabled={snapshot.phase === 'creating' || snapshot.pending}>Cancelar</button>}
         {(snapshot.phase === 'idle' || (snapshot.phase === 'error' && !snapshot.pending)) && <button type="button"
-          className={snapshot.runs.length > 0 ? 'vnext-btn-secondary' : 'vnext-btn-primary'}
-          data-translation-action="generate" onClick={() => { drafts.current.clear(); setEditingKeys([]); setReviewAttempt(attempt => attempt + 1); void coordinator.generate(targetLocale); }}>{snapshot.phase === 'error' && snapshot.runs.length === 0 ? 'Tentar tradução novamente' : 'Gerar tradução'}</button>}
+          className={snapshot.runs.length > 0 ? 'vnext-btn-secondary' : 'vnext-btn-primary'} aria-busy={saving || undefined}
+          data-translation-action="generate" onClick={() => { void generate(); }}>{saving ? 'Salvando…' : snapshot.phase === 'error' && snapshot.runs.length === 0 ? 'Tentar tradução novamente' : 'Gerar tradução'}</button>}
         {snapshot.runs.length > 0 && <button type="button" className="vnext-btn-primary" data-translation-action="accept" disabled={busy || snapshot.reviewInvalid}
           onClick={accept}>{snapshot.pending ? 'Verificar cópia' : 'Salvar cópia traduzida'}</button>}
         {snapshot.phase === 'created' && snapshot.copy && <button type="button" className="vnext-btn-primary" data-translation-action="open-copy"
           onClick={() => onOpenCopy(snapshot.copy!.catalogId)}>Abrir cópia traduzida</button>}
-      </footer>
+      </footer>}
     </section>
   </div>;
 }

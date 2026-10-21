@@ -4356,7 +4356,8 @@ export function EditorWorkspace({
                 )}
               </section>
               <div className="vnext-divider" />
-              <p>Posição e tamanho em milímetros.</p>
+              {/* J4 P2: every field below shows "mm"; say once what it means. */}
+              <p data-inspector-units="">Posição e tamanho, em mm (mm = milímetros).</p>
               <div className="vnext-inspector-grid" data-inspector-authoring="">
                 {INSPECTOR_FRAME_FIELDS.map((field) => (
                   <InspectorNumberField key={field} field={field} label={inspectorFieldLabel(field)} value={inspectorDraft[field]}
