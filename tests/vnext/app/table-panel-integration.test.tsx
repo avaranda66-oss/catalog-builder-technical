@@ -96,7 +96,7 @@ async function enterGrid(container: HTMLElement) {
   await waitFor(() => {
     if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(screen.getByRole('button', { name: 'Editar tabela' }));
     expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
-  }, { timeout: 5_000 });
+  }, { timeout: 15_000 });
   return container.querySelector<HTMLElement>('[data-table-grid-overlay]')!;
 }
 
@@ -104,7 +104,8 @@ const panel = () => screen.getByRole('complementary', { name: 'Propriedades do o
 const status = (container: HTMLElement) => container.querySelector('[role="status"]');
 const undo = (container: HTMLElement) => fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
 
-describe('FR-34 rows from the selected cell or range, in the real editor', () => {
+// The whole editor renders in jsdom: under the full suite in parallel one test can take more than the 5 s default.
+describe('FR-34 rows from the selected cell or range, in the real editor', { timeout: 20_000 }, () => {
   it('"Linha abaixo" goes under the selected cell; "Excluir 5 linhas" removes a range at once and one Desfazer brings it back', async () => {
     const { session, objectId } = sessionWithTable();
     const restore = enableMeasurement();
@@ -171,7 +172,7 @@ describe('FR-34 rows from the selected cell or range, in the real editor', () =>
   });
 });
 
-describe('FR-33 presets by task and one-click notes, in the real editor', () => {
+describe('FR-33 presets by task and one-click notes, in the real editor', { timeout: 20_000 }, () => {
   it('"Tabela" creates a table with the whole "Especificações" look, shown as such, and one Desfazer removes it', async () => {
     const session = emptyPageSession();
     const restore = enableMeasurement();
@@ -261,6 +262,38 @@ describe('FR-33 presets by task and one-click notes, in the real editor', () => 
       expect(Array.from(bar.querySelectorAll('button, input')).map((control) => control.textContent?.trim())).toEqual([
         'Opções da tabela', 'Copiar', 'Colar', 'Voltar ao objeto',
       ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('writes "Conclua a edição da célula" as the last line of the bar, so the click that ends the cell lands on its button', async () => {
+    // W4.C proof (21/10): the reason sat between "Colunas" and "Desmesclar células"; the click on "Desmesclar" first
+    // finished the cell, the reason vanished, the button jumped 62 px up and the click was lost.
+    const { session, objectId } = sessionWithTable();
+    const restore = enableMeasurement();
+    try {
+      const { container } = render(<VNextApp session={session} simpleByDefault />);
+      selectTable(container, objectId);
+      await enterGrid(container);
+      const bar = container.querySelector<HTMLElement>('[data-table-axis-toolbar]')!;
+      fireEvent.click(within(bar).getByRole('button', { name: 'Opções da tabela' }));
+      const controlsOf = () => Array.from(bar.querySelectorAll<HTMLElement>('button, input'))
+        .map((control) => control.getAttribute('data-editor-action') ?? control.getAttribute('aria-label'));
+      const gridControls = controlsOf();
+      expect(gridControls).toContain('unmerge-cell');
+      expect(gridControls).toContain('leave-table-grid');
+
+      fireEvent.keyDown(screen.getByRole('grid', { name: 'Grade da tabela' }), { key: 'F2' });
+      await waitFor(() => expect(container.querySelector('[data-cell-edit-session]')).not.toBeNull());
+      const note = bar.querySelector<HTMLElement>('[data-table-axis-note]');
+      expect(note?.textContent).toContain('Conclua a edição da célula antes de mudar linhas e colunas.');
+      expect(bar.lastElementChild).toBe(note);
+      for (const control of bar.querySelectorAll('button, input')) {
+        expect(note!.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+      }
+      expect(controlsOf()).toEqual(gridControls);
+      expect(bar.querySelector('[data-editor-action="remove-row"]')).toHaveAttribute('aria-describedby', note!.id);
     } finally {
       restore();
     }

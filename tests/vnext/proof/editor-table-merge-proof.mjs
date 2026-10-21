@@ -10,7 +10,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const output=resolve(root,'scratch/w4c-table-merge-proof'); await mkdir(output,{recursive:true});
 const port=Number(process.env.W4C_PROOF_PORT??5231);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 const editorUrl=`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w4c-editor-browser.html`;
 const publicationUrl=`http://127.0.0.1:${port}/src/labs/presys-editorial-proof/index.html?fixture=W2A`;
 let browser;

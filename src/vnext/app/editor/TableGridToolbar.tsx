@@ -117,7 +117,6 @@ export function TableGridToolbar({
         <button type="button" data-editor-action="insert-column-after" disabled={structureLocked || Boolean(columnAxisReason)} title={structureReason(columnAxisReason)} aria-describedby={noteFor(columnAxisReason)} onClick={() => runTableAxisInsert('column', 'after')}>Coluna à direita</button>
         <button type="button" data-editor-action="remove-column" disabled={structureLocked || Boolean(columnRemoval)} title={structureReason(columnRemoval)} aria-describedby={noteFor(columnRemoval)} onClick={() => runTableAxisRemove('column')}>{removeAxisLabel('column', columnAxisCount)}</button>
       </div>
-      {notes.length > 0 && <p id={noteId} className="vnext-disclosure-help" data-table-axis-note="">{notes.join(' ')}</p>}
       <div className="vnext-tool-group" aria-label="Mesclagem de células">
         <button
           type="button"
@@ -152,6 +151,9 @@ export function TableGridToolbar({
         <button type="button" data-editor-action="paste-table-cells" disabled={mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
       </div>
       <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
+      {/* Last, on a line of its own: the note comes and goes with the cell editing (the click that ends it is
+          the same click on "Desmesclar", "Voltar ao objeto"...), so it must never move a button under the pointer. */}
+      {(!simple || tableOptionsOpen) && notes.length > 0 && <p id={noteId} className="vnext-disclosure-help" data-table-axis-note="">{notes.join(' ')}</p>}
     </div>
   );
 }
