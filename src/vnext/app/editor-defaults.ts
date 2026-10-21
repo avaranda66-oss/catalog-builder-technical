@@ -302,6 +302,49 @@ export function createTableInsertSpec(page: Page, table: TableModel, documentSty
   };
 }
 
+/** Longest side of a new photo frame; the same size the square default gave to the drawn photo. */
+export const NEW_IMAGE_LONG_SIDE_MM = 58;
+/** A very wide or tall photo grows its long side so the short side stays usable. */
+export const NEW_IMAGE_MIN_SHORT_SIDE_MM = 10;
+
+/**
+ * C-01: the frame of a new photo follows the photo's proportion, so a portrait photo is not drawn inside a square
+ * with empty bands on its sides. The long side stays at {@link NEW_IMAGE_LONG_SIDE_MM} (the photo looks as big as
+ * before); a very thin photo grows until its short side reaches {@link NEW_IMAGE_MIN_SHORT_SIDE_MM}, never past the
+ * safe area of the page. Without valid pixel sizes the square default is kept.
+ */
+export function photoFrameSizeMm(page: Page, size: { readonly widthPx: number; readonly heightPx: number }): { widthMm: number; heightMm: number } {
+  const { widthPx, heightPx } = size;
+  if (!(Number.isFinite(widthPx) && Number.isFinite(heightPx) && widthPx > 0 && heightPx > 0)) {
+    return { widthMm: NEW_IMAGE_LONG_SIDE_MM, heightMm: NEW_IMAGE_LONG_SIDE_MM };
+  }
+  const box = contentBox(page);
+  const maxWidthMm = box.widthMm;
+  const maxHeightMm = Math.max(10, box.bottomMm - box.topMm);
+  const ratio = widthPx / heightPx;
+  const longMm = Math.max(NEW_IMAGE_LONG_SIDE_MM, NEW_IMAGE_MIN_SHORT_SIDE_MM * Math.max(ratio, 1 / ratio));
+  let widthMm = ratio >= 1 ? longMm : longMm * ratio;
+  let heightMm = ratio >= 1 ? longMm / ratio : longMm;
+  const scale = Math.min(1, maxWidthMm / widthMm, maxHeightMm / heightMm);
+  widthMm *= scale;
+  heightMm *= scale;
+  const round = (value: number) => Math.round(value * 100) / 100;
+  return { widthMm: round(widthMm), heightMm: round(heightMm) };
+}
+
+/** Insert spec for a photo just sent by the person (C-01): same place as before, frame in the photo's proportion. */
+export function createImageInsertSpec(page: Page, size: { readonly widthPx: number; readonly heightPx: number }): Extract<ObjectInsertSpec, { type: 'image' }> {
+  const { widthMm, heightMm } = photoFrameSizeMm(page, size);
+  return {
+    type: 'image',
+    frameU: clearInsertFrame(page, frame(20, 52, widthMm, heightMm)),
+    zIndex: nextZIndex(page),
+    assetId: W2C_PRIMARY_ASSET_ID,
+    fit: 'contain',
+    focalPoint: { x: 0.5, y: 0.5 },
+  };
+}
+
 export function createInsertSpec(
   tool: InsertTool,
   page: Page,
