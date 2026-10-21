@@ -7,6 +7,7 @@ import { mmToU, uToQ, type CatalogDocument, type Cell, type TableModel, type Tab
 import type { LayoutSnapshot, PhysicalLayoutFact } from '@/vnext/rendering';
 import { tableQuickNotes } from '@/vnext/editor/table-quick-notes';
 import { SPLIT_OBJECT_ID, documentWithTable } from '../editor/table-split-fixtures';
+import { StrictCasCatalogRepository, runtimeFixture, settleAsyncWork } from '../persistence/w3h-fixtures';
 
 /**
  * B-01 (P1, J4 of 20/10): typing "Parâmetro" and "Faixa" in a new table blocked the PDF with "A tabela ultrapassa
@@ -206,6 +207,36 @@ describe('B-01 · typing in a table grows its frame (J4: Parâmetro, Faixa, Ente
     await waitFor(() => expect(container.querySelector('[data-table-auto-fit]')).toBeNull(), { timeout: 5_000 });
     await waitFor(() => expect(problems()).not.toBeNull(), { timeout: 5_000 });
     expect(blocking()).toBe(false);
+  });
+
+  it('Salvar while typing saves the cell and then its growth: the catalog ends "Salvo", never "Alterações não salvas"', async () => {
+    // PILOT.A proof (21/10): Salvar committed the cell or title and saved at once; the growth measured right after made
+    // the catalog dirty again, so the father read "Alterações não salvas" just after pressing Salvar.
+    const initial = newTableSession().getSnapshot().document;
+    const repository = new StrictCasCatalogRepository(initial);
+    const active = runtimeFixture(repository, initial, 15100, { autosave: false });
+    const { container } = render(<VNextApp runtime={active.runtime} simpleByDefault />);
+    const grid = await openTableGrid(container);
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(document.activeElement!, { key: 'P' });
+    fireEvent.change(cellEditor(), { target: { value: 'Parâmetro' } });
+    const heightBefore = tableObject(active.session).frame.heightMm;
+    await act(async () => {
+      fireEvent.keyDown(cellEditor(), { key: 's', ctrlKey: true });
+      await settleAsyncWork(4);
+      await active.runtime.saveCoordinator.waitForActiveSave();
+    });
+    expect(textAt(active.session, 1, 0)).toBe('Parâmetro');
+    await waitFor(() => expect(tableObject(active.session).frame.heightMm).toBeGreaterThan(heightBefore + 1), { timeout: 5_000 });
+    await waitFor(() => {
+      const workspace = active.runtime.workspace.getSnapshot();
+      expect(workspace.dirty).toBe(false);
+      expect(workspace.save.label).toBe('Saved');
+    }, { timeout: 5_000 });
+    // The cell, then the growth that belongs to it: what is stored is what the father sees.
+    expect(repository.saveCAS).toHaveBeenCalledTimes(2);
+    expect(repository.current(initial.id).documentSnapshot).toEqual(active.session.getSnapshot().document);
+    await act(async () => { await active.runtime.dispose(); });
   });
 
   it('Tab on the last cell adds a row and the frame holds the row and the typed text; Desfazer keeps the text', async () => {

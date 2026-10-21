@@ -18,6 +18,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 const url = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/pilot-a-authorship-browser.html`;
@@ -62,9 +64,11 @@ async function selectTable(page, id) {
 }
 async function saveAndWait(page) {
   await saveButton(page).click();
+  // B-01: a draft committed by Salvar may still grow its table once measured; that growth is saved right after,
+  // so "Saved" only counts once no automatic table fit is pending.
   await page.waitForFunction(() => {
     const current = window.__PILOT_A_PROOF__.state();
-    return current.saveLabel === 'Saved' && current.dirty === false;
+    return current.saveLabel === 'Saved' && current.dirty === false && !document.querySelector('[data-table-auto-fit]');
   }, { timeout: 15000 });
   assert.equal((await saveState(page).textContent())?.trim(), 'Salvo');
 }

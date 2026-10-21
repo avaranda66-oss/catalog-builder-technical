@@ -355,6 +355,16 @@ export function EditorWorkspace({
   const [pasteTableAreaOpen, setPasteTableAreaOpen] = React.useState(false);
   const [pasteGrowOffer, setPasteGrowOffer] = React.useState<(TablePasteGrowthOffer & { objectId: string; sourceRows: number; sourceColumns: number; source: TablePasteSource }) | null>(null);
   const [pendingTableFit, setPendingTableFit] = React.useState<PendingTableFit | null>(null);
+  /** Same value as `pendingTableFit`, readable right after a draft is committed (before React renders). */
+  const pendingTableFitRef = React.useRef<PendingTableFit | null>(null);
+  pendingTableFitRef.current = pendingTableFit;
+  /**
+   * B-01 and "Salvar": Salvar commits an open draft (cell, title) and saves at once, but the growth of the table
+   * frame that belongs to that change lands only once the table is measured, after the save started. That growth
+   * is saved right after, so pressing Salvar never ends in "Alterações não salvas".
+   */
+  const saveAfterPendingFitRef = React.useRef<string | null>(null);
+  const [followUpSaveRequested, setFollowUpSaveRequested] = React.useState(false);
   /**
    * B-01: a row with text is taller than an empty one (6,5 → 7,8 mm in the house style), so typing, pasting or
    * writing a note can make the table taller than its frame. The change runs under its own transaction and the
@@ -364,7 +374,9 @@ export function EditorWorkspace({
     const transactionId = newTableTransactionId();
     const result = session.execute(action, { transactionId });
     if (result.ok && result.metadata.changed) {
-      setPendingTableFit({ objectId, transactionId, document: result.document, growOnly: true });
+      const pending = { objectId, transactionId, document: result.document, growOnly: true };
+      pendingTableFitRef.current = pending;
+      setPendingTableFit(pending);
     }
     return result;
   };
@@ -1126,6 +1138,7 @@ export function EditorWorkspace({
     if (!titleResult.ok) return titleResult;
     // A typed position/size is applied (or put back if invalid) before saving; it never blocks Save.
     if (inspectorDraftIsPending()) settleInspectorDraft();
+    saveAfterPendingFitRef.current = pendingTableFitRef.current?.transactionId ?? null;
     return { ok: true };
   };
   const prepareAuthoringForSaveRef = React.useRef(prepareAuthoringForSave);
@@ -1782,9 +1795,24 @@ export function EditorWorkspace({
     if (!pendingTableFit) return;
     const decision = decidePendingTableFit(pendingTableFit, session.getSnapshot().document, selectedTableObject?.id, pendingFitPreparation, inspectorDraftIsPending());
     if (decision.kind === 'wait') return;
+    pendingTableFitRef.current = null;
     setPendingTableFit(null);
-    if (decision.kind === 'fit') session.execute(decision.action, { transactionId: pendingTableFit.transactionId });
+    const savedBeforeFit = saveAfterPendingFitRef.current === pendingTableFit.transactionId;
+    if (savedBeforeFit) saveAfterPendingFitRef.current = null;
+    if (decision.kind !== 'fit') return;
+    const fitted = session.execute(decision.action, { transactionId: pendingTableFit.transactionId });
+    if (savedBeforeFit && fitted.ok && fitted.metadata.changed) setFollowUpSaveRequested(true);
   }, [pendingFitPreparation, pendingTableFit, selectedTableObject?.id, session]);
+  // The follow-up save waits for the save in flight; after a failed save the father already sees why, and his next
+  // Salvar includes the growth, so nothing is retried behind his back.
+  const savePhase = persistence?.save.phase;
+  const saveDirty = persistence?.save.dirty;
+  React.useEffect(() => {
+    if (!followUpSaveRequested || !persistenceRuntime) return;
+    if (savePhase === 'saving') return;
+    setFollowUpSaveRequested(false);
+    if (savePhase === 'idle' && saveDirty) void persistenceRuntime.manualSave();
+  }, [followUpSaveRequested, persistenceRuntime, saveDirty, savePhase]);
 
   const handleTablePasteClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (editorState.mode !== 'table-grid') return;
