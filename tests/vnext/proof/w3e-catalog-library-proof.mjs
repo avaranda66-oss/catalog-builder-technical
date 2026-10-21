@@ -22,6 +22,12 @@ const server = await createServer({
 });
 let browser;
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 const rowTitles = (page) => page.locator('[data-library-catalog-id] h2').allTextContents();
 // FR-08: search filters the already loaded list after a 300 ms pause, so wait for the rows to settle.
 const waitForRowTitles = (page, expected) => page.waitForFunction(
@@ -155,6 +161,8 @@ try {
   await recoveryDialog.waitFor();
   assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'W3.D gate must keep editor absent before recovery decision');
   assert.equal(await page.locator('[data-editor-action="save"]').count(), 0, 'Save must be structurally unavailable before recovery decision');
+  // J7: with recoverable work, the saved version is one of the "Mais opções".
+  await openMoreRecoveryOptions(recoveryDialog);
   await recoveryDialog.getByRole('button', { name: 'Abrir versão salva na nuvem' }).click();
   await page.locator('[data-vnext-shell]').waitFor();
   assert.equal(await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.recoveryCount()), 1, 'Cloud-open choice preserves recoverable local record under W3.D retention semantics');

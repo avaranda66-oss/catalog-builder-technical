@@ -97,6 +97,8 @@ describe('W3.E Library Open preserves the W3.D startup gate', () => {
     expect(container.querySelector('[data-vnext-shell]')).toBeNull();
     expect(container.querySelector('[data-editor-action="save"]')).toBeNull();
 
+    // J7: the saved version is one of the "Mais opções" when the work can be recovered.
+    fireEvent.click(getByRole('button', { name: 'Mais opções' }));
     fireEvent.click(getByRole('button', { name: 'Abrir versão salva na nuvem' }));
     await waitFor(() => expect(container.querySelector('[data-vnext-shell]')).not.toBeNull());
     expect(container.querySelector('[data-editor-action="save"]')).not.toBeNull();

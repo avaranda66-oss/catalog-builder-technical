@@ -62,11 +62,18 @@ async function waitForLibrary(page) {
   await page.getByRole('heading', { name: 'Meus catálogos', exact: true }).waitFor();
 }
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 async function resolveRecoveryByDiscardingThroughUi(page) {
   const dialog = page.getByRole('dialog', { name: 'Recuperação local' });
   const shell = page.locator('[data-vnext-shell]');
   await Promise.race([dialog.waitFor(), shell.waitFor()]);
   for (let attempts = 0; attempts < 8 && await dialog.isVisible().catch(() => false); attempts += 1) {
+    await openMoreRecoveryOptions(dialog);
     const discard = dialog.getByRole('button', { name: 'Apagar a cópia deste computador', exact: true }).first();
     if (!await discard.isVisible().catch(() => false)) break;
     await discard.click();
@@ -235,6 +242,7 @@ async function assertRecoveryPreviewAtViewport(page, width, minimumButtonHeight)
     'Apagar a cópia deste computador',
   ];
   const buttonGeometry = {};
+  await openMoreRecoveryOptions(dialog);
   for (const name of actions) {
     const button = dialog.getByRole('button', { name, exact: true });
     await button.scrollIntoViewIfNeeded();
@@ -438,6 +446,7 @@ try {
   await father.reload({ waitUntil: 'networkidle' });
   const recoveryDialog = father.getByRole('dialog', { name: 'Recuperação local' });
   await recoveryDialog.waitFor();
+  await openMoreRecoveryOptions(recoveryDialog);
   const inspectRecovery = recoveryDialog.getByRole('button', { name: 'Ver alterações recuperadas', exact: true });
   assert.equal(await inspectRecovery.isVisible(), true);
   await inspectRecovery.click();
