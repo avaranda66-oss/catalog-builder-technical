@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PublicationReview } from '@/vnext/app/PublicationReview';
+import { PUBLICATION_BLOCKED_MESSAGE, PublicationReview } from '@/vnext/app/PublicationReview';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { VNextError } from '@/vnext/domain';
 import type { PublicationReviewResult, PublicationSource } from '@/vnext/publication/review';
@@ -204,6 +204,11 @@ describe('W5.C publication dialog guards', () => {
     const { view } = setup(true, locate);
     await waitFor(() => expect(view.getByText('Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.')).toBeInTheDocument());
     expect(view.getByRole('heading', { name: 'Itens para corrigir' })).toBeInTheDocument();
+    // C-04: "Corrigir este item" closes the review, so the instruction names the way back, not "Verificar novamente".
+    expect(view.getByRole('status')).toHaveTextContent(PUBLICATION_BLOCKED_MESSAGE);
+    expect(PUBLICATION_BLOCKED_MESSAGE).toContain('Corrigir este item');
+    expect(PUBLICATION_BLOCKED_MESSAGE).toContain('Publicar / PDF de novo');
+    expect(view.getByRole('status')).not.toHaveTextContent('Verificar novamente');
     expect(view.getByRole('button', { name: 'Imprimir / salvar PDF' })).toBeDisabled();
     fireEvent.click(view.getByRole('button', { name: 'Corrigir este item' }));
     expect(locate).toHaveBeenCalledWith(expect.objectContaining({ code: 'UNRESOLVED_PLACEHOLDER', objectId: 'any-text' }));

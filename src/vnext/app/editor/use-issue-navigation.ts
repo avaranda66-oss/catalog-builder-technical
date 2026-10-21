@@ -63,6 +63,11 @@ export interface IssueNavigationOptions {
   readonly selectedHasProblems: boolean;
 }
 
+/**
+ * C-04: after "Corrigir este item" the review is closed. Arriving from it, the person is told how to check again.
+ */
+export const RETURN_TO_REVIEW_HINT = 'Depois de corrigir, clique em Publicar / PDF para verificar de novo.';
+
 /** What to tell the person on arrival when the side panel cannot list the problem (content checks). */
 export function arrivalMessage(diagnostic: Diagnostic): string {
   const fix = ISSUE_FIXES[diagnostic.code];
@@ -80,12 +85,13 @@ export function useIssueNavigation(options: IssueNavigationOptions): (diagnostic
   const latest = React.useRef(options);
   latest.current = options;
   const pendingFocus = React.useRef<PendingFocus>();
-  const goTo = React.useCallback((diagnostic: Diagnostic) => {
+  const goTo = React.useCallback((diagnostic: Diagnostic, fromReview = false) => {
     const { document, prepare, locate, showPage, openDiagnostics, announce, selectedObjectId } = latest.current;
     if (!prepare()) return;
     const listedBeside = W2D_DIAGNOSTIC_CODES.has(diagnostic.code);
     // Announce first: guidance from the locate logic itself (for example, a grouped table) must win.
-    if (!listedBeside) announce(arrivalMessage(diagnostic));
+    if (!listedBeside) announce(fromReview ? `${arrivalMessage(diagnostic)} ${RETURN_TO_REVIEW_HINT}` : arrivalMessage(diagnostic));
+    else if (fromReview) announce(RETURN_TO_REVIEW_HINT);
     const target = locatableIssue(document, diagnostic);
     if (target) {
       pendingFocus.current = focusTarget(document, target, selectedObjectId);
@@ -102,7 +108,7 @@ export function useIssueNavigation(options: IssueNavigationOptions): (diagnostic
     if (!request || handledRequest.current === request.id) return;
     handledRequest.current = request.id;
     request.onHandled?.(request.id);
-    goTo(request.diagnostic);
+    goTo(request.diagnostic, true);
   }, [request, goTo]);
 
   // The locate logic focuses the object right away, but a request from the review changes the page outside a click,
@@ -133,5 +139,6 @@ export function useIssueNavigation(options: IssueNavigationOptions): (diagnostic
     }
   }, [selectedObjectId, selectedHasProblems]);
 
-  return goTo;
+  // The editor's own issue list never passes the "from the review" flag (an event as second argument must not either).
+  return React.useCallback((diagnostic: Diagnostic) => goTo(diagnostic), [goTo]);
 }

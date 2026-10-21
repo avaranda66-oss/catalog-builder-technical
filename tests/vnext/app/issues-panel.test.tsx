@@ -4,7 +4,7 @@ import { createDocumentSession, type DocumentSession } from '@/vnext/application
 import { createMinimalW2CTable, createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { IssuesPanel, editorIssues } from '@/vnext/app/editor/IssuesPanel';
 import { ISSUE_FIXES, issueFixFor } from '@/vnext/app/editor/issue-fixes';
-import { arrivalMessage, locatableIssue, useIssueNavigation, type EditorLocateRequest } from '@/vnext/app/editor/use-issue-navigation';
+import { arrivalMessage, locatableIssue, RETURN_TO_REVIEW_HINT, useIssueNavigation, type EditorLocateRequest } from '@/vnext/app/editor/use-issue-navigation';
 import { plainRichText, type CatalogDocument, type Diagnostic, type TableObject } from '@/vnext/domain';
 
 afterEach(cleanup);
@@ -195,6 +195,28 @@ describe('FR-13 fix registry and locating', () => {
     view.rerender(<Probe request={{ ...request, id: 2 }} />);
     expect(locate).toHaveBeenCalledTimes(2);
     expect(onHandled).toHaveBeenLastCalledWith(2);
+  });
+
+  it('C-04: arriving from the publication review, says to click Publicar / PDF again after fixing', () => {
+    const document = catalog();
+    const announce = vi.fn();
+    let goTo: ((diagnostic: import('@/vnext/domain').Diagnostic) => void) | undefined;
+    function Probe({ request }: { request?: EditorLocateRequest }) {
+      goTo = useIssueNavigation({ document, request, prepare: () => true, locate: vi.fn(), showPage: vi.fn(), openDiagnostics: vi.fn(), announce,
+        selectedHasProblems: false });
+      return null;
+    }
+    const placeholder = { code: 'UNRESOLVED_PLACEHOLDER', severity: 'ERROR', details: 'surface=cell; token=TBD', pageId: 'page-two', objectId: 'spec' } as const;
+    const view = render(<Probe request={{ id: 1, diagnostic: placeholder }} />);
+    expect(announce).toHaveBeenLastCalledWith(`${arrivalMessage(placeholder)} ${RETURN_TO_REVIEW_HINT}`);
+    expect(RETURN_TO_REVIEW_HINT).toBe('Depois de corrigir, clique em Publicar / PDF para verificar de novo.');
+    // A layout problem listed beside the page gets the same instruction.
+    view.rerender(<Probe request={{ id: 2, diagnostic: { code: 'TABLE_WIDTH_INFEASIBLE', severity: 'ERROR', details: '', pageId: 'page-two', objectId: 'spec' } }} />);
+    expect(announce).toHaveBeenLastCalledWith(RETURN_TO_REVIEW_HINT);
+    // The editor's own issue list, without the review, does not mention it.
+    announce.mockClear();
+    act(() => { goTo!(placeholder); });
+    expect(announce).toHaveBeenCalledWith(arrivalMessage(placeholder));
   });
 
   it('tells the person what to do on arrival, pointing to the one-click fix when there is one', () => {
