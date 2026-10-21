@@ -20,8 +20,10 @@ export interface EditorNoticesProps {
  * FR-12: one fixed area right under the top bar, above the page, so messages are seen without scrolling.
  * Save problems are bands that stay while they last (they are part of the layout). The latest status message floats
  * over the top of the workspace instead, so it never pushes the page down or pulls it back up: a short finished
- * change leaves after 4 s; a longer one, which tells what to do next, stays at least 12 s (paused while the pointer
- * is over it); an error or an instruction stays until the person closes it or the next message replaces it.
+ * change leaves after 4 s; a longer one, which only adds a tip, after 6 to 8 s (paused while the pointer is over it);
+ * an error or an instruction stays until the person closes it or the next message replaces it. The message never
+ * takes clicks away from the page: the area is click-through outside the cards, and use-notice-anchor.ts keeps the
+ * card off the selected object (J5).
  * FR-44: every save problem has its plain explanation here, also in the simple mode. FR-43: a conflict is not a
  * band: the editor shows the blocking SaveConflictDialog (rendered outside the editor shell, see ConflictDialog.tsx).
  */

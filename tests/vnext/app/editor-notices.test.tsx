@@ -77,12 +77,28 @@ describe('C-03 how long each message stays', () => {
     expect(editorNoticeTimeoutMs('Enviando imagem…')).toBeNull();
   });
 
-  it('keeps a longer success, which tells what to do next, at least 12 s and longer when it has more words', () => {
-    // 21 words: at 150 words per minute a 60-year-old reader needs about 8.4 s (J4 measured it leaving at ~4.1 s).
-    expect(editorNoticeTimeoutMs(successNotice(pasteResult))).toBe(LONG_NOTICE_MIN_TIMEOUT_MS);
-    expect(LONG_NOTICE_MIN_TIMEOUT_MS).toBeGreaterThanOrEqual(12_000);
+  it('lets a success that only adds a tip leave by itself after 6 to 8 s, the time to read it (J5)', () => {
+    // 20 words: at 150 words per minute a 60-year-old reader needs 8 s, plus a moment to notice it (J4 measured it
+    // leaving at ~4.1 s).
+    expect(editorNoticeTimeoutMs(successNotice(pasteResult))).toBe(8400);
+    expect(editorNoticeTimeoutMs(successNotice(pasteResult.replace('12 linhas e 4 colunas', '41 linhas e 4 colunas')))).toBe(8400);
+    expect(editorNoticeTimeoutMs(successNotice('Tabela aumentada em 3 linhas e 12 células coladas. Para voltar, use Desfazer.')))
+      .toBe(LONG_NOTICE_MIN_TIMEOUT_MS);
+    for (const text of [pasteResult, 'Tabela aumentada em 3 linhas e 12 células coladas. Para voltar, use Desfazer.']) {
+      const timeout = editorNoticeTimeoutMs(successNotice(text))!;
+      expect(timeout).toBeGreaterThanOrEqual(6000);
+      expect(timeout).toBeLessThanOrEqual(8500);
+    }
+    // Longer text still gets its reading time.
     const thirtyWords = Array.from({ length: 30 }, (_, index) => `palavra${index}`).join(' ') + ' atualizado.';
-    expect(editorNoticeTimeoutMs(successNotice(thirtyWords))).toBeGreaterThan(LONG_NOTICE_MIN_TIMEOUT_MS);
+    expect(editorNoticeTimeoutMs(successNotice(thirtyWords))).toBeGreaterThan(8500);
+  });
+
+  it('keeps errors and real instructions until closed, however long they are', () => {
+    const heic = 'Esta foto está no formato HEIC, do iPhone, que ainda não é aceito. Envie a foto em JPEG ou peça a quem a tirou.';
+    expect(editorNoticeTimeoutMs(heic)).toBeNull();
+    expect(editorNoticeTimeoutMs('Selecione uma única célula para editar o conteúdo.')).toBeNull();
+    expect(editorNoticeTimeoutMs({ text: heic, tone: 'error' })).toBeNull();
   });
 });
 
@@ -103,7 +119,7 @@ describe('FR-12 editor notices', () => {
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
 
-  it('keeps a success that carries an instruction for at least 12 seconds, green, and then lets it leave', () => {
+  it('keeps a success that carries a tip for 6 seconds, green, and then lets it leave', () => {
     vi.useFakeTimers();
     const tip = 'Tabela de 6 linhas × 3 colunas adicionada. Para escrever nela, clique em Editar tabela.';
     const { onDismissMessage } = renderNotices({ message: successNotice(tip) });
@@ -112,7 +128,21 @@ describe('FR-12 editor notices', () => {
     expect(screen.getByRole('status')).toHaveAttribute('data-notice-stays', 'long');
     act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
     expect(onDismissMessage).not.toHaveBeenCalled();
-    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - SUCCESS_NOTICE_TIMEOUT_MS - 100); });
+    const stays = editorNoticeTimeoutMs(successNotice(tip))!;
+    expect(stays).toBeGreaterThanOrEqual(LONG_NOTICE_MIN_TIMEOUT_MS);
+    expect(stays).toBeLessThanOrEqual(8500);
+    act(() => { vi.advanceTimersByTime(stays - SUCCESS_NOTICE_TIMEOUT_MS - 100); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('hides "Tabela criada com 41 linhas" by itself in about 8 seconds, so it cannot keep covering the table (J5)', () => {
+    vi.useFakeTimers();
+    const created = 'Tabela criada com 41 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.';
+    const { onDismissMessage } = renderNotices({ message: successNotice(created) });
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'success');
+    act(() => { vi.advanceTimersByTime(8300); });
     expect(onDismissMessage).not.toHaveBeenCalled();
     act(() => { vi.advanceTimersByTime(100); });
     expect(onDismissMessage).toHaveBeenCalledOnce();
@@ -121,13 +151,14 @@ describe('FR-12 editor notices', () => {
   it('pauses a long message while the pointer is over it and gives the full time again after it leaves', () => {
     vi.useFakeTimers();
     const tip = 'Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.';
+    const stays = editorNoticeTimeoutMs(successNotice(tip))!;
     const { onDismissMessage } = renderNotices({ message: successNotice(tip) });
-    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - 1000); });
+    act(() => { vi.advanceTimersByTime(stays - 1000); });
     fireEvent.mouseEnter(screen.getByRole('status'));
     act(() => { vi.advanceTimersByTime(60_000); });
     expect(onDismissMessage).not.toHaveBeenCalled();
     fireEvent.mouseLeave(screen.getByRole('status'));
-    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - 100); });
+    act(() => { vi.advanceTimersByTime(stays - 100); });
     expect(onDismissMessage).not.toHaveBeenCalled();
     act(() => { vi.advanceTimersByTime(100); });
     expect(onDismissMessage).toHaveBeenCalledOnce();
@@ -199,6 +230,29 @@ describe('FR-12 editor notices', () => {
       const bands = document.querySelector<HTMLElement>('[data-editor-notice-bands]')!;
       expect(bands).toContainElement(screen.getByRole('alert'));
       expect(getComputedStyle(bands).position).not.toBe('absolute');
+      expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute');
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('never takes a click away from the page: the area lets clicks through, only the cards and bands take them (J5)', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/EditorNotices.css'), 'utf8');
+    document.head.append(style);
+    try {
+      renderNotices({
+        message: 'Não foi possível excluir o objeto.',
+        save: { phase: 'unavailable', label: 'Offline / unavailable', dirty: true, canSave: true },
+      });
+      const area = document.querySelector<HTMLElement>('[data-editor-notices]')!;
+      expect(getComputedStyle(area).pointerEvents).toBe('none');
+      expect(getComputedStyle(screen.getByRole('status')).pointerEvents).toBe('auto');
+      expect(getComputedStyle(screen.getByRole('alert')).pointerEvents).toBe('auto');
+      // A message that joined the layout (no floating place free of the selected object) takes room instead of floating.
+      area.setAttribute('data-notice-placement', 'inline');
+      expect(getComputedStyle(screen.getByRole('status')).position).toBe('relative');
+      area.setAttribute('data-notice-placement', 'bottom');
       expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute');
     } finally {
       style.remove();

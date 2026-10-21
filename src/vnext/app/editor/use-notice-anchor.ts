@@ -15,6 +15,12 @@
  * had just selected, and the person had to close it before editing. The message now keeps away
  * from the selected object: right under it, or at the bottom of the visible page area
  * (`data-notice-placement` tells which). It stays on screen and keeps its "Fechar" button (FR-12).
+ *
+ * J5 (21/10): a table of 41 rows fills the whole visible page, so no floating place was free and the
+ * message stayed over its top edge, taking the click the father made on the table. When every
+ * floating place would cover part of the selected object, the message now joins the layout instead
+ * (`inline`: right under the top bars, the page area gets shorter by its height). Nothing is ever
+ * under the message, and it keeps that place until it is replaced or closed, so it never jumps.
  */
 import { useLayoutEffect, type RefObject } from 'react';
 
@@ -50,8 +56,11 @@ export function noticeAnchorFor(notices: Box, page: Box, column: Box, viewportHe
   };
 }
 
-/** `top`: where the page starts; `below-selection`: right under the selected object; `bottom`: bottom of the page area. */
-export type NoticePlacement = 'top' | 'below-selection' | 'bottom';
+/**
+ * `top`: where the page starts; `below-selection`: right under the selected object; `bottom`: bottom of the page area;
+ * `inline`: in the layout, above the page, when no floating place is free of the selected object.
+ */
+export type NoticePlacement = 'top' | 'below-selection' | 'bottom' | 'inline';
 
 export interface NoticeAvoidance {
   /** The message on screen now (its height and horizontal extent do not depend on its top). */
@@ -63,8 +72,9 @@ export interface NoticeAvoidance {
 /**
  * Pure: keeps the message of `anchor` off the selected object. The first place that covers none
  * of its visible part wins, in the order top, right under it, bottom of the visible page area;
- * when every place covers part of it, the one that covers least (top on ties). The message never
- * goes above the message area nor below the window.
+ * when every floating place covers part of it (a table as tall as the page area), the message joins
+ * the layout (`inline`) instead of floating over the object. The message never goes above the
+ * message area nor below the window.
  */
 export function placeNoticeAvoiding(
   anchor: NoticeAnchor,
@@ -88,8 +98,8 @@ export function placeNoticeAvoiding(
   const below = coveredBottom + NOTICE_GAP_PX;
   if (below <= lowest) candidates.push({ top: below, placement: 'below-selection' });
   if (lowest >= notices.bottom + 4) candidates.push({ top: lowest, placement: 'bottom' });
-  const best = candidates.find((candidate) => covered(candidate.top) === 0)
-    ?? candidates.reduce((least, candidate) => (covered(candidate.top) < covered(least.top) ? candidate : least));
+  const best = candidates.find((candidate) => covered(candidate.top) === 0);
+  if (!best) return { top: anchor.top, placement: 'inline' };
   return best.placement === 'top' ? base : { top: Math.round(best.top - notices.bottom), placement: best.placement };
 }
 
@@ -126,16 +136,24 @@ export function useNoticeAnchor(anchorRef: RefObject<HTMLElement | null>): void 
     const notices = shell?.querySelector<HTMLElement>('[data-editor-notices]');
     const page = column?.querySelector<HTMLElement>('.vnext-document-preview');
     if (!column || !notices || !page) return undefined;
+    // The message that joined the layout keeps that place for as long as it is on screen: being in the layout moves the
+    // page, and measuring again from there would send it floating over the object and back.
+    let inlineNotice: Element | null = null;
     const measure = () => {
       const noticesRect = notices.getBoundingClientRect();
       const pageRect = page.getBoundingClientRect();
       const placement = noticeAnchorFor(noticesRect, pageRect, column.getBoundingClientRect(), window.innerHeight);
       if (!placement) return;
       const notice = notices.querySelector<HTMLElement>('[data-editor-notice]');
-      const selection = notice ? selectionArea(page) : undefined;
-      const placed = notice && selection
-        ? placeNoticeAvoiding(placement, noticesRect, pageRect, window.innerHeight, { notice: notice.getBoundingClientRect(), selection })
-        : { top: placement.top, placement: 'top' as NoticePlacement };
+      if (inlineNotice && inlineNotice !== notice) inlineNotice = null;
+      const selection = notice && !inlineNotice ? selectionArea(page) : undefined;
+      let placed: { top: number; placement: NoticePlacement } = inlineNotice
+        ? { top: placement.top, placement: 'inline' }
+        : { top: placement.top, placement: 'top' };
+      if (notice && selection) {
+        placed = placeNoticeAvoiding(placement, noticesRect, pageRect, window.innerHeight, { notice: notice.getBoundingClientRect(), selection });
+        if (placed.placement === 'inline') inlineNotice = notice;
+      }
       notices.style.setProperty(NOTICE_TOP_VARIABLE, `${placed.top}px`);
       notices.style.setProperty(NOTICE_CENTER_VARIABLE, `${placement.center}px`);
       notices.style.setProperty(NOTICE_MAX_WIDTH_VARIABLE, `${placement.maxWidth}px`);

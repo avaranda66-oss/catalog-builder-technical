@@ -78,13 +78,18 @@ describe('placeNoticeAvoiding (P2 da J4: the message never covers what the perso
     expect(68 + placed.top + notice.height).toBeLessThanOrEqual(768);
   });
 
-  it('a table taller than the free space: the place that covers least, at the bottom of the page area', () => {
-    const tall = { ...table, top: 180, bottom: 700 };
-    const placed = placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: tall });
+  it('goes to the bottom of the page area when only that is free of the table', () => {
+    // The table ends 4 px above the lowest place, so there is no room right under it but the bottom does not touch it.
+    const placed = placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: 180, bottom: 680 } });
     expect(placed).toEqual({ top: 768 - 8 - 76 - 68, placement: 'bottom' });
-    // Covering the whole visible page: it keeps its place (top on ties) and stays readable.
+  });
+
+  it('a table as tall as the page area (J5, 41 rows): the message joins the layout instead of floating over it', () => {
+    // Every floating place would cover part of the table, and a card over the table takes the click meant for it.
+    expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: 180, bottom: 700 } }))
+      .toEqual({ top: 110, placement: 'inline' });
     expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: 100, bottom: 900 } }))
-      .toEqual({ top: 110, placement: 'top' });
+      .toEqual({ top: 110, placement: 'inline' });
   });
 });
 
@@ -170,6 +175,64 @@ describe('useNoticeAnchor', () => {
     act(() => { getByRole('button', { name: 'Desmarcar' }).click(); });
     await waitFor(() => expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'top'));
     expect(notices.style.getPropertyValue(NOTICE_TOP_VARIABLE)).toBe('110px');
+  });
+
+  it('J5: a table as tall as the page area puts the message in the layout, keeps it there while it is open, and frees it when it goes', async () => {
+    const rects = new Map<string, Rect>([
+      ['vnext-editor-notices', { left: 0, top: 68, width: 1366, height: 0 }],
+      ['vnext-canvas-area', { left: 176, top: 68, width: 890, height: 700 }],
+      ['vnext-document-preview', { left: 196, top: 170, width: 850, height: 598 }],
+      ['vnext-editor-notice', { left: 261, top: 178, width: 720, height: 76 }],
+      ['table-hit', { left: 262, top: 180, width: 718, height: 900 }],
+    ]);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const rect = rects.get(this.className) ?? { left: 0, top: 0, width: 0, height: 0 };
+      return { ...box(rect), x: rect.left, y: rect.top, toJSON: () => ({}) } as DOMRect;
+    });
+    function LongTable() {
+      const anchor = React.useRef<HTMLDivElement>(null);
+      const [message, setMessage] = React.useState<string | null>('Tabela criada com 41 linhas e 4 colunas.');
+      const [selected, setSelected] = React.useState(true);
+      useNoticeAnchor(anchor);
+      return (
+        <div className="vnext-shell">
+          <div className="vnext-editor-notices" data-editor-notices="">
+            {message && (
+              <div key={message} className="vnext-editor-notice" role="status" data-editor-notice="">
+                <p>{message}</p>
+                <button type="button" onClick={() => setMessage(null)}>Fechar aviso</button>
+              </div>
+            )}
+          </div>
+          <main className="vnext-canvas-area">
+            <div ref={anchor} className="vnext-canvas-meta">Página 1 de 1</div>
+            <div className="vnext-document-preview">
+              <div className="table-hit" data-editor-object-id="table" data-selected={selected ? 'true' : 'false'} />
+            </div>
+            <button type="button" onClick={() => setSelected(false)}>Desmarcar</button>
+            <button type="button" onClick={() => setMessage('Objeto excluído.')}>Outro aviso</button>
+          </main>
+        </div>
+      );
+    }
+    const { container, getByRole } = render(<LongTable />);
+    const notices = container.querySelector<HTMLElement>('[data-editor-notices]')!;
+    expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'inline');
+    expect(getByRole('status')).toHaveTextContent('Tabela criada com 41 linhas');
+
+    // The page moved when the message joined the layout, and the person deselects: the message does not jump back over it.
+    act(() => { getByRole('button', { name: 'Desmarcar' }).click(); });
+    await new Promise((resolveFrame) => setTimeout(resolveFrame, 60));
+    expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'inline');
+
+    // Closed: nothing is in the layout any more.
+    act(() => { getByRole('button', { name: 'Fechar aviso' }).click(); });
+    await waitFor(() => expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'top'));
+
+    // The next message is measured again: with nothing selected it floats at the top.
+    act(() => { getByRole('button', { name: 'Outro aviso' }).click(); });
+    await waitFor(() => expect(getByRole('status')).toHaveTextContent('Objeto excluído.'));
+    expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'top');
   });
 
   it('removes its variables when the editor closes', () => {

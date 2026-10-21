@@ -4,7 +4,8 @@
  * - `progress`: work still running ("Enviando imagem…"); stays until the result replaces it;
  * - `error`: a problem, a refusal or an instruction the person still has to follow; stays until closed or replaced;
  * - `success`: a finished change ("Objeto excluído."); a short one disappears after a few seconds, a longer one that
- *   explains what to do next stays long enough to be read (see {@link editorNoticeTimeoutMs});
+ *   only adds a tip ("Tabela criada … Para voltar, use Desfazer.") disappears after about 6 to 8.4 seconds, the time to
+ *   read it (see {@link editorNoticeTimeoutMs}); it never stays until closed;
  * - `info`: anything else, such as "Texto sem alterações."; same timing as `success`.
  *
  * Problem words win over success words, so "Tabela adicionada. Confira a altura…" stays on screen. A caller that
@@ -15,14 +16,17 @@ export type EditorNoticeTone = 'progress' | 'error' | 'success' | 'info';
 /** A short finished change ("Objeto excluído.") leaves after this. */
 export const SUCCESS_NOTICE_TIMEOUT_MS = 4000;
 /**
- * A finished change that explains itself in more words ("… A primeira linha virou o cabeçalho. Para voltar, use
- * Desfazer.") is an instruction too: it never leaves before this, and longer ones stay longer (C-03, J4).
+ * A finished change that adds a tip in more words ("… A primeira linha virou o cabeçalho. Para voltar, use
+ * Desfazer.") never leaves before this, and longer ones stay as long as they take to read (C-03, J4). It is a tip,
+ * not an instruction: it leaves alone, so it never keeps covering the page the person is about to edit (J5).
  */
-export const LONG_NOTICE_MIN_TIMEOUT_MS = 12_000;
+export const LONG_NOTICE_MIN_TIMEOUT_MS = 6000;
 /** Up to this many words a success is "short" and leaves after {@link SUCCESS_NOTICE_TIMEOUT_MS}. */
 export const SHORT_NOTICE_MAX_WORDS = 8;
-/** Reading time per word for a 60-year-old reader without hurry (100 words per minute). */
-export const NOTICE_READING_MS_PER_WORD = 600;
+/** Reading time per word for a 60-year-old reader without hurry (150 words per minute). */
+export const NOTICE_READING_MS_PER_WORD = 400;
+/** Time to notice that a message appeared before the reading starts; the "Fechar" button is read too (J4 counts it). */
+export const NOTICE_NOTICING_MS = 400;
 
 /**
  * Matches whole words only. `\b` cannot be used: in JavaScript it only knows ASCII letters, so it never matches
@@ -93,14 +97,14 @@ export function editorNoticeWordCount(text: string): number {
 
 /**
  * How long a message stays before leaving on its own, or `null` when it stays until the person closes it (or the
- * next message replaces it). The rule the person can rely on: a short success leaves by itself; an error or an
- * instruction stays until closed; a longer success, which always carries an instruction, stays at least
- * {@link LONG_NOTICE_MIN_TIMEOUT_MS} and more when it has more words. Pointing at the message (or focusing its
- * button) pauses the countdown; leaving it starts the full time again.
+ * next message replaces it). The rule the person can rely on: a success leaves by itself, a short one after 4 s and a
+ * longer one (a tip such as "Para voltar, use Desfazer.") after {@link LONG_NOTICE_MIN_TIMEOUT_MS} at least, and more
+ * when it has more words; an error or an instruction the person still has to follow stays until closed. Pointing at
+ * the message (or focusing its button) pauses the countdown; leaving it starts the full time again.
  */
 export function editorNoticeTimeoutMs(notice: EditorNoticeInput): number | null {
   if (!editorNoticeAutoHides(editorNoticeTone(notice))) return null;
   const words = editorNoticeWordCount(editorNoticeText(notice));
   if (words <= SHORT_NOTICE_MAX_WORDS) return SUCCESS_NOTICE_TIMEOUT_MS;
-  return Math.max(LONG_NOTICE_MIN_TIMEOUT_MS, words * NOTICE_READING_MS_PER_WORD);
+  return Math.max(LONG_NOTICE_MIN_TIMEOUT_MS, NOTICE_NOTICING_MS + words * NOTICE_READING_MS_PER_WORD);
 }
