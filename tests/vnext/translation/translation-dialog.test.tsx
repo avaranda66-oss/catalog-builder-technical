@@ -99,7 +99,11 @@ describe('P2 Translation Center presentation and safety guards', () => {
     expect(view.getByText('Precisão ±0,1 °C')).toBeInTheDocument();
     expect(view.container.textContent).not.toContain('catalog-unit-hidden');
     expect(view.container.textContent).not.toContain('run-a');
-    expect(view.getByRole('combobox')).toBeDisabled();
+    // F-09: na revisão o seletor some e os idiomas viram uma linha; a descrição fica só para leitores de tela.
+    expect(view.queryByRole('combobox')).toBeNull();
+    expect(view.container.querySelector('[data-translation-languages="compact"]')).toHaveTextContent(/PRESYS TA-25N·Português \(Brasil\) →.*Inglês \(Estados Unidos\)/);
+    expect(view.getByText(/Gere e revise uma cópia/)).toHaveClass('vnext-translation-description-compact');
+    expect(view.container.querySelector('[data-translation-suggestions-summary]')).toHaveTextContent('1 ajuste de números · 0 perguntas · 0 termos do glossário');
     const translation = view.getByRole('textbox', { name: 'Tradução 2' });
     expect(translation).toHaveAttribute('data-translation-run', '1');
     fireEvent.change(translation, { target: { value: 'Revised accuracy ±0,1 °C' } });
@@ -198,8 +202,9 @@ describe('P2 Translation Center presentation and safety guards', () => {
     const { view, coordinator, close } = setup({ phase: 'error', pending: true, runs, targetLocale: 'en-US',
       message: 'Não foi possível confirmar a cópia. Tente verificar novamente; nenhuma nova cópia será preparada.' });
     expect(view.getByRole('alert')).toHaveTextContent('Tente verificar novamente');
-    expect(view.getByRole('combobox')).toBeDisabled();
-    expect(view.getByRole('combobox')).toHaveValue('en-US');
+    // F-09: com trechos na tela o idioma de destino é só informado (sem seletor).
+    expect(view.queryByRole('combobox')).toBeNull();
+    expect(view.container.querySelector('[data-translation-languages="compact"]')).toHaveTextContent('Inglês (Estados Unidos)');
     expect(view.getByRole('button', { name: 'Fechar' })).toBeDisabled();
     expect(view.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     expect(view.getByRole('textbox', { name: 'Tradução 1' })).toBeDisabled();
