@@ -18,6 +18,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 const editorUrl = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w4f3-editor-browser.html`;
@@ -60,6 +62,20 @@ async function waitSequence(page, before) {
   );
   await settle(page, 3);
 }
+/** Waits until no command lands for a while, so a pending automatic growOnly fit has been applied. */
+async function waitQuiet(page, quietMs = 600) {
+  let last = (await state(page)).localSequence;
+  let since = Date.now();
+  const deadline = Date.now() + 10000;
+  while (Date.now() - since < quietMs) {
+    assert(Date.now() < deadline, 'localSequence never settled');
+    await page.waitForTimeout(100);
+    const sequence = (await state(page)).localSequence;
+    if (sequence !== last) { last = sequence; since = Date.now(); }
+  }
+  await settle(page, 3);
+}
+
 async function selectObject(page, objectId) {
   if (await page.locator('[data-table-grid-overlay]').count()) {
     await page.locator('[data-editor-action="leave-table-grid"]').click();
@@ -203,22 +219,56 @@ try {
 
   await selectObject(page, ids.objectId);
   const titleCreated = 'Tabela de calibração — superfícies semânticas W4.F.3';
+  const beforeTitle = await state(page);
   await setTitle(page, titleCreated);
+  // B-01 (b7925e3): writing a table title grows the authored frame with one growOnly fit inside the same
+  // Desfazer; x/y/width stay authored. Annotations and cell images below still never touch the frame.
+  await page.waitForFunction(
+    (sequence) => window.__W4F3_PROOF__.state().localSequence === sequence + 2,
+    beforeTitle.localSequence,
+    { timeout: 10000 }
+  );
+  await waitQuiet(page);
   let current = await state(page);
+  assert.equal(current.localSequence, beforeTitle.localSequence + 2, 'title plus exactly one automatic growOnly fit');
   assert.equal(plain(current.main.table.title), titleCreated);
-  assert.equal(current.main.frame.heightMm, originalFrame.heightMm);
+  assert.equal(current.main.frame.xMm, originalFrame.xMm);
+  assert.equal(current.main.frame.yMm, originalFrame.yMm);
+  assert.equal(current.main.frame.widthMm, originalFrame.widthMm);
+  assert(current.main.frame.heightMm > originalFrame.heightMm, 'title grows the authored frame');
+  const titleCreatedFrame = structuredClone(current.main.frame);
   await page.locator('[data-table-title]').waitFor();
   assert((await page.locator('[data-table-title]').innerText()).includes('Tabela de calibração'));
   const titleEdited = titleCreated + ' — revisão';
   await setTitle(page, titleEdited);
+  await waitQuiet(page);
   const afterTitleEdit = await state(page);
   assert.equal(plain(afterTitleEdit.main.table.title), titleEdited);
+  assert.equal(afterTitleEdit.main.frame.xMm, originalFrame.xMm);
+  assert.equal(afterTitleEdit.main.frame.yMm, originalFrame.yMm);
+  assert.equal(afterTitleEdit.main.frame.widthMm, originalFrame.widthMm);
+  assert(afterTitleEdit.main.frame.heightMm >= titleCreatedFrame.heightMm, 'growOnly never shrinks the frame');
   await page.locator('[data-editor-action="undo"]').click();
   await settle(page);
-  assert.equal(plain((await state(page)).main.table.title), titleCreated);
+  const undoneTitle = await state(page);
+  assert.equal(plain(undoneTitle.main.table.title), titleCreated);
+  assert.deepEqual(undoneTitle.main.frame, titleCreatedFrame, 'one Desfazer takes back the title edit and its growth');
+  await page.locator('[data-editor-action="undo"]').click();
+  await settle(page);
+  const undoneTitleCreate = await state(page);
+  assert.deepEqual(undoneTitleCreate.main.table.title, initial.main.table.title);
+  assert.deepEqual(undoneTitleCreate.main.frame, originalFrame, 'one Desfazer takes back the new title and its growth');
   await page.locator('[data-editor-action="redo"]').click();
   await settle(page);
-  assert.equal(plain((await state(page)).main.table.title), titleEdited);
+  const redoneTitleCreate = await state(page);
+  assert.equal(plain(redoneTitleCreate.main.table.title), titleCreated);
+  assert.deepEqual(redoneTitleCreate.main.frame, titleCreatedFrame);
+  await page.locator('[data-editor-action="redo"]').click();
+  await settle(page);
+  const redoneTitle = await state(page);
+  assert.equal(plain(redoneTitle.main.table.title), titleEdited);
+  assert.deepEqual(redoneTitle.main.frame, afterTitleEdit.main.frame);
+  const titledFrame = structuredClone(afterTitleEdit.main.frame);
 
   await openSemanticPanel(page);
   await selectCell(page, 1, 1);
@@ -245,7 +295,7 @@ try {
   assert(current.main.table.annotationIds.includes(footnote.id));
   const selectedCell = current.main.table.cells[5];
   assert(selectedCell.annotationIds.includes(note.id));
-  assert.equal(current.main.frame.heightMm, originalFrame.heightMm);
+  assert.equal(current.main.frame.heightMm, titledFrame.heightMm);
 
   const noteEntry = page.locator(`[data-annotation-entry-id="${note.id}"]`);
   const deleteWhileReferenced = noteEntry.locator('[data-editor-action="remove-annotation"]');
@@ -318,7 +368,7 @@ try {
     targetWidthMm: 24,
     targetHeightMm: 16,
   });
-  assert.equal(current.main.frame.heightMm, originalFrame.heightMm);
+  assert.equal(current.main.frame.heightMm, titledFrame.heightMm);
   const img = page.locator(`[data-cell-id="${imageCell.id}"] img[data-asset-id="asset-ta25n"]`);
   await img.waitFor();
   assert.equal(await img.evaluate((node) => getComputedStyle(node).objectFit), 'contain');
@@ -373,7 +423,7 @@ try {
   await settle(page, 3);
   assert.equal((await state(page)).main.table.cells[5].content.type, 'image');
   const authoredBeforeFit = await state(page);
-  assert.deepEqual(authoredBeforeFit.main.frame, originalFrame);
+  assert.deepEqual(authoredBeforeFit.main.frame, titledFrame);
   const blocked = await publish(context, authoredBeforeFit.document);
   assert.equal(blocked.report.status, 'BLOCKED');
   assert(blocked.report.diagnostics.some((diagnostic) => diagnostic.code === 'TABLE_CONTENT_OVERFLOW'));
@@ -393,7 +443,7 @@ try {
   assert.equal(afterFit.main.frame.xMm, originalFrame.xMm);
   assert.equal(afterFit.main.frame.yMm, originalFrame.yMm);
   assert.equal(afterFit.main.frame.widthMm, originalFrame.widthMm);
-  assert.notEqual(afterFit.main.frame.heightMm, originalFrame.heightMm);
+  assert(afterFit.main.frame.heightMm > titledFrame.heightMm, 'explicit Fit grows past the titled frame');
   const semanticSnapshot = {
     frame: structuredClone(afterFit.main.frame),
     title: structuredClone(afterFit.main.table.title),

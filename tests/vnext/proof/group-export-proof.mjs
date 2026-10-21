@@ -1,5 +1,6 @@
 /* global window, document, getComputedStyle, structuredClone */
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +12,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const output=resolve(root,'scratch/w2f-group-export-proof');
 await mkdir(output,{recursive:true});
 const port=Number(process.env.W2F_EXPORT_PROOF_PORT??5202);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 const url=`http://127.0.0.1:${port}/src/labs/presys-editorial-proof/index.html`;
 let browser;
 

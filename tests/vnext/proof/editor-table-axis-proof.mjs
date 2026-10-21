@@ -18,6 +18,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 let browser;
@@ -172,11 +174,17 @@ try {
   assert.deepEqual(await state(page), beforeSpanFailure, 'Span rejection must preserve document and history sequence');
 
   await page.locator('[data-table-selector="table"]').click();
+  // FR-34 (cf8f794): the bar above the page now writes out why a row/column button is disabled
+  // ([data-table-axis-note]), which makes the bar taller and moves the whole page down. The whole-table
+  // highlight must match the grid as it is laid out now, not the measurement taken before the note.
+  const liveGridRect = await page.locator('[data-editorial-root] [data-table-id="w4a-table"]').boundingBox();
   const whole = await page.locator('[data-table-selection-highlight]').boundingBox();
-  assert(whole);
-  close(whole.x, gridRect.x, 'whole table x');
-  close(whole.y, gridRect.y, 'whole table y');
-  close(whole.width, gridRect.width, 'whole table width');
+  assert(whole && liveGridRect);
+  close(liveGridRect.x, gridRect.x, 'grid x is unchanged by the notice');
+  close(liveGridRect.width, gridRect.width, 'grid width is unchanged by the notice');
+  close(whole.x, liveGridRect.x, 'whole table x');
+  close(whole.y, liveGridRect.y, 'whole table y');
+  close(whole.width, liveGridRect.width, 'whole table width');
   await page.locator('[data-table-row-selector="0"]').click();
   await page.locator('[data-editor-action="insert-row-after"]').click();
   await waitForMeasuredGrid(page);
@@ -191,9 +199,17 @@ try {
   await waitForMeasuredGrid(page);
   await page.locator('[data-table-row-selector="0"]').click();
   const beforeLastAxisFailure = await state(page);
-  await page.locator('[data-editor-action="remove-row"]').click();
-  await page.getByText('A última linha ou coluna não pode ser removida.', { exact: true }).waitFor();
-  assert.equal((await state(page)).localSequence, beforeLastAxisFailure.localSequence, 'Last-axis rejection must preserve history sequence');
+  // FR-33/FR-34 (7511892, cf8f794): removing the last row is refused up front. The button is disabled and
+  // the plain reason is written out under the row and column buttons, instead of appearing after a click.
+  const lastRowRemoval = page.locator('[data-editor-action="remove-row"]');
+  const axisNote = page.locator('[data-table-axis-note]');
+  await axisNote.waitFor();
+  assert.equal(await lastRowRemoval.isDisabled(), true, 'Removing the last row must be unavailable');
+  assert((await axisNote.innerText()).includes('A tabela precisa de pelo menos uma linha.'), 'Last-axis reason must be written out');
+  assert.equal(await lastRowRemoval.getAttribute('aria-describedby'), await axisNote.getAttribute('id'), 'Disabled button must point to its written reason');
+  await lastRowRemoval.evaluate((button) => button.click());
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  assert.deepEqual(await state(page), beforeLastAxisFailure, 'Last-axis refusal must preserve document and history sequence');
   await page.locator('[data-editor-action="leave-table-grid"]').click();
 
   const savedShape = await state(page);

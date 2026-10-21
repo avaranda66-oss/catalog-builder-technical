@@ -19,6 +19,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 const editorUrl = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w4e-editor-browser.html`;
@@ -203,26 +205,51 @@ try {
   await fitButton.click();
   await settle(page);
   assert.equal((await state(page)).localSequence, sequenceBeforeNoop);
-  // W4.D external TSV paste grows content, but never auto-grows the authored frame.
+  // B-01 (b7925e3, replaces the W4.D "never auto-grows" rule): an external TSV paste that overflows
+  // the cell grows the authored frame with one growOnly table.fitHeight in the same undo transaction,
+  // so no TABLE_CONTENT_OVERFLOW is left behind and x/y/width stay authored.
   await enterTable(page, fitObjectId);
   await selectCell(page, 0, 0);
   const beforePaste = await state(page);
   const fittedHeightBeforePaste = beforePaste.fit.frame.heightMm;
+  const beforePasteFrame = structuredClone(beforePaste.fit.frame);
+  const beforePasteTable = structuredClone(beforePaste.fit.table);
   await page.locator('[data-editor-action="paste-table-cells"]').click();
   const pasteText = '"Linha 1\nLinha 2\nLinha 3\nLinha 4\nLinha 5\nLinha 6\nLinha 7\nLinha 8"';
   await page.locator('[data-table-paste-textarea]').fill(pasteText);
   await page.locator('[data-editor-action="apply-native-table-paste"]').click();
-  await page.waitForFunction((sequence) => window.__W4E_PROOF__.state().localSequence === sequence + 1, beforePaste.localSequence);
-  assert.equal((await state(page)).fit.frame.heightMm, fittedHeightBeforePaste);
-  await page.locator('[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"]').waitFor({ timeout: 30000 });
+  await page.waitForFunction((sequence) => window.__W4E_PROOF__.state().localSequence === sequence + 2, beforePaste.localSequence);
+  await settle(page);
+  const afterPaste = await state(page);
+  assert.equal(afterPaste.localSequence, beforePaste.localSequence + 2, 'paste plus exactly one automatic growOnly fit');
+  assert(afterPaste.fit.frame.heightMm > fittedHeightBeforePaste, 'pasted overflow grows the frame');
+  assert.equal(afterPaste.fit.frame.xMm, beforePasteFrame.xMm);
+  assert.equal(afterPaste.fit.frame.yMm, beforePasteFrame.yMm);
+  assert.equal(afterPaste.fit.frame.widthMm, beforePasteFrame.widthMm);
+  assert.notDeepEqual(afterPaste.fit.table, beforePasteTable, 'paste changed the cell content');
+  assert.equal(await page.locator('[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"]').count(), 0);
+  // One Undo reverts content and growth together; Redo restores both.
+  await page.locator('[data-editor-action="undo"]').click();
+  await page.waitForFunction((height) => window.__W4E_PROOF__.state().fit.frame.heightMm === height, beforePasteFrame.heightMm);
+  const undonePaste = await state(page);
+  assert.deepEqual(undonePaste.fit.frame, beforePasteFrame);
+  assert.deepEqual(undonePaste.fit.table, beforePasteTable);
+  await page.locator('[data-editor-action="redo"]').click();
+  await page.waitForFunction((height) => window.__W4E_PROOF__.state().fit.frame.heightMm === height, afterPaste.fit.frame.heightMm);
+  const redonePaste = await state(page);
+  assert.deepEqual(redonePaste.fit.frame, afterPaste.fit.frame);
+  assert.deepEqual(redonePaste.fit.table, afterPaste.fit.table);
   await page.locator('[data-editor-action="leave-table-grid"]').click();
   await waitFitReady(page);
+  // The automatic growth already reached the measured height: an explicit Fit is a semantic no-op.
   const beforeSecondFit = await state(page);
   await fitButton.click();
-  await page.waitForFunction((sequence) => window.__W4E_PROOF__.state().localSequence === sequence + 1, beforeSecondFit.localSequence);
-  await page.locator('[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"]').waitFor({ state: 'detached', timeout: 30000 });
+  await settle(page);
+  assert.equal((await state(page)).localSequence, beforeSecondFit.localSequence);
+  assert.equal(await page.locator('[data-diagnostic-code="TABLE_CONTENT_OVERFLOW"]').count(), 0);
   await waitFitReady(page);
   const afterSecondFit = await state(page);
+  assert.deepEqual(afterSecondFit.fit.frame, afterPaste.fit.frame);
   assert(afterSecondFit.fit.frame.heightMm > fittedHeightBeforePaste);
 
   // Stale prepared Fit cannot overwrite a newer manual frame change.

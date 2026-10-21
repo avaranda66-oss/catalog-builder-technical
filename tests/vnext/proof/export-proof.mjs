@@ -1,5 +1,6 @@
 /* global window, document, getComputedStyle, structuredClone, CSS */
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import { resolve,dirname } from 'node:path';
 import { fileURLToPath,URL } from 'node:url';
@@ -49,7 +50,7 @@ function projectedSpanQ(heightsU,row,span) {
 const runStarted=performance.now();
 const evidence={startedAt:new Date().toISOString(),machine:{platform:os.platform(),release:os.release(),arch:os.arch(),cpus:os.cpus()[0]?.model,logicalCPUs:os.cpus().length,totalMemoryBytes:os.totalmem()},matrix:[],adversarial:[],pdf:undefined};
 const port=Number(process.env.PROOF_PORT??5197);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 let browser;
 const url=`http://127.0.0.1:${port}/src/labs/presys-editorial-proof/index.html`;
 async function openPage(context,fixture='all') {

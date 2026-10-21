@@ -18,6 +18,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 let browser;
@@ -144,8 +146,22 @@ try {
   await page.mouse.up();
   await waitMm(page, 'width', 64);
   near(await readMm(page, 'x'), beforeResizeX, 0.001, 'east resize opposite edge');
-  await page.locator('[data-diagnostic-code="SAFE_AREA_VIOLATION"][data-diagnostic-severity="WARNING"]').waitFor();
-  near(await readMm(page, 'width'), 64, 0.001, 'safe-area crossing authored width');
+  // FR-54 (2026-10-17, W2-A4-AUTHORING-CONTRACT): a shape flush with the page edge is an intentional
+  // bleed, so that side raises no SAFE_AREA_VIOLATION. Stopping 1 mm short of the edge still crosses
+  // the safe area and must warn; returning flush must clear the warning again.
+  const safeAreaWarning = page.locator('[data-diagnostic-code="SAFE_AREA_VIOLATION"][data-diagnostic-severity="WARNING"]');
+  await numberInput(page, 'width').fill('63');
+  await numberInput(page, 'width').press('Enter');
+  await waitMm(page, 'width', 63);
+  await safeAreaWarning.waitFor();
+  near(await readMm(page, 'width'), 63, 0.001, 'safe-area crossing authored width');
+  near(await readMm(page, 'x'), beforeResizeX, 0.001, 'safe-area crossing keeps x');
+  await numberInput(page, 'width').fill('64');
+  await numberInput(page, 'width').press('Enter');
+  await waitMm(page, 'width', 64);
+  await page.waitForFunction(() => !document.querySelector('[data-diagnostic-code="SAFE_AREA_VIOLATION"]'));
+  assert.equal(await page.locator('[data-editor-diagnostics] li').count(), 0, 'Shape flush with the page edge must have no diagnostics (FR-54 bleed)');
+  near(await readMm(page, 'width'), 64, 0.001, 'page-edge bleed authored width');
 
   selected = selectedOverlay(page);
   box = await selected.boundingBox();
