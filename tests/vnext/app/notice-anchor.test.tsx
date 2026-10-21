@@ -6,8 +6,10 @@ import React from 'react';
 import {
   NOTICE_CENTER_VARIABLE,
   NOTICE_MAX_WIDTH_VARIABLE,
+  NOTICE_PLACEMENT_ATTRIBUTE,
   NOTICE_TOP_VARIABLE,
   noticeAnchorFor,
+  placeNoticeAvoiding,
   useNoticeAnchor,
 } from '@/vnext/app/editor/use-notice-anchor';
 
@@ -50,6 +52,42 @@ describe('noticeAnchorFor (pure)', () => {
   });
 });
 
+describe('placeNoticeAvoiding (P2 da J4: the message never covers what the person is about to edit)', () => {
+  const notices = box({ left: 0, top: 68, width: 1366, height: 0 });
+  const page = box({ left: 196, top: 170, width: 850, height: 598 });
+  const anchor = { top: 110, center: 621, maxWidth: 858 };
+  // The message as drawn: 720 px wide, centred on the page column, two lines and the "Fechar" button.
+  const notice = { left: 261, right: 981, height: 76 };
+  // "Ir até lá" selected the table at the top of the page: 6 rows, from y = 236 to y = 386.
+  const table = { left: 262, right: 980, top: 236, bottom: 386 };
+
+  it('stays over the top of the page when it covers nothing selected', () => {
+    expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: 400, bottom: 560 } }))
+      .toEqual({ top: 110, placement: 'top' });
+    // Beside the object, not over it.
+    expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { left: 990, right: 1040, top: 180, bottom: 300 } }))
+      .toEqual({ top: 110, placement: 'top' });
+    // Scrolled out of view.
+    expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: -300, bottom: 150 } }))
+      .toEqual({ top: 110, placement: 'top' });
+  });
+
+  it('goes right under the selected table, inside the window', () => {
+    const placed = placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: table });
+    expect(placed).toEqual({ top: 386 + 8 - 68, placement: 'below-selection' });
+    expect(68 + placed.top + notice.height).toBeLessThanOrEqual(768);
+  });
+
+  it('a table taller than the free space: the place that covers least, at the bottom of the page area', () => {
+    const tall = { ...table, top: 180, bottom: 700 };
+    const placed = placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: tall });
+    expect(placed).toEqual({ top: 768 - 8 - 76 - 68, placement: 'bottom' });
+    // Covering the whole visible page: it keeps its place (top on ties) and stays readable.
+    expect(placeNoticeAvoiding(anchor, notices, page, 768, { notice, selection: { ...table, top: 100, bottom: 900 } }))
+      .toEqual({ top: 110, placement: 'top' });
+  });
+});
+
 function Harness() {
   const anchor = React.useRef<HTMLDivElement>(null);
   useNoticeAnchor(anchor);
@@ -85,6 +123,53 @@ describe('useNoticeAnchor', () => {
     rects.set('vnext-document-preview', { left: 196, top: 230, width: 850, height: 538 });
     act(() => { window.dispatchEvent(new Event('resize')); });
     await waitFor(() => expect(notices.style.getPropertyValue(NOTICE_TOP_VARIABLE)).toBe('170px'));
+  });
+
+  it('moves an open message off the table "Ir até lá" selected, and back when the selection goes', async () => {
+    const rects = new Map<string, Rect>([
+      ['vnext-editor-notices', { left: 0, top: 68, width: 1366, height: 0 }],
+      ['vnext-canvas-area', { left: 176, top: 68, width: 890, height: 700 }],
+      ['vnext-document-preview', { left: 196, top: 170, width: 850, height: 598 }],
+      ['vnext-editor-notice', { left: 261, top: 178, width: 720, height: 76 }],
+      ['table-hit', { left: 262, top: 236, width: 718, height: 150 }],
+    ]);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const rect = rects.get(this.className) ?? { left: 0, top: 0, width: 0, height: 0 };
+      return { ...box(rect), x: rect.left, y: rect.top, toJSON: () => ({}) } as DOMRect;
+    });
+    function WithNotice() {
+      const anchor = React.useRef<HTMLDivElement>(null);
+      const [selected, setSelected] = React.useState(true);
+      useNoticeAnchor(anchor);
+      return (
+        <div className="vnext-shell">
+          <div className="vnext-editor-notices" data-editor-notices="">
+            <div className="vnext-editor-notice" role="status" data-editor-notice="">
+              <p>Esta tabela tem 6 linhas vazias, que sairão em branco no PDF.</p>
+              <button type="button">Fechar</button>
+            </div>
+          </div>
+          <main className="vnext-canvas-area">
+            <div ref={anchor} className="vnext-canvas-meta">Página 2 de 2</div>
+            <div className="vnext-document-preview">
+              <div className="table-hit" data-editor-object-id="table" data-selected={selected ? 'true' : 'false'} />
+            </div>
+            <button type="button" onClick={() => setSelected(false)}>Desmarcar</button>
+          </main>
+        </div>
+      );
+    }
+    const { container, getByRole } = render(<WithNotice />);
+    const notices = container.querySelector<HTMLElement>('[data-editor-notices]')!;
+    // Right under the table: the cells stay visible and clickable, the message stays on screen with "Fechar".
+    expect(notices.style.getPropertyValue(NOTICE_TOP_VARIABLE)).toBe(`${386 + 8 - 68}px`);
+    expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'below-selection');
+    expect(getByRole('status')).toHaveTextContent('Esta tabela tem 6 linhas vazias');
+    expect(getByRole('button', { name: 'Fechar' })).toBeVisible();
+
+    act(() => { getByRole('button', { name: 'Desmarcar' }).click(); });
+    await waitFor(() => expect(notices).toHaveAttribute(NOTICE_PLACEMENT_ATTRIBUTE, 'top'));
+    expect(notices.style.getPropertyValue(NOTICE_TOP_VARIABLE)).toBe('110px');
   });
 
   it('removes its variables when the editor closes', () => {

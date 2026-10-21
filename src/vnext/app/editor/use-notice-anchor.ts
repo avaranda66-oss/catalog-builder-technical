@@ -5,18 +5,23 @@
  * the problems counter, for up to 4 s. On a computer screen the toolbars above the page are now
  * fixed (only the page scrolls), so this hook measures where the page area starts and publishes
  * three CSS variables on the message area (`[data-editor-notices]`):
- * - `--vnext-notice-top`: distance from the message area to the top of the page area;
+ * - `--vnext-notice-top`: distance from the message area to the top of the message;
  * - `--vnext-notice-center`: horizontal centre of the page column;
  * - `--vnext-notice-max-width`: width of the page column, minus a margin.
- * styles.css uses them (only above 900 px) to float the message over the top edge of the page,
- * still under the top bars and without moving anything. Below 900 px the message keeps its place
- * under the top bar.
+ * styles.css uses them (only above 900 px) to float the message over the page, still under the
+ * top bars and without moving anything. Below 900 px the message keeps its place under the top bar.
+ *
+ * P2 da J4 (20/10): over the top edge of the page the message covered the table that "Ir até lá"
+ * had just selected, and the person had to close it before editing. The message now keeps away
+ * from the selected object: right under it, or at the bottom of the visible page area
+ * (`data-notice-placement` tells which). It stays on screen and keeps its "Fechar" button (FR-12).
  */
 import { useLayoutEffect, type RefObject } from 'react';
 
 export const NOTICE_TOP_VARIABLE = '--vnext-notice-top';
 export const NOTICE_CENTER_VARIABLE = '--vnext-notice-center';
 export const NOTICE_MAX_WIDTH_VARIABLE = '--vnext-notice-max-width';
+export const NOTICE_PLACEMENT_ATTRIBUTE = 'data-notice-placement';
 const NOTICE_GAP_PX = 8;
 const NOTICE_SIDE_MARGIN_PX = 32;
 const NOTICE_MIN_WIDTH_PX = 240;
@@ -28,6 +33,7 @@ export interface NoticeAnchor {
 }
 
 type Box = Pick<DOMRect, 'left' | 'top' | 'bottom' | 'width'>;
+type Area = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>;
 
 /**
  * Pure placement: `notices` is the message area under the top bars, `page` the page area
@@ -42,6 +48,62 @@ export function noticeAnchorFor(notices: Box, page: Box, column: Box, viewportHe
     center: Math.round(column.left + column.width / 2 - notices.left),
     maxWidth: Math.round(Math.max(NOTICE_MIN_WIDTH_PX, column.width - NOTICE_SIDE_MARGIN_PX)),
   };
+}
+
+/** `top`: where the page starts; `below-selection`: right under the selected object; `bottom`: bottom of the page area. */
+export type NoticePlacement = 'top' | 'below-selection' | 'bottom';
+
+export interface NoticeAvoidance {
+  /** The message on screen now (its height and horizontal extent do not depend on its top). */
+  readonly notice: Pick<DOMRect, 'left' | 'right' | 'height'>;
+  /** The selected object(s), which the person is about to edit. */
+  readonly selection: Area;
+}
+
+/**
+ * Pure: keeps the message of `anchor` off the selected object. The first place that covers none
+ * of its visible part wins, in the order top, right under it, bottom of the visible page area;
+ * when every place covers part of it, the one that covers least (top on ties). The message never
+ * goes above the message area nor below the window.
+ */
+export function placeNoticeAvoiding(
+  anchor: NoticeAnchor,
+  notices: Pick<DOMRect, 'bottom'>,
+  page: Pick<DOMRect, 'top' | 'bottom'>,
+  viewportHeight: number,
+  { notice, selection }: NoticeAvoidance
+): { top: number; placement: NoticePlacement } {
+  const base = { top: anchor.top, placement: 'top' as NoticePlacement };
+  const height = notice.height;
+  const visibleTop = Math.max(page.top, notices.bottom);
+  const visibleBottom = Math.min(page.bottom, viewportHeight);
+  const coveredTop = Math.max(selection.top, visibleTop);
+  const coveredBottom = Math.min(selection.bottom, visibleBottom);
+  const sideBySide = Math.min(notice.right, selection.right) - Math.max(notice.left, selection.left) <= 0;
+  if (!(height > 0) || sideBySide || coveredBottom <= coveredTop) return base;
+  const covered = (top: number) => Math.max(0, Math.min(top + height, coveredBottom) - Math.max(top, coveredTop));
+  const candidates: { top: number; placement: NoticePlacement }[] = [{ top: notices.bottom + anchor.top, placement: 'top' }];
+  // Both stay inside the visible page area, so inside the window, and never above the message area.
+  const lowest = visibleBottom - NOTICE_GAP_PX - height;
+  const below = coveredBottom + NOTICE_GAP_PX;
+  if (below <= lowest) candidates.push({ top: below, placement: 'below-selection' });
+  if (lowest >= notices.bottom + 4) candidates.push({ top: lowest, placement: 'bottom' });
+  const best = candidates.find((candidate) => covered(candidate.top) === 0)
+    ?? candidates.reduce((least, candidate) => (covered(candidate.top) < covered(least.top) ? candidate : least));
+  return best.placement === 'top' ? base : { top: Math.round(best.top - notices.bottom), placement: best.placement };
+}
+
+/** Union of the selected objects on the page, or undefined when nothing is selected. */
+function selectionArea(page: HTMLElement): Area | undefined {
+  let area: Area | undefined;
+  for (const element of page.querySelectorAll<HTMLElement>('[data-editor-object-id][data-selected="true"]')) {
+    const rect = element.getBoundingClientRect();
+    if (!(rect.width > 0 || rect.height > 0)) continue;
+    area = area
+      ? { left: Math.min(area.left, rect.left), right: Math.max(area.right, rect.right), top: Math.min(area.top, rect.top), bottom: Math.max(area.bottom, rect.bottom) }
+      : { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  }
+  return area;
 }
 
 function nextFrame(callback: () => void): number {
@@ -65,12 +127,19 @@ export function useNoticeAnchor(anchorRef: RefObject<HTMLElement | null>): void 
     const page = column?.querySelector<HTMLElement>('.vnext-document-preview');
     if (!column || !notices || !page) return undefined;
     const measure = () => {
-      const placement = noticeAnchorFor(notices.getBoundingClientRect(), page.getBoundingClientRect(),
-        column.getBoundingClientRect(), window.innerHeight);
+      const noticesRect = notices.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      const placement = noticeAnchorFor(noticesRect, pageRect, column.getBoundingClientRect(), window.innerHeight);
       if (!placement) return;
-      notices.style.setProperty(NOTICE_TOP_VARIABLE, `${placement.top}px`);
+      const notice = notices.querySelector<HTMLElement>('[data-editor-notice]');
+      const selection = notice ? selectionArea(page) : undefined;
+      const placed = notice && selection
+        ? placeNoticeAvoiding(placement, noticesRect, pageRect, window.innerHeight, { notice: notice.getBoundingClientRect(), selection })
+        : { top: placement.top, placement: 'top' as NoticePlacement };
+      notices.style.setProperty(NOTICE_TOP_VARIABLE, `${placed.top}px`);
       notices.style.setProperty(NOTICE_CENTER_VARIABLE, `${placement.center}px`);
       notices.style.setProperty(NOTICE_MAX_WIDTH_VARIABLE, `${placement.maxWidth}px`);
+      notices.setAttribute(NOTICE_PLACEMENT_ATTRIBUTE, placed.placement);
     };
     measure();
     let frame: number | undefined;
@@ -84,14 +153,25 @@ export function useNoticeAnchor(anchorRef: RefObject<HTMLElement | null>): void 
       // The page area shrinks or grows when a toolbar above it opens or closes.
       for (const element of [column, page, notices]) observer.observe(element);
     }
+    // A message appears or changes; the selection, an object's frame or the zoom changes.
+    let mutations: MutationObserver | undefined;
+    if (typeof MutationObserver !== 'undefined') {
+      mutations = new MutationObserver(schedule);
+      mutations.observe(notices, { childList: true, subtree: true, characterData: true });
+      mutations.observe(page, { subtree: true, attributes: true, attributeFilter: ['data-selected', 'style'] });
+    }
     window.addEventListener('resize', schedule);
     column.addEventListener('scroll', schedule, { passive: true });
+    page.addEventListener('scroll', schedule, { passive: true });
     return () => {
       observer?.disconnect();
+      mutations?.disconnect();
       window.removeEventListener('resize', schedule);
       column.removeEventListener('scroll', schedule);
+      page.removeEventListener('scroll', schedule);
       if (frame !== undefined) cancelFrame(frame);
       for (const name of [NOTICE_TOP_VARIABLE, NOTICE_CENTER_VARIABLE, NOTICE_MAX_WIDTH_VARIABLE]) notices.style.removeProperty(name);
+      notices.removeAttribute(NOTICE_PLACEMENT_ATTRIBUTE);
     };
   }, [anchorRef]);
 }
