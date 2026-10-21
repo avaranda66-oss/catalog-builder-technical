@@ -453,12 +453,26 @@ try {
       j.step('25 Esc no meio da revisão não perde a revisão', true, `${runsAfter} trechos continuam ao reabrir`);
     }
   } else {
-    j.step('25 Esc com o cursor na tradução não fecha o Centro', true, 'o diálogo continua aberto');
+    // E-02: Esc com correções feitas pergunta antes de descartar; "Continuar revisando" mantém tudo.
+    const ask = page.getByRole('alertdialog', { name: 'Descartar as correções da tradução?' });
+    const asked = (await ask.count()) > 0;
+    j.step('25 Esc no meio da revisão pergunta "Descartar as correções da tradução?" e não fecha o Centro sozinho', asked && (await dialog().count()) === 1,
+      `pergunta visível: ${asked}`);
+    if (asked) {
+      await clicks.click('continuar revisando', ask.getByRole('button', { name: 'Continuar revisando' }));
+      await page.waitForTimeout(200);
+      j.step('25 "Continuar revisando" mantém a tradução e a correção feita à mão', (await runs().count()) > 0 && (await runState(exatEs)) === 'corrected' && (await ask.count()) === 0,
+        `trechos: ${await runs().count()} · estado: ${await runState(exatEs)}`);
+    }
   }
   j.addEvidence(await shot(page, 'j09-09-espanhol-reaberto'));
   // Cancelar de verdade: nada é criado.
   const cancel = dialog().getByRole('button', { name: 'Cancelar', exact: true });
   if (await cancel.count()) await clicks.click('cancelar (ES)', cancel);
+  await page.waitForTimeout(300);
+  // Com a revisão em andamento, "Cancelar" pergunta antes (E-02): o pai escolhe descartar.
+  const discard = page.getByRole('button', { name: 'Descartar correções e fechar' });
+  if (await discard.count()) await clicks.click('descartar correções e fechar (ES)', discard);
   await page.waitForTimeout(300);
   st = await state(page);
   j.step('26 "Cancelar" fecha o Centro sem criar nada: continuam só o original e a cópia EN', (await dialog().count()) === 0 && st.catalogs.length === 2 && st.catalogs.every((c) => !c.archivedAt),

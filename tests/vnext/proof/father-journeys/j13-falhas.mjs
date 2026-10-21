@@ -296,42 +296,33 @@ try {
   await boxL.fill(PEDIDO);
   const sendL = dock().getByRole('button', { name: 'Enviar ao Gemini' });
   measures.sendButtonLimite = { ...(await measure(sendL)), enabled: await sendL.isEnabled() };
-  const tL = Date.now();
-  await clicks.click('enviar (limite)', sendL);
-  const alertL = dock().locator('[role="alert"]').first();
-  const alertLms = await waitMs(async () => (await alertL.count()) > 0, { timeout: 10000 });
-  timings.limite.alertMs = alertLms >= 0 ? Date.now() - tL : -1;
-  texts.alertaLimite = (await alertL.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-  measures.alertaLimite = alertLms >= 0 ? await measureInScroll(alertL) : null;
-  const unsentL = await dock().locator('.ai-chat-unsent').count();
+  // C-05: com o limite já conhecido, "Enviar" fica desligado e uma explicação aparece logo abaixo; o pedido fica na caixa.
+  const blockedL = dock().locator('[data-ai-send-blocked]');
+  const blockedMs = await waitMs(async () => (await blockedL.count()) > 0, { timeout: 10000 });
+  timings.limite.alertMs = blockedMs >= 0 ? 0 : -1;
+  texts.alertaLimite = (await blockedL.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  measures.alertaLimite = blockedMs >= 0 ? await measureInScroll(blockedL) : null;
   const boxValueL = await boxL.inputValue();
-  // A mensagem completa termina com " O catálogo não foi alterado." (composer-messages.ts): por isso startsWith.
-  j.step('L2 ao enviar, a mensagem diz O QUE FAZER ("Continue editando manualmente hoje; amanhã o limite renova") em menos de 2 s',
-    timings.limite.alertMs >= 0 && timings.limite.alertMs < 2000 && texts.alertaLimite.startsWith(MSG_LIMITE),
-    `${timings.limite.alertMs} ms · "${texts.alertaLimite}"`);
-  j.step('L2 a mensagem está visível SEM ROLAR (nem a página nem o painel)',
+  j.step('L2 com o limite atingido, "Enviar" fica desligado e a explicação diz o que acontece e que o texto continua guardado',
+    !measures.sendButtonLimite.enabled && /limite diário de uso da IA foi atingido/.test(texts.alertaLimite) && /continua guardado/.test(texts.alertaLimite),
+    `enviar ativo: ${measures.sendButtonLimite.enabled} · "${texts.alertaLimite}"`);
+  j.step('L2 a explicação está visível SEM ROLAR (nem a página nem o painel)',
     Boolean(measures.alertaLimite?.visibleWithoutScrolling),
     `visível: ${measures.alertaLimite?.fullyVisible} · cortada pelo painel: ${measures.alertaLimite?.clippedByScroll} ${JSON.stringify(measures.alertaLimite?.clippers ?? [])} · base y=${measures.alertaLimite?.bottom} (janela ${viewport.height})`);
-  // FR-16b integrada: o tamanho da instrução precisa passar, não depender de uma fatia já entregue.
   if ((measures.alertaLimite?.fontPx ?? 0) < MIN_BODY_FONT_PX) {
-    j.step('L2 a mensagem de limite tem letra legível (FR-16b)', false,
+    j.step('L2 a explicação do limite tem letra legível (FR-16b)', false,
       `${measures.alertaLimite?.fontPx} px (< ${MIN_BODY_FONT_PX}); prontidão: ${limite.readinessMeasure.fontPx} px`);
   } else {
-    j.step('L2 a mensagem de limite tem letra legível (≥ 13 px)', true, `${measures.alertaLimite?.fontPx} px`);
+    j.step('L2 a explicação do limite tem letra legível (≥ 13 px)', true, `${measures.alertaLimite?.fontPx} px`);
   }
-  j.step('L2 o pedido NÃO se perde: volta para a caixa, marcado como "não enviado"', unsentL === 1 && boxValueL === PEDIDO, `não enviado: ${unsentL} · caixa: "${boxValueL}"`);
+  j.step('L2 o pedido NÃO se perde: continua na caixa de texto', boxValueL === PEDIDO, `caixa: "${boxValueL}"`);
   st = await state(page);
   j.step('L2 o catálogo não foi alterado pela tentativa (0 páginas novas, continua "Salvo")', st.runtime.document.pages.length === 1 && st.runtime.saveLabel === 'Saved', `páginas: ${st.runtime.document.pages.length} · ${st.runtime.saveLabel}`);
   await jargonStep('L2 painel do assistente (limite)', '[data-vnext-assistant="open"]');
   j.addEvidence(await shot(page, 'j13-falhas-03-ia-limite-diario'));
-  // O botão "Enviar" continua ativo mesmo com o painel avisando do limite: o pai digita, envia e só então leva o "não".
-  if (measures.sendButtonLimite.enabled && limite.readiness === MSG_LIMITE) {
-    findingStep(j, 'L3 com o limite diário já avisado no topo do painel, "Enviar ao Gemini" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)',
-      `prontidão: "${limite.readiness}" · botão Enviar ativo: ${measures.sendButtonLimite.enabled} · caixa de texto aceita digitar`,
-      { id: 'C-05', severity: 'P3', knownFR: 'FR-61' });
-  } else {
-    j.step('L3 com o limite avisado, o envio fica desligado ou explica antes de digitar', true);
-  }
+  j.step('L3 com o limite avisado, o envio fica desligado e explica antes de o pai digitar tudo em vão (C-05)',
+    !measures.sendButtonLimite.enabled && limite.readiness === MSG_LIMITE,
+    `prontidão: "${limite.readiness}" · botão Enviar ativo: ${measures.sendButtonLimite.enabled}`);
   await checkReload('depois do limite');
 
   // ================================================================ (3) SERVIDOR SEM IA (?ia=off)

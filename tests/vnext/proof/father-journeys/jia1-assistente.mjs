@@ -246,8 +246,6 @@ try {
     rejeitar: rejectButton,
   });
   measures.proposta.grupo = await measure(proposal);
-  j.step('B4 "Confirmar e inserir no catálogo" e "Rejeitar proposta" estão visíveis sem rolar',
-    measures.proposta.confirmar?.fullyVisible && measures.proposta.rejeitar?.fullyVisible, JSON.stringify({ confirmar: measures.proposta.confirmar, rejeitar: measures.proposta.rejeitar }));
   const smallFP = smallFonts(measures.proposta, ['titulo', 'resumo', 'item', 'confirmar', 'rejeitar']);
   const smallTP = smallTargets(measures.proposta, ['confirmar', 'rejeitar']);
   j.step('B5 letras e botões da proposta legíveis (≥ 13 px / ≥ 24 px, FR-16b)',
@@ -275,6 +273,12 @@ try {
     j.step('B7 o título "Proposta para revisar" está visível junto com os botões', true, JSON.stringify(clipped));
   }
   j.addEvidence(await shot(page, 'jia1-02-proposta'));
+  // D-07: a proposta abre pelo título; os botões ficam logo abaixo, a uma rolagem curta dentro do painel.
+  await confirmButton.scrollIntoViewIfNeeded();
+  await rejectButton.scrollIntoViewIfNeeded();
+  const botoesDepoisDeRolar = await measureAll({ confirmar: confirmButton, rejeitar: rejectButton });
+  j.step('B4 "Confirmar e inserir no catálogo" e "Rejeitar proposta" ficam visíveis depois de rolar o painel uma vez',
+    botoesDepoisDeRolar.confirmar?.fullyVisible && botoesDepoisDeRolar.rejeitar?.fullyVisible, JSON.stringify(botoesDepoisDeRolar));
 
   // ------------------------------------------------------------------ C. confirmar e inserir
   const pagesPanelBefore = (await page.getByRole('complementary', { name: 'Páginas do catálogo' }).innerText()).replace(/\s+/g, ' ');
@@ -388,17 +392,17 @@ try {
   observations.avancadoPiscouLimite = { viu: limite.rec.advancedSeen, duracaoMs: limite.flickerMs };
   const boxL = d.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
   await boxL.fill(PEDIDO);
-  const tL = Date.now();
-  await clicks.click('pedir (limite diário)', d.getByRole('button', { name: 'Enviar ao Gemini' }));
-  const alertL = d.locator('[role="alert"]').first();
-  await alertL.waitFor({ timeout: 10000 });
-  timings.alertaLimiteMs = Date.now() - tL;
-  texts.alertaLimite = (await alertL.innerText()).replace(/\s+/g, ' ').trim();
-  measures.alertaLimite = await measure(alertL);
-  const unsentL = d.locator('.ai-chat-unsent');
-  j.step('F1 com o limite diário atingido, aparece em português o que fazer ("Continue editando manualmente hoje; amanhã o limite renova")',
-    /O limite diário de uso da IA foi atingido\. Continue editando manualmente hoje; amanhã o limite renova\./.test(texts.alertaLimite) && measures.alertaLimite.fullyVisible,
-    `"${texts.alertaLimite}" · em ${timings.alertaLimiteMs} ms · visível: ${measures.alertaLimite.fullyVisible} · prontidão: "${limite.readiness}"`);
+  // C-05: com o limite já conhecido, "Enviar" fica desligado e a explicação aparece logo abaixo; o pedido continua na caixa.
+  const sendL = d.getByRole('button', { name: 'Enviar ao Gemini' });
+  const blockedL = d.locator('[data-ai-send-blocked]');
+  await blockedL.waitFor({ timeout: 10000 });
+  timings.alertaLimiteMs = 0;
+  texts.alertaLimite = (await blockedL.innerText()).replace(/\s+/g, ' ').trim();
+  measures.alertaLimite = await measure(blockedL);
+  const sendDisabledL = await sendL.isDisabled();
+  j.step('F1 com o limite diário atingido, "Enviar" fica desligado e a explicação aparece em português logo abaixo',
+    sendDisabledL && /limite diário de uso da IA foi atingido/.test(texts.alertaLimite) && /continua guardado/.test(texts.alertaLimite) && measures.alertaLimite.fullyVisible,
+    `"${texts.alertaLimite}" · desligado: ${sendDisabledL} · visível: ${measures.alertaLimite.fullyVisible} · prontidão: "${limite.readiness}"`);
   // Com o limite atingido, a consulta de prontidão falha (429) antes de o servidor dizer "byok: false"; o painel então
   // oferece "Avançado (chave própria)" — a chave pessoal + senha que o FR-60 tirou do caminho do pai.
   const advancedL = d.getByRole('button', { name: 'Avançado (chave própria)' });
@@ -421,9 +425,9 @@ try {
   } else {
     j.step('F1b com o limite diário atingido, "Avançado (chave própria)" continua escondido', true);
   }
-  j.step('F2 o pedido volta para a caixa ("não enviado") e nenhuma proposta aparece',
-    (await unsentL.count()) === 1 && (await boxL.inputValue()) === PEDIDO && (await d.getByRole('group', { name: 'Proposta de páginas' }).count()) === 0,
-    `não enviado: ${await unsentL.count()} · caixa: "${await boxL.inputValue()}"`);
+  j.step('F2 o pedido continua na caixa e nenhuma proposta aparece',
+    (await boxL.inputValue()) === PEDIDO && (await d.getByRole('group', { name: 'Proposta de páginas' }).count()) === 0,
+    `caixa: "${await boxL.inputValue()}"`);
   j.step('F3 a mensagem de limite tem letras legíveis (≥ 13 px, FR-16b)',
     measures.alertaLimite.fontPx >= MIN_BODY_FONT_PX, `${measures.alertaLimite.fontPx} px`);
   j.addEvidence(await shot(page, 'jia1-05-limite-diario'));
