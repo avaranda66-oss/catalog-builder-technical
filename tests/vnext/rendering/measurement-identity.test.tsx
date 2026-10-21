@@ -139,6 +139,25 @@ describe('Measurement pass identity and geometry contracts', () => {
     expect(await captureSnapshot(doc, plans, root)).toEqual(first);
   });
 
+  it('keeps 100% exact: one Q of drift is a geometry mismatch at devicePixelRatio 1', async () => {
+    const { doc, root, plans } = fixture();
+    root.querySelector<HTMLElement>('[data-cell-id="cell1-0"]')!.dataset.qaOffset = String(1 / 64);
+    expect((await captureSnapshot(doc, plans, root)).geometryDiagnostics).toContainEqual(expect.objectContaining({
+      code: 'RENDER_GEOMETRY_MISMATCH', cellId: 'cell1-0', details: 'cell x: actualQ=1, expectedQ=0' }));
+  });
+
+  it('accepts device-pixel rounding under browser zoom but still flags a real misplacement', async () => {
+    const { doc, root, plans } = fixture(), cell = root.querySelector<HTMLElement>('[data-cell-id="cell1-0"]')!;
+    window.devicePixelRatio = 1.1;
+    try {
+      cell.dataset.qaOffset = '0.5';
+      expect((await captureSnapshot(doc, plans, root)).geometryDiagnostics).toEqual([]);
+      cell.dataset.qaOffset = '2';
+      expect((await captureSnapshot(doc, plans, root)).geometryDiagnostics).toContainEqual(expect.objectContaining({
+        code: 'RENDER_GEOMETRY_MISMATCH', cellId: 'cell1-0', details: 'cell x: actualQ=128, expectedQ=0, toleranceQ=60' }));
+    } finally { window.devicePixelRatio = 1; }
+  });
+
   it('retains the precise missing-edge error if an edge disappears during hashing', async () => {
     const { doc, root, grid, plan, plans } = fixture();
     hashHook.once = () => grid.querySelector('[data-paint-edge]')!.remove();
