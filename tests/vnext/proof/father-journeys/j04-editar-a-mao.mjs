@@ -257,6 +257,31 @@ function tableSummary(object) {
   };
 }
 
+/**
+ * B-01: altura da moldura (documento) e do conteúdo desenhado da tabela na página do editor, em mm. Usa medidas
+ * de layout (offsetHeight e grid-template-rows), que não mudam com o zoom; rowsMm mostra a altura de cada linha.
+ */
+async function tableGeometry(object) {
+  if (!object || object.type !== 'table') return null;
+  const frameMm = object.frame.heightMm;
+  const dom = await page.evaluate(({ objectId, tableId }) => {
+    const root = document.querySelector('[data-editorial-root]');
+    const node = root?.querySelector(`[data-object-id="${CSS.escape(objectId)}"]`);
+    const intrinsic = node?.querySelector(`[data-table-intrinsic="${CSS.escape(tableId)}"]`);
+    const grid = node?.querySelector(`[data-table-id="${CSS.escape(tableId)}"]`);
+    if (!node || !intrinsic || !grid || !node.offsetHeight) return null;
+    return {
+      framePx: node.offsetHeight,
+      contentPx: intrinsic.offsetHeight,
+      rowsPx: getComputedStyle(grid).gridTemplateRows.split(' ').map((value) => parseFloat(value)),
+    };
+  }, { objectId: object.id, tableId: object.table.id });
+  if (!dom) return { frameMm, contentMm: null, rowsMm: [] };
+  const mmPerPx = frameMm / dom.framePx;
+  const r2 = (n) => Math.round(n * 100) / 100;
+  return { frameMm: r2(frameMm), contentMm: r2(dom.contentPx * mmPerPx), rowsMm: dom.rowsPx.map((px) => r2(px * mmPerPx)) };
+}
+
 /** O que está desenhado na página para a tabela (cabeçalho em destaque? textos iguais?). */
 async function tableCells(tableId) {
   return page.locator(`[data-table-id="${tableId}"]`).first().evaluate((grid) => {
@@ -394,6 +419,7 @@ try {
   findingStep('A2 o aviso amarelo que aparece ao inserir "Tabela" (se houver) é sobre linhas vazias, diz que nada impede o PDF e não fala de área segura',
     !scaryA2 && reassuringA2, `chip: "${issuesA2.chip || '-'}" · painel: "${issuesA2.panel ?? '-'}" · "Localizar" selecionou: ${issuesA2.located === newTable?.id ? 'a tabela nova' : (issuesA2.located ?? '-')}`, 'P2');
   await waitSaved(page, 20000);
+  measurements.tableGeometryA2 = { beforeTyping: await tableGeometry(allObjects(await state(page)).find((o) => o.id === newTable?.id)) };
   const hit = page.locator(`[data-editor-object-id="${newTable?.id}"]`);
   await hit.dblclick({ position: { x: 30, y: 30 } });
   countClick('A2 editar célula (caminho esperado)', 2);
@@ -455,6 +481,14 @@ try {
   await waitSaved(page, 20000).catch(() => {});
   st = await state(page);
   j.step('A2 tudo salvo sozinho ao fim (Salvo)', st.runtime.saveLabel === 'Saved' && !st.runtime.dirty, `saveLabel: ${st.runtime.saveLabel}`);
+  // B-01: linhas com texto ficam mais altas que linhas vazias; a moldura precisa acompanhar o conteúdo digitado.
+  const geometryA2 = measurements.tableGeometryA2;
+  geometryA2.afterTyping = await tableGeometry(allObjects(st).find((o) => o.id === newTable?.id));
+  const { beforeTyping, afterTyping } = geometryA2;
+  j.step('A2 a moldura da tabela cresce sozinha com o texto digitado e o conteúdo cabe nela (B-01)',
+    Boolean(beforeTyping?.contentMm && afterTyping?.contentMm) && afterTyping.frameMm >= beforeTyping.frameMm
+      && afterTyping.contentMm <= afterTyping.frameMm + 0.05,
+    JSON.stringify(geometryA2));
   // Preserve the actual publication diagnostic after typing, not only the one from an empty table.
   const afterInlineIssues = await inspectIssues('A2 após Enter, Tab e Esc');
   j.step('A2 digitar Parâmetro/Faixa numa tabela nova não introduz bloqueio de altura para publicar (B-01)',

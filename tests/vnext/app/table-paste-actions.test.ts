@@ -213,6 +213,16 @@ describe('FR-31 automatic "Ajustar altura" for new tables', () => {
     expect(decidePendingTableFit(pending, document, 'table-1', { ok: true, prepared: roomy }).kind).toBe('fit');
   });
 
+  it('B-01: content that grew the table still fits after a click elsewhere, but never over a changed document', () => {
+    const grown: PendingTableFit = { ...pending, growOnly: true };
+    expect(decidePendingTableFit(grown, document, undefined, { ok: true, prepared: prepared() }).kind).toBe('fit');
+    expect(decidePendingTableFit(grown, document, 'other', { ok: true, prepared: prepared() }).kind).toBe('fit');
+    expect(decidePendingTableFit(grown, { ...document }, 'table-1', { ok: true, prepared: prepared() })).toEqual({ kind: 'cancel' });
+    // No room left on the page: nothing moves (the problem list offers "Continuar na próxima página").
+    expect(decidePendingTableFit(grown, document, 'table-1', { ok: true, prepared: prepared({ wouldExceedPage: true }) })).toEqual({ kind: 'cancel' });
+    expect(decidePendingTableFit(grown, document, 'table-1', { ok: true, prepared: prepared({ tallerThanPage: true }) })).toEqual({ kind: 'cancel' });
+  });
+
   it('fits with the exact canonical action when the measured table fits on the page', () => {
     const decision = decidePendingTableFit(pending, document, 'table-1', { ok: true, prepared: prepared({ wouldViolateSafeArea: true }) });
     expect(decision).toEqual({

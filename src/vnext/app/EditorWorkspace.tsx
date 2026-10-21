@@ -355,6 +355,19 @@ export function EditorWorkspace({
   const [pasteTableAreaOpen, setPasteTableAreaOpen] = React.useState(false);
   const [pasteGrowOffer, setPasteGrowOffer] = React.useState<(TablePasteGrowthOffer & { objectId: string; sourceRows: number; sourceColumns: number; source: TablePasteSource }) | null>(null);
   const [pendingTableFit, setPendingTableFit] = React.useState<PendingTableFit | null>(null);
+  /**
+   * B-01: a row with text is taller than an empty one (6,5 → 7,8 mm in the house style), so typing, pasting or
+   * writing a note can make the table taller than its frame. The change runs under its own transaction and the
+   * measured "Ajustar altura" (grow only) joins it: one Desfazer takes back both.
+   */
+  const executeGrowingTable = (action: ApplicationAction, objectId: string) => {
+    const transactionId = newTableTransactionId();
+    const result = session.execute(action, { transactionId });
+    if (result.ok && result.metadata.changed) {
+      setPendingTableFit({ objectId, transactionId, document: result.document, growOnly: true });
+    }
+    return result;
+  };
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
@@ -828,13 +841,13 @@ export function EditorWorkspace({
       setStatusMessage(validation.message);
       return false;
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cell.setContent',
       ...draft.identity,
       expectedContent: draft.originalContent,
       content: validation.input,
       ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-    });
+    }, draft.identity.objectId);
     if (!result.ok) {
       setStatusMessage(result.error.code === 'TARGET_STALE'
         ? 'A célula mudou. O rascunho foi preservado para revisão.'
@@ -980,14 +993,14 @@ export function EditorWorkspace({
       setStatusMessage('A tabela do título não está mais disponível. O rascunho foi preservado.');
       return { ok: false, reason: 'STALE_DRAFT', message: 'O alvo do título mudou e o rascunho foi preservado.' };
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.title.set',
       pageId: draft.pageId,
       objectId: draft.objectId,
       tableId: draft.tableId,
       expectedTitle: draft.expectedTitle,
       plainText: draft.draft,
-    });
+    }, draft.objectId);
     if (!result.ok) {
       const stale = result.error.code === 'TARGET_STALE';
       setStatusMessage(stale
@@ -1080,13 +1093,13 @@ export function EditorWorkspace({
         setStatusMessage(validation.message);
         return { ok: false, reason: 'INVALID_DRAFT', message: 'O rascunho da célula foi preservado porque ainda é inválido.' };
       }
-      const result = session.execute({
+      const result = executeGrowingTable({
         type: 'table.cell.setContent',
         ...cell.identity,
         expectedContent: cell.originalContent,
         content: validation.input,
         ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-      });
+      }, cell.identity.objectId);
       if (!result.ok) {
         const stale = result.error.code === 'TARGET_STALE';
         setStatusMessage(stale
@@ -1342,13 +1355,13 @@ export function EditorWorkspace({
   const applyCellDraft = (draft: TableCellDraft) => {
     const validation = validateTableCellDraft(draft);
     if (!validation.ok) return { ok: false as const, validation };
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cell.setContent',
       ...draft.identity,
       expectedContent: draft.originalContent,
       content: validation.input,
       ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-    });
+    }, draft.identity.objectId);
     return result.ok ? { ok: true as const, result } : { ok: false as const, result };
   };
 
@@ -1541,7 +1554,12 @@ export function EditorWorkspace({
   const addQuickNote = (): boolean => {
     const live = semanticMutationTable();
     if (!live) return false;
-    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, [quickNoteCreateStep()], newTableTransactionId());
+    const transactionId = newTableTransactionId();
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, [quickNoteCreateStep()], transactionId);
+    // B-01: the note prints under the grid; the frame grows to hold it, in the same Desfazer.
+    if (outcome.ok && outcome.changed) {
+      setPendingTableFit({ objectId: live.object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
+    }
     setStatusMessage(outcome.ok && outcome.changed
       ? successNotice('Nota adicionada abaixo da tabela. Escreva o texto no lugar de "A COMPLETAR".')
       : 'A nota não pôde ser adicionada. Nada foi alterado.');
@@ -1600,7 +1618,7 @@ export function EditorWorkspace({
   ): boolean => {
     const live = currentSelectedTableForStructure();
     if (!live || editorState.mode !== 'table-grid') return false;
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cells.setContents',
       pageId: live.selection.identity.pageId,
       objectId: live.object.id,
@@ -1609,7 +1627,7 @@ export function EditorWorkspace({
       targets: prepared.targets,
       ...(prepared.legendCreates ? { legendCreates: prepared.legendCreates } : {}),
       ...(prepared.expectedLegend ? { expectedLegend: prepared.expectedLegend } : {}),
-    });
+    }, live.object.id);
     if (!result.ok) {
       setStatusMessage(tableBulkActionMessage(result.error.code));
       return false;
@@ -1752,14 +1770,21 @@ export function EditorWorkspace({
     return () => globalThis.removeEventListener('paste', listener);
   }, []);
 
+  // The table waiting for its automatic fit, measured on its own: the open cell editor (typing the next cell) or a
+  // click elsewhere does not stop the frame from growing to what was already saved (B-01).
+  const pendingFitPreparation = React.useMemo(() => {
+    if (!pendingTableFit) return null;
+    const page = document.pages.find((entry) => entry.objects.some((object) => object.id === pendingTableFit.objectId));
+    return prepareTableFitHeight(document, page?.id ?? '', pendingTableFit.objectId, measuredLayout?.source === document ? measuredLayout : null);
+  }, [document, measuredLayout, pendingTableFit]);
   // New tables start with an estimated height; once measured, fit it exactly inside the same undo step.
   React.useEffect(() => {
     if (!pendingTableFit) return;
-    const decision = decidePendingTableFit(pendingTableFit, session.getSnapshot().document, selectedTableObject?.id, fitHeightPreparation, inspectorDraftIsPending());
+    const decision = decidePendingTableFit(pendingTableFit, session.getSnapshot().document, selectedTableObject?.id, pendingFitPreparation, inspectorDraftIsPending());
     if (decision.kind === 'wait') return;
     setPendingTableFit(null);
     if (decision.kind === 'fit') session.execute(decision.action, { transactionId: pendingTableFit.transactionId });
-  }, [fitHeightPreparation, pendingTableFit, selectedTableObject?.id, session]);
+  }, [pendingFitPreparation, pendingTableFit, selectedTableObject?.id, session]);
 
   const handleTablePasteClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (editorState.mode !== 'table-grid') return;
@@ -1950,14 +1975,14 @@ export function EditorWorkspace({
     const pending = tableTitleDraftRef.current;
     const samePendingTarget = Boolean(pending
       && sameTableTitleTarget(pending, live.pageId, live.object.id, live.object.table.id));
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.title.set',
       pageId: live.pageId,
       objectId: live.object.id,
       tableId: live.object.table.id,
       expectedTitle: samePendingTarget ? pending!.expectedTitle : current ?? null,
       plainText,
-    });
+    }, live.object.id);
     if (result.ok && samePendingTarget) publishTableTitleDraft(null);
     setStatusMessage(result.ok
       ? (result.metadata.changed ? (plainText === null ? 'Título da tabela removido.' : 'Título da tabela atualizado.') : 'Título da tabela sem alterações.')
@@ -2017,7 +2042,7 @@ export function EditorWorkspace({
       setStatusMessage('A anotação não existe mais.');
       return;
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.annotation.update',
       pageId: live.pageId,
       objectId: live.object.id,
@@ -2025,7 +2050,7 @@ export function EditorWorkspace({
       annotationId: current.id,
       expectedAnnotation: current,
       plainText: plainText.replace(/\r\n?/g, '\n'),
-    });
+    }, live.object.id);
     setStatusMessage(result.ok
       ? (result.metadata.changed ? 'Anotação atualizada.' : 'Anotação sem alterações.')
       : result.error.code === 'TARGET_STALE'

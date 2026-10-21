@@ -176,8 +176,9 @@ export interface PendingTableFit {
   /** Document right after the insert; any other change cancels the automatic fit. */
   readonly document: CatalogDocument;
   /**
-   * A table grown by "Adicionar N linhas e colar" only gets taller: a frame that already has room for the new rows
-   * keeps the height the person gave it.
+   * A table grown by "Adicionar N linhas e colar", new rows or new content (B-01: typed or pasted cells, title,
+   * notes) only gets taller: a frame that already has room keeps the height the person gave it. It follows the
+   * table, not the selection: a click elsewhere right after typing still lets the frame grow.
    */
   readonly growOnly?: boolean;
 }
@@ -190,7 +191,9 @@ export type PendingTableFitDecision =
 /**
  * Decides what to do with a pending automatic "Ajustar altura" for a new table:
  * wait for the measurement, give up when anything changed, or fit when the
- * measured table still fits on the page (otherwise preflight keeps reporting it).
+ * measured table still fits on the page (otherwise preflight keeps reporting it,
+ * and the problem list offers "Continuar na próxima página").
+ * `preparation` is the measurement of the pending table itself.
  */
 export function decidePendingTableFit(
   pending: PendingTableFit,
@@ -200,7 +203,8 @@ export function decidePendingTableFit(
   /** The user already started typing a position/size: never overwrite that draft. */
   userIsTyping = false
 ): PendingTableFitDecision {
-  if (userIsTyping || liveDocument !== pending.document || selectedTableId !== pending.objectId) return { kind: 'cancel' };
+  if (userIsTyping || liveDocument !== pending.document) return { kind: 'cancel' };
+  if (!pending.growOnly && selectedTableId !== pending.objectId) return { kind: 'cancel' };
   if (!preparation || (!preparation.ok && (preparation.reason === 'MEASURING' || preparation.reason === 'NO_FACT'))) return { kind: 'wait' };
   if (!preparation.ok) return { kind: 'cancel' };
   const { wouldExceedPage, tallerThanPage, wouldViolateSafeArea: _safeArea, ...prepared } = preparation.prepared;
