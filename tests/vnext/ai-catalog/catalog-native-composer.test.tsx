@@ -2,7 +2,7 @@ import { webcrypto } from 'node:crypto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession } from '../../../src/vnext/application';
-import { CatalogNativeComposer } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
+import { CatalogNativeComposer, DAILY_LIMIT_SEND_EXPLANATION } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
 import type { NativeComposeFunctionsClient } from '../../../src/vnext/ai-catalog/native-compose-client';
 import type { NativeComposePlan } from '../../../src/vnext/ai-catalog/native-compose';
 import { clearByokCredential, setByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
@@ -157,8 +157,68 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     expect(screen.queryByText(/↗/)).toBeNull();
   });
 
+  it('C-05: with the daily limit already known, switches "Enviar" off with the reason beside it and keeps the typed request', async () => {
+    const f = makeWith(async () => httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' }));
+    await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    const box = screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
+    fireEvent.change(box, { target: { value: 'Crie uma capa para o catálogo de calibradores.' } });
+    const sendButton = screen.getByRole('button', { name: 'Enviar ao Gemini' });
+    expect(sendButton).toBeDisabled();
+    expect(sendButton).toHaveAccessibleDescription(DAILY_LIMIT_SEND_EXPLANATION);
+    expect(screen.getByText(DAILY_LIMIT_SEND_EXPLANATION)).toBeVisible();
+    expect(DAILY_LIMIT_SEND_EXPLANATION).toMatch(/limite diário/);
+    // Enter does not send either; the text stays in the box and nothing reaches the server.
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(sendButton);
+    expect(box).toHaveValue('Crie uma capa para o catálogo de calibradores.');
+    expect(f.generationCalls()).toHaveLength(0);
+    expect(screen.queryByRole('article', { name: 'Mensagem não enviada' })).toBeNull();
+    expect(f.session.getSnapshot().document).toEqual(f.doc);
+  });
+
+  it('C-05: when a request comes back with the daily limit, keeps the request and switches "Enviar" off from then on', async () => {
+    const f = makeWith(async (_name, options) => options.body.task === 'status'
+      ? statusOk : httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' }));
+    await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
+    await send('Crie uma capa para o catálogo de calibradores.');
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O limite diário de uso da IA foi atingido.'));
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Crie uma capa para o catálogo de calibradores.');
+    expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeDisabled();
+    expect(screen.getByText(DAILY_LIMIT_SEND_EXPLANATION)).toBeInTheDocument();
+    expect(f.generationCalls()).toHaveLength(1);
+  });
+
+  it('keeps "Enviar" on when the server is ready with budget left', async () => {
+    makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
+    await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Crie uma capa.' } });
+    expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeEnabled();
+    expect(screen.queryByText(DAILY_LIMIT_SEND_EXPLANATION)).toBeNull();
+  });
+
+  it('D-07: opens a new proposal from its beginning, not scrolled down to its buttons', async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, writable: true, value: scrollTo });
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = this.matches('.ai-compose-proposal') ? 640 : this.matches('.ai-chat-log') ? 200 : 0;
+      return { top, bottom: top + 100, left: 0, right: 300, width: 300, height: 100, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
+      await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
+      await sendAndWaitProposal();
+      // The last scroll puts the proposal's title at the top of the history (8 px of breathing room), after the
+      // usual "follow the conversation" scroll to the bottom.
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 640 - 200 - 8 });
+      expect(screen.getByRole('heading', { name: 'Proposta para revisar' })).toBeInTheDocument();
+    } finally {
+      rect.mockRestore();
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
   it.each([
-    ['AGENT_DAILY_BUDGET_EXCEEDED', 429],
     ['COMPOSER_DISABLED', 503],
     ['FORBIDDEN', 403],
   ])('keeps personal-key controls hidden when readiness is blocked by %s', async (code, status) => {

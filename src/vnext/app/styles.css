@@ -908,6 +908,8 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   padding-top: 11px;
 }
 .vnext-assistant-dock [role="alert"] { font-size: 15px; color: #ad362d; }
+/* C-05: why "Enviar" is switched off, right under it. */
+.vnext-assistant-dock .ai-send-blocked { margin: -4px 0 12px; color: var(--vnext-warning, #7c5b00); font-size: 15px; line-height: 1.5; }
 @media (max-width: 900px) {
   .vnext-actions .vnext-action-assistant { padding: 0 8px; }
   /* FR-17: only on a small screen the assistant covers the screen, with its own "Fechar". */

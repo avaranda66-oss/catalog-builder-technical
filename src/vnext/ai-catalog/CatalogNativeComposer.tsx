@@ -64,6 +64,16 @@ function cachedReadiness(client: NativeComposeFunctionsClient): Promise<Composer
 /** PROVIDER_NOT_CONFIGURED where no personal key can be used: no mention of an "Avançado" that is not there. */
 const SERVER_AI_NOT_CONFIGURED = 'A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.';
 const NOT_CHANGED = ' O catálogo não foi alterado.';
+/** C-05: shown next to the switched-off "Enviar" once the daily limit is known. */
+export const DAILY_LIMIT_SEND_EXPLANATION = 'O envio está desligado até amanhã, porque o limite diário de uso da IA foi atingido. '
+  + 'O que você escreveu continua guardado nesta caixa.';
+
+/** C-05: the server already said today's AI budget is used up (when the panel opened, or on the last request). */
+function dailyLimitKnown(readiness: ComposerReadiness | undefined): boolean {
+  if (readiness?.kind === 'blocked') return readiness.code === 'AGENT_DAILY_BUDGET_EXCEEDED';
+  return readiness?.kind === 'ready' && readiness.remainingMicrousd !== null && readiness.callReserveMicrousd !== null
+    && readiness.remainingMicrousd < readiness.callReserveMicrousd;
+}
 const clock = (timestamp: string) => {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -90,6 +100,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const [unsent, setUnsent] = React.useState<string>();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [readiness, setReadiness] = React.useState<ComposerReadiness>();
+  const [limitAnswered, setLimitAnswered] = React.useState(false);
+  // A personal key does not use the server's daily budget.
+  const dailyLimitReached = !ownKey && (limitAnswered || dailyLimitKnown(readiness));
   // Wait for readiness before offering a new key. Keep an unlocked key and the legacy available state usable.
   const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind === 'available' ||
     (readiness?.kind === 'ready' && readiness.byok));
@@ -99,6 +112,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     : !ownKey && !ownKeyOffered && readiness?.kind === 'ready' && !readiness.serverKey ? SERVER_AI_NOT_CONFIGURED
       : composerReadinessText(readiness, !!ownKey);
   const log = React.useRef<HTMLDivElement>(null);
+  const proposalRef = React.useRef<HTMLDivElement>(null);
   const input = React.useRef<HTMLTextAreaElement>(null);
   // FR-64: the files of this catalog outlive the panel (closing it, "Ferramentas" or Esc keep them).
   const intake = React.useMemo(() => sourceIntakeSessionFor(documentId), [documentId]);
@@ -119,6 +133,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     if (turns.length === 0 && !unsent) return;
     log.current?.scrollTo?.({ top: log.current.scrollHeight });
   }, [turns, unsent]);
+  // D-07: a new proposal opens from its beginning (title and "Página 1"), not scrolled down to its buttons.
+  // Declared after the effect above, so in the same update it runs last and wins.
+  const proposalKey = pending ? `pages:${pending.requestSequence}` : pendingRewrite ? `rewrite:${pendingRewrite.serial}` : '';
+  React.useEffect(() => {
+    const scroller = log.current, proposal = proposalRef.current;
+    if (!proposalKey || !scroller || !proposal) return;
+    const offset = proposal.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTo?.({ top: Math.max(0, scroller.scrollTop + offset - 8) });
+  }, [proposalKey]);
   // Late answers after the panel closes are ignored and never stored.
   React.useEffect(() => () => { requestSerial.current++; }, []);
   React.useEffect(() => {
@@ -151,7 +174,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   };
   const send = async () => {
     const text = message.trim();
-    if (!text || text.length > 1200 || busy || turnsRef.current.length > WORKBENCH_MESSAGE_LIMIT - 2) return;
+    if (!text || text.length > 1200 || busy || dailyLimitReached || turnsRef.current.length > WORKBENCH_MESSAGE_LIMIT - 2) return;
     if (!client) {
       setError('A IA não está disponível nesta tela. Continue editando manualmente.');
       return;
@@ -200,6 +223,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     } catch (failure) {
       if (sequence === requestSerial.current) {
         restoreUnsent(text);
+        if (failure instanceof ComposerRequestError && failure.code === 'AGENT_DAILY_BUDGET_EXCEEDED' && !ownKey) setLimitAnswered(true);
         setError(failure instanceof ComposerRequestError && failure.code === 'PROVIDER_NOT_CONFIGURED' && !ownKey &&
           !ownKeyOfferedRef.current ? SERVER_AI_NOT_CONFIGURED + NOT_CHANGED : composerErrorMessage(failure, { usingOwnKey: !!ownKey }));
       }
@@ -303,7 +327,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       {busy && <p role="status">{busy === 'rewrite'
         ? 'Gemini está preparando uma reescrita do texto…'
         : 'Gemini está preparando uma proposta de páginas…'}</p>}
-      {pendingRewrite?.reply.status === 'proposal' && <div className="ai-compose-proposal"
+      {pendingRewrite?.reply.status === 'proposal' && <div className="ai-compose-proposal" ref={proposalRef}
         role="group" aria-label="Revisão de texto selecionado">
         <h4>Antes de alterar, confira</h4>
         <p><strong>Texto atual:</strong> {plainSelectedEditorialText(pendingRewrite.target)}</p>
@@ -314,7 +338,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
           <button type="button" onClick={() => setPendingRewrite(undefined)}>Rejeitar reescrita</button>
         </div>
       </div>}
-      {pending && <div className="ai-compose-proposal" role="group" aria-label="Proposta de páginas">
+      {pending && <div className="ai-compose-proposal" ref={proposalRef} role="group" aria-label="Proposta de páginas">
         <h4>Proposta para revisar</h4>
         <p>{pending.plan.summary}</p>
         <ul>{pending.plan.pages.map((page, i) => <li key={i}>
@@ -340,7 +364,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         } }} />
       <div className="ai-chat-actions">
         <button className="vnext-btn-primary" type="button" onClick={() => { void send(); }}
-          disabled={!message.trim() || !!busy || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
+          aria-describedby={dailyLimitReached ? 'gemini-send-blocked' : undefined}
+          disabled={!message.trim() || !!busy || dailyLimitReached || turns.length > WORKBENCH_MESSAGE_LIMIT - 2}>
           {busy ? 'Preparando…' : rewriteMode ? 'Pedir reescrita ao Gemini' : 'Enviar ao Gemini'}
         </button>
         {busy && <button type="button" onClick={cancel}>Cancelar pedido</button>}
@@ -349,6 +374,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         {ownKey && <button type="button" onClick={() => { clearByokCredential(); setError(''); }}>
           Voltar a usar a IA do servidor</button>}
       </div>
+      {dailyLimitReached && <p id="gemini-send-blocked" className="ai-send-blocked" data-ai-send-blocked="">
+        {DAILY_LIMIT_SEND_EXPLANATION}</p>}
       {advancedOpen && ownKeyOffered && <div id="catalog-gemini-settings" className="ai-compose-settings">
         <ProviderCredentialsSettings onlyProvider="gemini" initiallyUnlocked={ownKey ? ['gemini'] : []}
           onUnlock={(provider, key) => {
