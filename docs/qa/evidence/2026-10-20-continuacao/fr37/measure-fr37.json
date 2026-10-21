@@ -1,0 +1,327 @@
+{
+  "journey": "measure-fr37",
+  "title": "FR-37 — edição inline de tabela 69×7 sem dividir, documento + pintura e long tasks",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T16:01:44.939Z",
+  "steps": [
+    {
+      "name": "tabela inteira 69×7 permanece em uma página e preserva todos os valores sintéticos",
+      "ok": true,
+      "detail": "{\"pages\":1,\"rows\":69,\"columns\":7,\"cells\":483}",
+      "atMs": 6788
+    },
+    {
+      "name": "edição 1 confirma pela UI, desenha o valor e preserva toda a matriz 69×7 sem dividir",
+      "ok": true,
+      "detail": "{\"objectId\":\"12dc400c-c62e-4987-bf50-4f3ba421c9c6\",\"cellId\":\"4e6f5049-a95f-4d20-891b-9a81a15b5a16\",\"value\":\"Edição de desempenho 1\",\"row\":2,\"column\":7,\"start\":5586.9000000003725,\"documentAndDomMs\":251.09999999962747,\"paintMs\":481.5,\"timeout\":false,\"longTaskSupported\":true,\"longTasks\":[{\"startTime\":5586.799999999814,\"duration\":239,\"overlapMs\":238.8999999994412},{\"startTime\":5826.5999999996275,\"duration\":60,\"overlapMs\":60},{\"startTime\":5887.299999999814,\"duration\":60,\"overlapMs\":60},{\"startTime\":5989.799999999814,\"duration\":68,\"overlapMs\":68}],\"longTaskTotalMs\":426.8999999994412}",
+      "atMs": 10880
+    },
+    {
+      "name": "edição 2 confirma pela UI, desenha o valor e preserva toda a matriz 69×7 sem dividir",
+      "ok": true,
+      "detail": "{\"objectId\":\"12dc400c-c62e-4987-bf50-4f3ba421c9c6\",\"cellId\":\"42feb6d6-98f8-4eaa-aa7c-96b48c75e45d\",\"value\":\"Edição de desempenho 2\",\"row\":3,\"column\":7,\"start\":7706.0999999996275,\"documentAndDomMs\":228,\"paintMs\":539.5,\"timeout\":false,\"longTaskSupported\":true,\"longTasks\":[{\"startTime\":7705.9000000003725,\"duration\":218,\"overlapMs\":217.80000000074506},{\"startTime\":7924.200000000186,\"duration\":57,\"overlapMs\":57},{\"startTime\":7982.200000000186,\"duration\":56,\"overlapMs\":56},{\"startTime\":8074.299999999814,\"duration\":94,\"overlapMs\":94},{\"startTime\":8169.0999999996275,\"duration\":67,\"overlapMs\":67}],\"longTaskTotalMs\":491.80000000074506}",
+      "atMs": 13098
+    },
+    {
+      "name": "edição 3 confirma pela UI, desenha o valor e preserva toda a matriz 69×7 sem dividir",
+      "ok": true,
+      "detail": "{\"objectId\":\"12dc400c-c62e-4987-bf50-4f3ba421c9c6\",\"cellId\":\"44d42e6a-5f04-4810-971e-bd9a8c172640\",\"value\":\"Edição de desempenho 3\",\"row\":4,\"column\":7,\"start\":9131.900000000373,\"documentAndDomMs\":226.3999999994412,\"paintMs\":439.40000000037253,\"timeout\":false,\"longTaskSupported\":true,\"longTasks\":[{\"startTime\":9131.900000000373,\"duration\":216,\"overlapMs\":216},{\"startTime\":9348.799999999814,\"duration\":55,\"overlapMs\":55},{\"startTime\":9404,\"duration\":53,\"overlapMs\":53},{\"startTime\":9496,\"duration\":66,\"overlapMs\":66}],\"longTaskTotalMs\":390}",
+      "atMs": 14341
+    },
+    {
+      "name": "edição 4 confirma pela UI, desenha o valor e preserva toda a matriz 69×7 sem dividir",
+      "ok": true,
+      "detail": "{\"objectId\":\"12dc400c-c62e-4987-bf50-4f3ba421c9c6\",\"cellId\":\"82845012-9f48-4482-b581-ec7e96b68ca7\",\"value\":\"Edição de desempenho 4\",\"row\":5,\"column\":7,\"start\":10608,\"documentAndDomMs\":225.80000000074506,\"paintMs\":436.19999999925494,\"timeout\":false,\"longTaskSupported\":true,\"longTasks\":[{\"startTime\":10607.900000000373,\"duration\":217,\"overlapMs\":216.90000000037253},{\"startTime\":10824.900000000373,\"duration\":51,\"overlapMs\":51},{\"startTime\":10876.099999999627,\"duration\":55,\"overlapMs\":55},{\"startTime\":10968.900000000373,\"duration\":65,\"overlapMs\":65}],\"longTaskTotalMs\":387.90000000037253}",
+      "atMs": 15809
+    },
+    {
+      "name": "edição 5 confirma pela UI, desenha o valor e preserva toda a matriz 69×7 sem dividir",
+      "ok": true,
+      "detail": "{\"objectId\":\"12dc400c-c62e-4987-bf50-4f3ba421c9c6\",\"cellId\":\"203a4753-2869-4613-9ac9-4a48e3485582\",\"value\":\"Edição de desempenho 5\",\"row\":6,\"column\":7,\"start\":12088,\"documentAndDomMs\":235.5,\"paintMs\":450.09999999962747,\"timeout\":false,\"longTaskSupported\":true,\"longTasks\":[{\"startTime\":12087.900000000373,\"duration\":226,\"overlapMs\":225.90000000037253},{\"startTime\":12313.900000000373,\"duration\":55,\"overlapMs\":55},{\"startTime\":12369.599999999627,\"duration\":56,\"overlapMs\":56},{\"startTime\":12462.300000000745,\"duration\":66,\"overlapMs\":66}],\"longTaskTotalMs\":402.90000000037253}",
+      "atMs": 17314
+    },
+    {
+      "name": "cinco Desfazer restauram exatamente a tabela original",
+      "ok": true,
+      "detail": null,
+      "atMs": 21094
+    },
+    {
+      "name": "cinco Refazer restauram exatamente as cinco edições",
+      "ok": true,
+      "detail": null,
+      "atMs": 24033
+    },
+    {
+      "name": "zero erros de console e de página",
+      "ok": true,
+      "detail": "{\"console\":[],\"pageErrors\":[],\"dialogs\":[]}",
+      "atMs": 24037
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507/shots/fr37-01-tabela-inteira.png",
+    "scratch/father-journeys/runs/2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507/shots/fr37-02-cinco-edicoes.png"
+  ],
+  "findings": [],
+  "durationMs": 24038,
+  "measurements": {
+    "build": "Vite dev, React development build com StrictMode",
+    "data": "Dados sintéticos: 1 cabeçalho + 68 sensores, 7 colunas; não é importação do arquivo PCON real.",
+    "method": "keydown Enter capturado no navegador → célula confirmada no documento e DOM → 2 requestAnimationFrame; não inclui digitação, abertura da célula nem autosave.",
+    "limit": "Nenhum limiar numérico de aprovação foi definido pelo plano; aprovação abaixo verifica apenas correção.",
+    "samples": [
+      {
+        "objectId": "12dc400c-c62e-4987-bf50-4f3ba421c9c6",
+        "cellId": "4e6f5049-a95f-4d20-891b-9a81a15b5a16",
+        "value": "Edição de desempenho 1",
+        "row": 2,
+        "column": 7,
+        "start": 5586.9000000003725,
+        "documentAndDomMs": 251.09999999962747,
+        "paintMs": 481.5,
+        "timeout": false,
+        "longTaskSupported": true,
+        "longTasks": [
+          {
+            "startTime": 5586.799999999814,
+            "duration": 239,
+            "overlapMs": 238.8999999994412
+          },
+          {
+            "startTime": 5826.5999999996275,
+            "duration": 60,
+            "overlapMs": 60
+          },
+          {
+            "startTime": 5887.299999999814,
+            "duration": 60,
+            "overlapMs": 60
+          },
+          {
+            "startTime": 5989.799999999814,
+            "duration": 68,
+            "overlapMs": 68
+          }
+        ],
+        "longTaskTotalMs": 426.8999999994412
+      },
+      {
+        "objectId": "12dc400c-c62e-4987-bf50-4f3ba421c9c6",
+        "cellId": "42feb6d6-98f8-4eaa-aa7c-96b48c75e45d",
+        "value": "Edição de desempenho 2",
+        "row": 3,
+        "column": 7,
+        "start": 7706.0999999996275,
+        "documentAndDomMs": 228,
+        "paintMs": 539.5,
+        "timeout": false,
+        "longTaskSupported": true,
+        "longTasks": [
+          {
+            "startTime": 7705.9000000003725,
+            "duration": 218,
+            "overlapMs": 217.80000000074506
+          },
+          {
+            "startTime": 7924.200000000186,
+            "duration": 57,
+            "overlapMs": 57
+          },
+          {
+            "startTime": 7982.200000000186,
+            "duration": 56,
+            "overlapMs": 56
+          },
+          {
+            "startTime": 8074.299999999814,
+            "duration": 94,
+            "overlapMs": 94
+          },
+          {
+            "startTime": 8169.0999999996275,
+            "duration": 67,
+            "overlapMs": 67
+          }
+        ],
+        "longTaskTotalMs": 491.80000000074506
+      },
+      {
+        "objectId": "12dc400c-c62e-4987-bf50-4f3ba421c9c6",
+        "cellId": "44d42e6a-5f04-4810-971e-bd9a8c172640",
+        "value": "Edição de desempenho 3",
+        "row": 4,
+        "column": 7,
+        "start": 9131.900000000373,
+        "documentAndDomMs": 226.3999999994412,
+        "paintMs": 439.40000000037253,
+        "timeout": false,
+        "longTaskSupported": true,
+        "longTasks": [
+          {
+            "startTime": 9131.900000000373,
+            "duration": 216,
+            "overlapMs": 216
+          },
+          {
+            "startTime": 9348.799999999814,
+            "duration": 55,
+            "overlapMs": 55
+          },
+          {
+            "startTime": 9404,
+            "duration": 53,
+            "overlapMs": 53
+          },
+          {
+            "startTime": 9496,
+            "duration": 66,
+            "overlapMs": 66
+          }
+        ],
+        "longTaskTotalMs": 390
+      },
+      {
+        "objectId": "12dc400c-c62e-4987-bf50-4f3ba421c9c6",
+        "cellId": "82845012-9f48-4482-b581-ec7e96b68ca7",
+        "value": "Edição de desempenho 4",
+        "row": 5,
+        "column": 7,
+        "start": 10608,
+        "documentAndDomMs": 225.80000000074506,
+        "paintMs": 436.19999999925494,
+        "timeout": false,
+        "longTaskSupported": true,
+        "longTasks": [
+          {
+            "startTime": 10607.900000000373,
+            "duration": 217,
+            "overlapMs": 216.90000000037253
+          },
+          {
+            "startTime": 10824.900000000373,
+            "duration": 51,
+            "overlapMs": 51
+          },
+          {
+            "startTime": 10876.099999999627,
+            "duration": 55,
+            "overlapMs": 55
+          },
+          {
+            "startTime": 10968.900000000373,
+            "duration": 65,
+            "overlapMs": 65
+          }
+        ],
+        "longTaskTotalMs": 387.90000000037253
+      },
+      {
+        "objectId": "12dc400c-c62e-4987-bf50-4f3ba421c9c6",
+        "cellId": "203a4753-2869-4613-9ac9-4a48e3485582",
+        "value": "Edição de desempenho 5",
+        "row": 6,
+        "column": 7,
+        "start": 12088,
+        "documentAndDomMs": 235.5,
+        "paintMs": 450.09999999962747,
+        "timeout": false,
+        "longTaskSupported": true,
+        "longTasks": [
+          {
+            "startTime": 12087.900000000373,
+            "duration": 226,
+            "overlapMs": 225.90000000037253
+          },
+          {
+            "startTime": 12313.900000000373,
+            "duration": 55,
+            "overlapMs": 55
+          },
+          {
+            "startTime": 12369.599999999627,
+            "duration": 56,
+            "overlapMs": 56
+          },
+          {
+            "startTime": 12462.300000000745,
+            "duration": 66,
+            "overlapMs": 66
+          }
+        ],
+        "longTaskTotalMs": 402.90000000037253
+      }
+    ],
+    "pasteMethod": "Ctrl+V real",
+    "shape": {
+      "pages": 1,
+      "rows": 69,
+      "columns": 7,
+      "cells": 483
+    },
+    "documentAndDomLatency": {
+      "count": 5,
+      "medianMs": 228,
+      "maxMs": 251.09999999962747,
+      "samplesMs": [
+        251.09999999962747,
+        228,
+        226.3999999994412,
+        225.80000000074506,
+        235.5
+      ]
+    },
+    "paintLatency": {
+      "count": 5,
+      "medianMs": 450.09999999962747,
+      "maxMs": 539.5,
+      "samplesMs": [
+        481.5,
+        539.5,
+        439.40000000037253,
+        436.19999999925494,
+        450.09999999962747
+      ]
+    },
+    "longTaskTotalMs": 2099.5000000009313
+  },
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "status": "pass",
+  "findingSummary": [],
+  "run": {
+    "id": "2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507",
+    "executionId": "cac016b7-c3e1-4280-a9e7-d0f867377ad5",
+    "startedAt": "2026-10-20T16:01:19.795Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "dab1fe0f-cb38-474f-9bac-9e6609ed8803",
+      "startedAt": "2026-10-20T16:01:20.125Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

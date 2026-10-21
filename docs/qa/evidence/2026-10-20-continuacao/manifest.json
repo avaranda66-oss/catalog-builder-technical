@@ -1,0 +1,1094 @@
+[
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/summary.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Resumo final das 14 jornadas; metadados e achados normalizados preservados sem alteração.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/summary.json",
+    "bytes": 31703,
+    "sha256": "9dabb5a4b52e84a160e70149460186c18eb300953d0ebf87a48e0d12766f0e4c"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j00-smoke.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j00-smoke.json",
+    "bytes": 6622,
+    "sha256": "6b8e4c88dd456007c8d8105af357da440fedfb2b6bc11e54278106c9f1914eb1"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j01-entrar-meus-catalogos.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j01-entrar-meus-catalogos.json",
+    "bytes": 22621,
+    "sha256": "f0f2ee0937211670ca31f22bd93844610fdc2537418f399a4cea173af9d8023f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j02-j03-ia-arquivos-conversa.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j02-j03-ia-arquivos-conversa.json",
+    "bytes": 18320,
+    "sha256": "76509fcb821ad91ee5653c7e7fadc40e12abe55e9ab0682216b172b324fe7b5a"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j04-editar-a-mao.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j04-editar-a-mao.json",
+    "bytes": 35827,
+    "sha256": "df8fe0f9de87ba06cf29dc0633df77f54a94d4e7145d7da4a39471f356dc8f8f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j05-tabela-longa.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j05-tabela-longa.json",
+    "bytes": 8915,
+    "sha256": "95699a9f92e2c884bd4056ab89f6889d9421bbb63839682972ec3ae68eaa3de7"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j06-foto-celular.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j06-foto-celular.json",
+    "bytes": 14240,
+    "sha256": "573b155f728c6dfa0745fcddcf24395e5f90401252ae9e2deba98f99996fe1f9"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j07-salvar-reabrir.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j07-salvar-reabrir.json",
+    "bytes": 16434,
+    "sha256": "87ec1b8f88e0926b2abe9ba8e06e67fdcd1b3b049da4036a34bcae3e2ea2f89f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j08-publicar-pdf.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j08-publicar-pdf.json",
+    "bytes": 20479,
+    "sha256": "3b2ac9b6dc674b7d9c8483c990861f1cf4a84d118e87606d5383a21c033ff000"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j09-idiomas.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j09-idiomas.json",
+    "bytes": 30090,
+    "sha256": "ebe78eea049e0de30f24c2c5fead0b5d47f01617c56eb55d32831b971a2d4028"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j10-dois-funcionarios.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j10-dois-funcionarios.json",
+    "bytes": 14767,
+    "sha256": "0f8121e0e9580477be375883a7ccae8db950534fafdd11a6975667927a512d16"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j11-biblioteca.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j11-biblioteca.json",
+    "bytes": 20969,
+    "sha256": "7c0765e859dbb0b048699abcf47651c420b2c4d6f3abfd89c0fd58b436a5e776"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j12-planilha-empresa.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j12-planilha-empresa.json",
+    "bytes": 21019,
+    "sha256": "bb26d03e9e7fc46d1a26aaf27a2f86971fd88337650205bd2f47afe1b3c0bfa0"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j13-falhas.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/j13-falhas.json",
+    "bytes": 18252,
+    "sha256": "ca7516b26f1537bd881750e68e9c78f17f540d024e21941328bb122f3f5b3beb"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/jia1-assistente.json",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/results/jia1-assistente.json",
+    "bytes": 28152,
+    "sha256": "2552b39484f33fb6853f8b44d9e2349eb129c51ecd2215888a515f4b5efc120b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-02-celula-enter-tab-esc.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j04-editar-a-mao-02-celula-enter-tab-esc; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j04-editar-a-mao-02-celula-enter-tab-esc.png",
+    "bytes": 136975,
+    "sha256": "157e1b8d1ee78da680ef3f9a0d0e43882f06e11b7cff856b0c55c052f231e44e"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j05-tabela-longa-03-cabecalho-segunda-pagina.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j05-tabela-longa-03-cabecalho-segunda-pagina; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j05-tabela-longa-03-cabecalho-segunda-pagina.png",
+    "bytes": 105761,
+    "sha256": "f02335df9e75e76a4fbe1ea664b234c27e4d6145fa6e87f4e638885f3b7f5554"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-04-recuperacao-local.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j07-04-recuperacao-local; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j07-04-recuperacao-local.png",
+    "bytes": 77328,
+    "sha256": "7e0ea34225009df34a4a910e02666d112979a8ad3ff7fed219744c8691f50b52"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-03-bloqueado.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j08-publicar-pdf-03-bloqueado; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j08-publicar-pdf-03-bloqueado.png",
+    "bytes": 89522,
+    "sha256": "35e325f751e83b76bbf7ff9cafab6312c596f3d7f8d37afeebe46cd700c6bb37"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-03b-confirmacao-1500.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j09-03b-confirmacao-1500; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j09-03b-confirmacao-1500.png",
+    "bytes": 127076,
+    "sha256": "f17282c865b1c4c2632b23c29dc6686c93ff734193f3a8e2f9d59b881830e1a0"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j10-01-aviso-de-conflito.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j10-01-aviso-de-conflito; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j10-01-aviso-de-conflito.png",
+    "bytes": 183942,
+    "sha256": "33b496a92510f04e051649fbded383d020c329b0dc965c677a9d2adbe9e93e5a"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-05-publicacao-da-planilha.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j12-05-publicacao-da-planilha; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j12-05-publicacao-da-planilha.png",
+    "bytes": 126475,
+    "sha256": "9e84e4394f3352ce9e6a8fa67bc14b9d581e7968fac0663f9d983c327e5e1880"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j13-falhas-03-ia-limite-diario.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: j13-falhas-03-ia-limite-diario; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/j13-falhas-03-ia-limite-diario.png",
+    "bytes": 149123,
+    "sha256": "00fad3570986d375bd4c83c7123c2c701f6025fef9d0033e0166109f5ede919a"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-05-limite-diario.png",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura selecionada: jia1-05-limite-diario; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/shots/jia1-05-limite-diario.png",
+    "bytes": 122778,
+    "sha256": "bf4bf2e991995dc6bc575d2af904cdb9db5923e45c48ab0bcd27e4ca9860b89b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j05-tabela-longa.pdf",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/pdf/j05-tabela-longa.pdf",
+    "bytes": 11942,
+    "sha256": "123cf9e2abf44005b92220d80b587fc32b72a8eed4e592e896f1d83445254d01"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-a-pronto.pdf",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/pdf/j08-a-pronto.pdf",
+    "bytes": 4199,
+    "sha256": "3da48a6058469fcbb126ede41ab86f874b6e6499b83fb8a152a7b6396bdcffdf"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-b-2-paginas.pdf",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/pdf/j08-b-2-paginas.pdf",
+    "bytes": 6251,
+    "sha256": "bfcbf13097db37709c82659e3ec078044fce467aca0dcb3c958bc851a45bbdb0"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j09-copia-en.pdf",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/pdf/j09-copia-en.pdf",
+    "bytes": 6588,
+    "sha256": "25cab55fee8bef23cfbac5e84fb41d28cb3ac680ebcb9310b39937254ac241ae"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j13-foto-grande.pdf",
+    "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1366/pdf/j13-foto-grande.pdf",
+    "bytes": 447525,
+    "sha256": "24a835bb6f2798d9b544c7b517173ef7a23504307d6f0e95f05165eebab9e09f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/summary@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Resumo final das 14 jornadas; metadados e achados normalizados preservados sem alteração.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/summary@1280.json",
+    "bytes": 32488,
+    "sha256": "b46fbb679a4f1ff883e67e31e360b517db0d0f69a99fd8f857977647da54fb84"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j00-smoke@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j00-smoke@1280.json",
+    "bytes": 6640,
+    "sha256": "cb7a73fd1ef85b9ca4eb924463cba98e947735789d194a76df8ebc1d860c42cc"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j01-entrar-meus-catalogos@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j01-entrar-meus-catalogos@1280.json",
+    "bytes": 22696,
+    "sha256": "5f090c48769f383f0d98bcf4a82a7422f5f1db52dc4bc2302f9f6c9cd86a2e1d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j02-j03-ia-arquivos-conversa@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j02-j03-ia-arquivos-conversa@1280.json",
+    "bytes": 18341,
+    "sha256": "8550fecee596cc3ffc77982de840e0e4173a614d41800de2bf307f58e201a843"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j04-editar-a-mao@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j04-editar-a-mao@1280.json",
+    "bytes": 36541,
+    "sha256": "36463cea6d0cafe198d89d7f3414bcdae90ebf78080073ae5eb474272b2b2dcd"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j05-tabela-longa@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j05-tabela-longa@1280.json",
+    "bytes": 8937,
+    "sha256": "1cffbf0bef87f385686baaf0472096b297808ae8284dd1389c35636d23129c70"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j06-foto-celular@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j06-foto-celular@1280.json",
+    "bytes": 14256,
+    "sha256": "8c88fc7749243de8467393418f1d46e7d6fd44731f73abede586ce22cad908e3"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j07-salvar-reabrir@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j07-salvar-reabrir@1280.json",
+    "bytes": 16458,
+    "sha256": "80475b23b3bf44aa21ff92a2ff049796faa2560d58647d25c3a121ace0cbef9c"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j08-publicar-pdf@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j08-publicar-pdf@1280.json",
+    "bytes": 20522,
+    "sha256": "acc5f510a0d9001fbe322e8289675ac7007c93075e52b260e3da3687f822e039"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j09-idiomas@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j09-idiomas@1280.json",
+    "bytes": 30145,
+    "sha256": "76359bd26b8e8a5c06f840a10cd79cfdbbd2b2271bf56513cc1cd2a096e6699f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j10-dois-funcionarios@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j10-dois-funcionarios@1280.json",
+    "bytes": 14785,
+    "sha256": "284b723e241d7b467154576b0ed924261145b9d47322efa1fbac8d38462ac70b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j11-biblioteca@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j11-biblioteca@1280.json",
+    "bytes": 20997,
+    "sha256": "57a297c6b028cb7a7e64207b0802420d9cd9f8d284c40e5833b988b4a1c43256"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j12-planilha-empresa@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j12-planilha-empresa@1280.json",
+    "bytes": 21034,
+    "sha256": "965c9ee350ffd0fa024a2ef579a1f505cc19ffcd73167ee8485eaf08b75484ad"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/j13-falhas@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/j13-falhas@1280.json",
+    "bytes": 18276,
+    "sha256": "bdf3a7f7488e13fd016337a2ba1a2f2ed9b02f80786ed1f52356d7428e279a9d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/results/jia1-assistente@1280.json",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "JSON bruto da jornada final; assertions, logs e metadados inalterados.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/results/jia1-assistente@1280.json",
+    "bytes": 28177,
+    "sha256": "433d9a536565fbe8c630656a29d24276c7ce5aa92337ab19cb4148b1195b231b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-02-celula-enter-tab-esc@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j04-editar-a-mao-02-celula-enter-tab-esc; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j04-editar-a-mao-02-celula-enter-tab-esc@1280.png",
+    "bytes": 129653,
+    "sha256": "6495d630d5f23f000683be943fe83d25fe587880a2d109355ba10a54ccbe24c3"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j05-tabela-longa-03-cabecalho-segunda-pagina@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j05-tabela-longa-03-cabecalho-segunda-pagina; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j05-tabela-longa-03-cabecalho-segunda-pagina@1280.png",
+    "bytes": 102131,
+    "sha256": "b9d7417db12a4715cd52470e51733d2144c67232124cd6b2fae7571ba3e4f98d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j07-04-recuperacao-local@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j07-04-recuperacao-local; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j07-04-recuperacao-local@1280.png",
+    "bytes": 75954,
+    "sha256": "59fc29cc23f610c72d098290965576bc831733ea3d1f754a921c2f051b2407d8"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j08-publicar-pdf-03-bloqueado@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j08-publicar-pdf-03-bloqueado; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j08-publicar-pdf-03-bloqueado@1280.png",
+    "bytes": 74221,
+    "sha256": "67d3aa8a5e447c2431cc06c225aa4e62607ae77e50bc3538eb42c8483fa8d09a"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-03-revisao-com-avisos@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j09-03-revisao-com-avisos; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j09-03-revisao-com-avisos@1280.png",
+    "bytes": 112572,
+    "sha256": "6b4ab9638f8b345b77a9dc17348cb6347db8df9f841a95701d3e1b7605d77d34"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-03b-confirmacao-1500@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j09-03b-confirmacao-1500; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j09-03b-confirmacao-1500@1280.png",
+    "bytes": 116161,
+    "sha256": "343288fe58a2c7d29566ff2e95d4f4670e53d73695ee91925af40ab4c2971851"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-01-aviso-de-conflito@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j10-01-aviso-de-conflito; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j10-01-aviso-de-conflito@1280.png",
+    "bytes": 176412,
+    "sha256": "8bb8805e35cec97079d4e7ef2a6ed050116dde2ddfd59ef7b559e00d6570c068"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-05-publicacao-da-planilha@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j12-05-publicacao-da-planilha; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j12-05-publicacao-da-planilha@1280.png",
+    "bytes": 92747,
+    "sha256": "d27b8238a3ecba7b9528f1cd4ccb57f6264b4206312c2c164b6974b8913eb024"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j13-falhas-03-ia-limite-diario@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j13-falhas-03-ia-limite-diario; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j13-falhas-03-ia-limite-diario@1280.png",
+    "bytes": 134324,
+    "sha256": "1044de33f3dfd60776d00d7f7b5491f958ffe208ca45592d84bb2219e1965c0f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/jia1-05-limite-diario@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: jia1-05-limite-diario; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/jia1-05-limite-diario@1280.png",
+    "bytes": 113542,
+    "sha256": "f2c70dffbd724afcdd11a283aeec005631b1a25b6db1c62a2f0d523e730e027d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-03-confirmar-descartar@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j10-03-confirmar-descartar; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j10-03-confirmar-descartar@1280.png",
+    "bytes": 159105,
+    "sha256": "0c170fb24ee02eb7ef95a382b60df06ee1c86e7f63da8417311eb6e35dc766bb"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-03-db-sensors-colunas-previa@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: j12-03-db-sensors-colunas-previa; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/j12-03-db-sensors-colunas-previa@1280.png",
+    "bytes": 109441,
+    "sha256": "7638f9f93510feb54024ca5ac6e49a5fc5f4cbbe9bc06ac3b6b3704f5e05c6f4"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/jia1-02-proposta@1280.png",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "Captura selecionada: jia1-02-proposta; não é aceite humano.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/shots/jia1-02-proposta@1280.png",
+    "bytes": 113369,
+    "sha256": "040ae04f9161907ccfe38690776e11e4339a7b29b5c4d7f687a2499a197d8eda"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j05-tabela-longa@1280.pdf",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/pdf/j05-tabela-longa@1280.pdf",
+    "bytes": 11942,
+    "sha256": "b95aa291b6198c06f9b8432e873188bcc45c16cb9c9240bf148b35018038a541"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j08-a-pronto@1280.pdf",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/pdf/j08-a-pronto@1280.pdf",
+    "bytes": 4199,
+    "sha256": "f5a660da1bf2fa9115a5b42ffae6629951363801e8c37efbbea948daaac72853"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j08-b-2-paginas@1280.pdf",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/pdf/j08-b-2-paginas@1280.pdf",
+    "bytes": 6251,
+    "sha256": "baf76d7b39a347dd80f15b3698d915ec092699402b41e755d277baee9944ab75"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j09-copia-en@1280.pdf",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/pdf/j09-copia-en@1280.pdf",
+    "bytes": 6588,
+    "sha256": "475eb525c09e9d4509bc7c2e6a59463dbf558c8863e579b7576f753ec227bc68"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j13-foto-grande@1280.pdf",
+    "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "description": "PDF gerado pelo Chromium headless da jornada; não verifica diálogo de impressão nativo.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/1280/pdf/j13-foto-grande@1280.pdf",
+    "bytes": 447525,
+    "sha256": "9949ba843ee0e84b76340616e1e7c9cb8c3de21a9ea249ec6ad088e4b2818f21"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507/results/measure-fr37.json",
+    "runId": "2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "FR-37: medição descritiva sintética 69x7; cinco edições e undo/redo; sem orçamento de produção.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/fr37/measure-fr37.json",
+    "bytes": 12695,
+    "sha256": "d2d266e94d191f9c7edd1c6c34eb1bb8d268d780310f6c9fe0c004bb392c83b0"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507/shots/fr37-01-tabela-inteira.png",
+    "runId": "2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura FR-37 antes/depois das cinco edições em dados sintéticos.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/fr37/fr37-01-tabela-inteira.png",
+    "bytes": 198667,
+    "sha256": "681598e7eadbb24061c47f6aa67b422c82f4c385d89084726f0e432392901f8b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507/shots/fr37-02-cinco-edicoes.png",
+    "runId": "2026-10-20T16-01-19-794Z-69f55313-c6b0-4fb8-9eac-b46faf037507",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Captura FR-37 antes/depois das cinco edições em dados sintéticos.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/fr37/fr37-02-cinco-edicoes.png",
+    "bytes": 193043,
+    "sha256": "3f04132dce39685427310f4d1e1675d24fe748302962cca509db5349d2a8e036"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0/summary.json",
+    "runId": "2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Histórico preservado: sete pass, cinco pending e duas fail antes dos ajustes de roteiro J4/J9.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/historical-2026-10-18/summary.json",
+    "bytes": 31054,
+    "sha256": "864c6786ef082168fb08fa11365eedbc9ed2f484919e1ea9d0bdf15841c5976e"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0/results/j04-editar-a-mao.json",
+    "runId": "2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Falha histórica de roteiro preservada; não aprovada retroativamente.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/historical-2026-10-18/j04-editar-a-mao.json",
+    "bytes": 26489,
+    "sha256": "e67030d6612224363520a84e13bb971677b0520a150c0011dfeb7d405155ca01"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0/results/j09-idiomas.json",
+    "runId": "2026-10-18T16-52-51-460Z-bd5ba64a-58a1-4e0e-aa80-6b880d06c2a0",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "description": "Falha histórica de roteiro preservada; não aprovada retroativamente.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/historical-2026-10-18/j09-idiomas.json",
+    "bytes": 29058,
+    "sha256": "e6204507d15bc2142a3e95a2af46eb158aa59a89fb28fc44ba865c27bcf39bc0"
+  },
+  {
+    "origin": "Derived from the 28 preserved raw result JSON files listed in results[].result; see method in journey-audit.json",
+    "runId": [
+      "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7"
+    ],
+    "viewport": [
+      {
+        "height": 768,
+        "width": 1366
+      },
+      {
+        "height": 720,
+        "width": 1280
+      }
+    ],
+    "description": "Auditoria derivada de logs brutos; não é execução de testes e não substitui os JSON originais.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/journey-audit.json",
+    "bytes": 39464,
+    "sha256": "cc1a9dab97bb1526de1a35761251f59466e2a65da4a3fd19f62d01166b18f613"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/summary.json",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": "Mixed; each proof receipt specifies its viewport.",
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/summary.json",
+    "bytes": 36015,
+    "sha256": "66ef95482602588bfc99cb380dbed7e4df261693f89d3d433a65adb34b9a6b6f"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/stderr.log",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/stderr.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/stdout.log",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/stdout.log",
+    "bytes": 9540,
+    "sha256": "ae7d22550a81f2e9e9647384582c8b493abfee223b30fddf6e2621ca5b8500c9"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/receipts/evidence.json",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/01-editor-text-proof/receipts/evidence.json",
+    "bytes": 9487,
+    "sha256": "7fa76ae1bb3881d5c96d23e1283b19ef417ef92360fe37fda2d123978e62b85a"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/stderr.log",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/stderr.log",
+    "bytes": 2767,
+    "sha256": "bfc3ea4561b647518df91150b081294ccd249c012f8b321b6d9a9711a6a62e27"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/stdout.log",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/stdout.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/receipts/evidence.json",
+    "runId": "2026-10-20T16-01-50-708Z-f147df14",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Rodada inicial parcial: 1 pass / 2 fail / 48 skips. Falha 403 de fontes e parada por disco preservadas.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-01-50-708Z-f147df14/02-editor-direct-manipulation-proof/receipts/evidence.json",
+    "bytes": 2371,
+    "sha256": "cc4971cf35c7bff881426565d5eb0f24cc5d0c5a337bf14be36c9da708c0c6ee"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/summary.json",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": "Mixed; each proof receipt specifies its viewport.",
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/summary.json",
+    "bytes": 29877,
+    "sha256": "18ffb0ed5ed1c723524031f1abe5ba58d155ac86ccee9184c479ff073021825d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/stderr.log",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/stderr.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/stdout.log",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/stdout.log",
+    "bytes": 277,
+    "sha256": "24fe0211997c85a2d3ad6fcb7c234db2c735cff45d3b22c4ccdc49fde0381dd3"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/receipts/result.json",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/receipts/result.json",
+    "bytes": 41464,
+    "sha256": "903c0db1e74b4a19cc530da2027cacda048a8fded38349d78b123464bd876b4d"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/artifacts/screen.png",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/artifacts/screen.png",
+    "bytes": 23371,
+    "sha256": "60f847ba2204890f9716779260b02a0058630fc8cc1557681ddec4a4675a1086"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/artifacts/fixture.pdf",
+    "runId": "2026-10-20T16-05-39-583Z-5fd88974",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Prova dirigida dos espaços: 1 pass / 50 skips; fixture Chromium screen/print/PDF, não fluxo completo do editor.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-39-583Z-5fd88974/51-hanging-space-browser-proof/artifacts/fixture.pdf",
+    "bytes": 29945,
+    "sha256": "4a34616ed47775cbbd6eb33fec92bb0f30f6df3295c7d9f7e26cb7edf3252e65"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/summary.json",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": "Mixed; each proof receipt specifies its viewport.",
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/summary.json",
+    "bytes": 30991,
+    "sha256": "b7848c3ebd2b191caf6cbf48ed2d0460982c1b94ca08fa59a87306580126dd40"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/stderr.log",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/stderr.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/stdout.log",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/stdout.log",
+    "bytes": 1886,
+    "sha256": "795e38fdcec0c26d5a716e1e43b7493ee3065c20a0f7e5c9f50e7819d63951fb"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/receipts/evidence.json",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 1100,
+      "width": 1500
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/02-editor-direct-manipulation-proof/receipts/evidence.json",
+    "bytes": 1853,
+    "sha256": "74bad548df3bdbb921817c545fc0eb6a9c606250a08bf70d8e16009f9cc9b6d4"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/stderr.log",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/stderr.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/stdout.log",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/stdout.log",
+    "bytes": 524,
+    "sha256": "76f11fa127b83cf4284fd8feda30edae54251f1ca318450dfddc4c1d5f82e74b"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/receipts/result.json",
+    "runId": "2026-10-20T16-05-46-310Z-549f6d51",
+    "viewport": {
+      "height": 768,
+      "width": 1366
+    },
+    "description": "Repetição dirigida: manipulação direta com allowlist corrigida e FR-24 aprovadas; 2 pass / 49 skips, sem aprovação integral.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/proof-gates/2026-10-20T16-05-46-310Z-549f6d51/48-fr24-thumbnails-measure/receipts/result.json",
+    "bytes": 4498,
+    "sha256": "389a244c1cc0415e1d799ae29177023886f19bf1cf4c3c9510678000fdf85617"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T16-09-20-962Z-e0fcdb7e-e93d-47cb-a9f6-cde17f359b8d/results/j04-editar-a-mao@1280.json",
+    "runId": "2026-10-20T16-09-20-962Z-e0fcdb7e-e93d-47cb-a9f6-cde17f359b8d",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    },
+    "description": "Probe J4 confirma B-01/P1 por diagnóstico pós-edição: tabela ultrapassa altura reservada e impede PDF. Status pass bruto veio antes da nova assertion, não é aceite.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/j04-diagnostic-probe/results/j04-editar-a-mao@1280.json",
+    "bytes": 38253,
+    "sha256": "dbdc79eb6c0bd938e6af859845ee9ddf33993a0d04d0f3210e124ce30ec489f6"
+  },
+  {
+    "origin": "C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/scratch/father-journeys/runs/2026-10-20T16-09-20-962Z-e0fcdb7e-e93d-47cb-a9f6-cde17f359b8d/shots/j04-editar-a-mao-02b-diagnostico-apos-editar@1280.png",
+    "runId": "2026-10-20T16-09-20-962Z-e0fcdb7e-e93d-47cb-a9f6-cde17f359b8d",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    },
+    "description": "Probe J4 confirma B-01/P1 por diagnóstico pós-edição: tabela ultrapassa altura reservada e impede PDF. Status pass bruto veio antes da nova assertion, não é aceite.",
+    "destination": "docs/qa/evidence/2026-10-20-continuacao/j04-diagnostic-probe/shots/j04-editar-a-mao-02b-diagnostico-apos-editar@1280.png",
+    "bytes": 111037,
+    "sha256": "5995e7e417a3bf4426632185ad2ffff20f4111928ca6675310750a38570acd5c"
+  }
+]

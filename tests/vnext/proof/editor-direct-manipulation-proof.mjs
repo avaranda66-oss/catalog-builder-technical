@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const output = resolve(root, 'scratch/w2c-editor-proof');
 await mkdir(output, { recursive: true });
 const port = Number(process.env.W2C_PROOF_PORT ?? 5198);
-const server = await createServer({ root, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'error' });
+const server = await createServer({ root, server: {
+  host: '127.0.0.1', port, strictPort: true,
+  fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
+}, logLevel: 'error' });
 let browser;
 
 const rounded = (value) => Math.round(value * 1000) / 1000;

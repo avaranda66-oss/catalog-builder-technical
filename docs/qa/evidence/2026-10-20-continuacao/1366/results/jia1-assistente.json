@@ -1,0 +1,680 @@
+{
+  "journey": "jia1-assistente",
+  "title": "J-IA1 — Abrir o Assistente IA sem chave, pedir capa e especificações do TA-25N, confirmar e desfazer com um Ctrl+Z",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T15:56:31.707Z",
+  "steps": [
+    {
+      "name": "A0 catálogo \"TA-25N — Ficha técnica 2026\" criado e salvo",
+      "ok": true,
+      "detail": "páginas: 1",
+      "atMs": 1141
+    },
+    {
+      "name": "A1 o botão \"Assistente IA\" está na barra de cima, visível sem rolar, com esse nome",
+      "ok": true,
+      "detail": "{\"text\":\"Abrir assistente de edição\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":141,\"top\":12,\"inViewport\":true,\"fullyVisible\":true,\"visibleText\":\"✦ Assistente IA\"}",
+      "atMs": 1156
+    },
+    {
+      "name": "A2 o painel abre e diz \"IA pronta.\" sem pedir chave nem senha",
+      "ok": true,
+      "detail": "texto: \"IA pronta.\" · campos de senha/chave: 0 · em 202 ms · sequência: Verificando a IA… → IA pronta.",
+      "atMs": 1367
+    },
+    {
+      "name": "A3 \"Avançado (chave própria)\" não aparece quando o servidor não oferece chave própria (FR-60/1B)",
+      "ok": true,
+      "detail": "nem de relance",
+      "atMs": 1367
+    },
+    {
+      "name": "A4 o cursor já está na caixa \"Seu pedido ao Gemini\" ao abrir (não precisa clicar nela)",
+      "ok": true,
+      "detail": "foco em: gemini-catalog-command",
+      "atMs": 1368
+    },
+    {
+      "name": "A5 textos do painel em português, sem jargão técnico",
+      "ok": true,
+      "detail": "termos: - · mm: -",
+      "atMs": 1373
+    },
+    {
+      "name": "A6 letras ≥ 13 px e alvos ≥ 24 px no painel do assistente (FR-16b)",
+      "ok": true,
+      "detail": "letras pequenas: - · alvos pequenos: -",
+      "atMs": 1455
+    },
+    {
+      "name": "A7 Assistente ocupa a coluna da direita, com Propriedades oculta e sem cobrir a página (FR-17)",
+      "ok": true,
+      "detail": "{\"viewport\":1366,\"dock\":{\"left\":1067,\"right\":1366,\"top\":129,\"width\":299},\"propriedades\":null,\"pagina\":{\"left\":224.59375,\"right\":1002.421875,\"top\":276,\"width\":777.828125},\"position\":\"static\",\"propriedadesCobertasPx\":0,\"propriedadesCobertasPct\":null,\"paginaCobertaPx\":0,\"paginaCobertaPct\":0,\"propriedadesOcultas\":true,\"abaAssistenteSelecionada\":true}",
+      "atMs": 1457
+    },
+    {
+      "name": "B0 depois de digitar, \"Enviar ao Gemini\" fica disponível",
+      "ok": true,
+      "detail": null,
+      "atMs": 1577
+    },
+    {
+      "name": "B1 a proposta chega como capa + tabela \"Ficha técnica\" (3 colunas × 5 linhas, vazia) + notas",
+      "ok": true,
+      "detail": "Proposta para revisar Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Página 1: Catálogo técnico PRESYS · Capa Página 2: Ficha técnica · Ficha técnica: 3 colunas × 5 linhas, dados ainda vazios Página 3: Notas de revisão · Conteúdo editorial Confirmar",
+      "atMs": 1629
+    },
+    {
+      "name": "B2 a proposta aparece em menos de 3 s (no harness a IA é falsa e responde na hora)",
+      "ok": true,
+      "detail": "50 ms · \"Gemini está preparando…\" chegou a aparecer: false",
+      "atMs": 1630
+    },
+    {
+      "name": "B3 a conversa explica a proposta e avisa que nenhum valor técnico será inventado",
+      "ok": true,
+      "detail": "Nada selecionado na página Fechar ✕ Criar com Gemini Ferramentas Criar catálogo com Gemini Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir. IA pronta. 2 ⇪ Arraste aqui PDFs, planilhas e fotos (ou clique para escolher) Até 10 arquivos, lid",
+      "atMs": 1630
+    },
+    {
+      "name": "B4 \"Confirmar e inserir no catálogo\" e \"Rejeitar proposta\" estão visíveis sem rolar",
+      "ok": true,
+      "detail": "{\"confirmar\":{\"text\":\"Confirmar e inserir no catálogo\",\"fontPx\":15,\"heightPx\":62,\"widthPx\":239,\"top\":293,\"inViewport\":true,\"fullyVisible\":true},\"rejeitar\":{\"text\":\"Rejeitar proposta\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":160,\"top\":363,\"inViewport\":true,\"fullyVisible\":true}}",
+      "atMs": 1659
+    },
+    {
+      "name": "B5 letras e botões da proposta legíveis (≥ 13 px / ≥ 24 px, FR-16b)",
+      "ok": true,
+      "detail": "letras pequenas: - · alvos pequenos: -",
+      "atMs": 1659
+    },
+    {
+      "name": "B6 a proposta e a conversa estão em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 1660
+    },
+    {
+      "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+      "ok": false,
+      "finding": {
+        "id": "D-07",
+        "severity": "P3",
+        "knownFR": null
+      },
+      "detail": "título da proposta termina em y=34 px, acima do topo da área rolável (y=357 px); \"Página 1\" termina em y=167 px",
+      "atMs": null
+    },
+    {
+      "name": "C1 \"Confirmar e inserir\" cria 3 páginas com 1 tabela de 3 colunas × 5 linhas",
+      "ok": true,
+      "detail": "páginas: 1 → 4 · tabelas novas: 1 · {\"rows\":5,\"columns\":3,\"styleKeys\":[\"base\",\"rowRoles\",\"annotation\",\"annotationGapMm\"],\"frame\":{\"xMm\":17,\"yMm\":66,\"widthMm\":176,\"heightMm\":77}} · em 12 ms",
+      "atMs": 1867
+    },
+    {
+      "name": "C2 o assistente responde \"Apliquei 3 página(s) e 1 tabela(s)…\" e a resposta está visível sem rolar",
+      "ok": true,
+      "detail": "{\"text\":\"AssistenteApliquei 3 página(s) e 1 tabela(s) editáveis no catálogo. Os campos té\",\"fontPx\":16,\"heightPx\":174,\"widthPx\":258,\"top\":263,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 1879
+    },
+    {
+      "name": "C3 o painel \"Páginas\" passa a mostrar 4 páginas (retorno visível fora do chat)",
+      "ok": true,
+      "detail": "antes: \"PÁGINAS 1 Página 1 Adicionar página Usar modelo…\" · depois: \"PÁGINAS 4 Página 1 Página 2 Página 3 Página 4 Adicionar página Usar modelo…\"",
+      "atMs": 3914
+    },
+    {
+      "name": "C4 volta a \"Salvo\" sozinho depois de inserir",
+      "ok": true,
+      "detail": "texto: \"Salvo às 12:56\" · 2204 ms",
+      "atMs": 3917
+    },
+    {
+      "name": "C4 o salvamento confirmado mostra o horário (FR-44)",
+      "ok": true,
+      "detail": "Salvo às 12:56",
+      "atMs": 3917
+    },
+    {
+      "name": "C5 do editor até as páginas inseridas: 3 cliques + digitar o pedido",
+      "ok": true,
+      "detail": "cliques: 3 (abrir, enviar, confirmar)",
+      "atMs": 3958
+    },
+    {
+      "name": "D0 o botão \"Desfazer\" da barra de cima fica ativo depois de inserir",
+      "ok": true,
+      "detail": null,
+      "atMs": 3961
+    },
+    {
+      "name": "D1 UM Ctrl+Z desfaz as 3 páginas de uma vez",
+      "ok": true,
+      "detail": "4 → 1 · caminho: Ctrl+Z logo depois de \"Confirmar\" · foco antes: BODY# · em 8 ms",
+      "atMs": 3990
+    },
+    {
+      "name": "D2 depois do Ctrl+Z, \"Refazer\" fica disponível e a conversa continua no painel",
+      "ok": true,
+      "detail": "canRedo: true · alertas no painel: 0",
+      "atMs": 4002
+    },
+    {
+      "name": "D3 volta a \"Salvo\" depois do Ctrl+Z",
+      "ok": true,
+      "detail": null,
+      "atMs": 5193
+    },
+    {
+      "name": "E1 Esc fecha o painel mas o texto digitado volta ao reabrir",
+      "ok": true,
+      "detail": "texto: \"Rascunho que o pai estava escrevendo\"",
+      "atMs": 5794
+    },
+    {
+      "name": "E2 painel sem jargão depois de usar",
+      "ok": true,
+      "detail": "-",
+      "atMs": 5798
+    },
+    {
+      "name": "F1 com o limite diário atingido, aparece em português o que fazer (\"Continue editando manualmente hoje; amanhã o limite renova\")",
+      "ok": true,
+      "detail": "\"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova. O catálogo não foi alterado.\" · em 74 ms · visível: true · prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\"",
+      "atMs": 6646
+    },
+    {
+      "name": "F1b com o limite diário atingido, \"Avançado (chave própria)\" continua escondido",
+      "ok": true,
+      "detail": null,
+      "atMs": 6649
+    },
+    {
+      "name": "F2 o pedido volta para a caixa (\"não enviado\") e nenhuma proposta aparece",
+      "ok": true,
+      "detail": "não enviado: 1 · caixa: \"Crie a capa e as especificações do TA-25N\"",
+      "atMs": 6662
+    },
+    {
+      "name": "F3 a mensagem de limite tem letras legíveis (≥ 13 px, FR-16b)",
+      "ok": true,
+      "detail": "15 px",
+      "atMs": 6663
+    },
+    {
+      "name": "G1 com o servidor sem IA, o painel avisa em português (sem pedir chave) e \"Avançado\" continua escondido",
+      "ok": true,
+      "detail": "\"A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.\" · campos de chave: 0 · \"Avançado\": 0",
+      "atMs": 7448
+    },
+    {
+      "name": "G2 a mensagem \"servidor sem IA\" não cita botão inexistente",
+      "ok": true,
+      "detail": null,
+      "atMs": 7449
+    },
+    {
+      "name": "G3 ao enviar, a mesma explicação aparece como aviso e o pedido volta para a caixa",
+      "ok": true,
+      "detail": "\"A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado.\"",
+      "atMs": 7537
+    },
+    {
+      "name": "H1 zero erros de console e de página",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do servidor de desenvolvimento: 0",
+      "atMs": 7609
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-01-painel-pronto.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-02-proposta.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-03-inserido.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-04-depois-ctrl-z.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-05-limite-diario.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-06-sem-ia.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "findingSteps": [
+    {
+      "id": "D-07",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+      "detail": "título da proposta termina em y=34 px, acima do topo da área rolável (y=357 px); \"Página 1\" termina em y=167 px"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "clicks": {
+    "abrir o assistente": 1,
+    "pedir": 1,
+    "confirmar": 1,
+    "esc (clique na caixa)": 1,
+    "reabrir depois do Esc": 1,
+    "abrir (limite diário)": 1,
+    "pedir (limite diário)": 1,
+    "abrir (servidor sem IA)": 1,
+    "pedir (servidor sem IA)": 1
+  },
+  "timings": {
+    "iaProntaMs": 202,
+    "propostaMs": 50,
+    "inseriuMs": 12,
+    "salvoAposInserirMs": 2204,
+    "ctrlZMs": 8,
+    "alertaLimiteMs": 74
+  },
+  "measures": {
+    "botaoAssistente": {
+      "text": "Abrir assistente de edição",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 141,
+      "top": 12,
+      "inViewport": true,
+      "fullyVisible": true,
+      "visibleText": "✦ Assistente IA"
+    },
+    "painel": {
+      "rotuloEditando": {
+        "text": "Nada selecionado na página",
+        "fontPx": 13,
+        "heightPx": 18,
+        "widthPx": 179,
+        "top": 150,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "fechar": {
+        "text": "Fechar painel do assistente",
+        "fontPx": 13,
+        "heightPx": 44,
+        "widthPx": 83,
+        "top": 137,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abaGemini": {
+        "text": "Criar com Gemini",
+        "fontPx": 15,
+        "heightPx": 58,
+        "widthPx": 135,
+        "top": 199,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abaFerramentas": {
+        "text": "Ferramentas",
+        "fontPx": 15,
+        "heightPx": 58,
+        "widthPx": 135,
+        "top": 199,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "titulo": {
+        "text": "Criar catálogo com Gemini",
+        "fontPx": 20,
+        "heightPx": 54,
+        "widthPx": 217,
+        "top": 23,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "descricao": {
+        "text": "Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que v",
+        "fontPx": 13,
+        "heightPx": 81,
+        "widthPx": 217,
+        "top": 82,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "prontidao": {
+        "text": "IA pronta.",
+        "fontPx": 13,
+        "heightPx": 20,
+        "widthPx": 217,
+        "top": 163,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "contador": {
+        "text": "Quantidade de mensagens",
+        "fontPx": 13,
+        "heightPx": 26,
+        "widthPx": 34,
+        "top": 23,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "boasVindas": {
+        "text": "O que vamos criar?",
+        "fontPx": 15,
+        "heightPx": 22,
+        "widthPx": 263,
+        "top": 379,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "sugestao1": {
+        "text": "Crie uma capa e uma apresentação profissional para este catálogo.",
+        "fontPx": 15,
+        "heightPx": 82,
+        "widthPx": 263,
+        "top": 413,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "dicaPequena": {
+        "text": "A IA cria até 4 páginas por pedido. As tabelas chegam vazias: os números técnico",
+        "fontPx": 13,
+        "heightPx": 60,
+        "widthPx": 263,
+        "top": 689,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "rotuloPedido": {
+        "text": "Seu pedido ao Gemini",
+        "fontPx": 15,
+        "heightPx": 20,
+        "widthPx": 267,
+        "top": 468,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "caixaPedido": {
+        "text": "",
+        "fontPx": 15,
+        "heightPx": 92,
+        "widthPx": 267,
+        "top": 495,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "enviar": {
+        "text": "Enviar ao Gemini",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 156,
+        "top": 596,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "limite": {
+        "text": "A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inv",
+        "fontPx": 13,
+        "heightPx": 119,
+        "widthPx": 267,
+        "top": 654,
+        "inViewport": true,
+        "fullyVisible": false
+      }
+    },
+    "sobreposicaoInicial": {
+      "viewport": 1366,
+      "dock": {
+        "left": 1067,
+        "right": 1366,
+        "top": 129,
+        "width": 299
+      },
+      "propriedades": null,
+      "pagina": {
+        "left": 224.59375,
+        "right": 1002.421875,
+        "top": 276,
+        "width": 777.828125
+      },
+      "position": "static",
+      "propriedadesCobertasPx": 0,
+      "propriedadesCobertasPct": null,
+      "paginaCobertaPx": 0,
+      "paginaCobertaPct": 0,
+      "propriedadesOcultas": true,
+      "abaAssistenteSelecionada": true
+    },
+    "proposta": {
+      "titulo": {
+        "text": "Proposta para revisar",
+        "fontPx": 15,
+        "heightPx": 20,
+        "widthPx": 239,
+        "top": 14,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "resumo": {
+        "text": "Estrutura de ficha técnica em três páginas, com os campos técnicos em branco par",
+        "fontPx": 15,
+        "heightPx": 72,
+        "widthPx": 239,
+        "top": 42,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "item": {
+        "text": "Página 1: Catálogo técnico PRESYS · Capa",
+        "fontPx": 13,
+        "heightPx": 42,
+        "widthPx": 222,
+        "top": 126,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "confirmar": {
+        "text": "Confirmar e inserir no catálogo",
+        "fontPx": 15,
+        "heightPx": 62,
+        "widthPx": 239,
+        "top": 293,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "rejeitar": {
+        "text": "Rejeitar proposta",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 160,
+        "top": 363,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "grupo": {
+        "text": "Proposta de páginas",
+        "fontPx": 16,
+        "heightPx": 438,
+        "widthPx": 269,
+        "top": -1,
+        "inViewport": true,
+        "fullyVisible": false
+      }
+    },
+    "mensagemApliquei": {
+      "text": "AssistenteApliquei 3 página(s) e 1 tabela(s) editáveis no catálogo. Os campos té",
+      "fontPx": 16,
+      "heightPx": 174,
+      "widthPx": 258,
+      "top": 263,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "alertaLimite": {
+      "text": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; a",
+      "fontPx": 15,
+      "heightPx": 80,
+      "widthPx": 267,
+      "top": 623,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "prontidaoSemIA": {
+      "text": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto i",
+      "fontPx": 13,
+      "heightPx": 81,
+      "widthPx": 217,
+      "top": 102,
+      "inViewport": true,
+      "fullyVisible": true
+    }
+  },
+  "texts": {
+    "prontidao": "IA pronta.",
+    "painelInicial": "Nada selecionado na página Fechar ✕ Criar com Gemini Ferramentas Criar catálogo com Gemini Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir. IA pronta. 0 ⇪ Arraste aqui PDFs, planilhas e fotos (ou clique para escolher) Até 10 arquivos, lidos aqui no computador. O que vamos criar? Crie uma capa e uma apresentação profissional para este catálogo. Comece uma comparação técnica com seções e tabelas para três modelos. Organize quatro novas páginas com capa, índice e tabelas de especificações. A IA cria até 4 páginas por pedido. As tabelas chegam vazias: os números técnicos você preenche a partir das fontes. Seu pedido ao Gemini Enviar ao Gemini A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inventa valores técnicos. Os arquivos soltos acima são lidos aqui no computador e não vão para a IA.",
+    "proposta": "Proposta para revisar Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Página 1: Catálogo técnico PRESYS · Capa Página 2: Ficha técnica · Ficha técnica: 3 colunas × 5 linhas, dados ainda vazios Página 3: Notas de revisão · Conteúdo editorial Confirmar e inserir no catálogo Rejeitar proposta",
+    "conversaAposProposta": "Nada selecionado na página Fechar ✕ Criar com Gemini Ferramentas Criar catálogo com Gemini Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir. IA pronta. 2 ⇪ Arraste aqui PDFs, planilhas e fotos (ou clique para escolher) Até 10 arquivos, lidos aqui no computador. Você Crie a capa e as especificações do TA-25N 12:56 Assistente Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Revise a proposta de 3 página(s) antes de aplicar. Nenhum valor técnico será inventado. 12:56 Proposta para revisar Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Página 1: Catálogo técnico PRESYS · Capa Página 2: Ficha técnica · Ficha técnica: 3 colunas × 5 linhas, dados ainda vazios Página 3: Notas de revisão · Conteúdo editorial Confirmar e inserir no catálogo Rejeitar proposta Seu pedido ao Gemini Enviar ao Gemini A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inventa valores técnicos. Os arquivos soltos acima são lidos aqui no computador e não vão para a IA.",
+    "conversaAposInserir": "Nada selecionado na página Fechar ✕ Criar com Gemini Ferramentas Criar catálogo com Gemini Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir. IA pronta. 3 ⇪ Arraste aqui PDFs, planilhas e fotos (ou clique para escolher) Até 10 arquivos, lidos aqui no computador. Você Crie a capa e as especificações do TA-25N 12:56 Assistente Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Revise a proposta de 3 página(s) antes de aplicar. Nenhum valor técnico será inventado. 12:56 Assistente Apliquei 3 página(s) e 1 tabela(s) editáveis no catálogo. Os campos técnicos ficam vazios; revise e depois salve. 12:56 Seu pedido ao Gemini Enviar ao Gemini A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inventa valores técnicos. Os arquivos soltos acima são lidos aqui no computador e não vão para a IA.",
+    "painelAria": "- complementary \"Assistente do catálogo atual\":\n  - text: Nada selecionado na página\n  - button \"Fechar painel do assistente\": Fechar\n  - tablist \"Modo do assistente\":\n    - tab \"Criar com Gemini\" [selected]\n    - tab \"Ferramentas\"\n  - region \"Assistente de criação do catálogo\":\n    - heading \"Criar catálogo com Gemini\" [level=3]\n    - paragraph: Solte arquivos ou descreva o que deseja. A IA propõe páginas A4 editáveis, que você confirma antes de inserir.\n    - paragraph: IA pronta.\n    - text: \"3\"\n    - region \"Arquivos para o catálogo\":\n      - button \"Arraste aqui PDFs, planilhas e fotos (ou clique para escolher)\"\n      - text: Até 10 arquivos, lidos aqui no computador.\n    - log \"Histórico de criação do catálogo\":\n      - article:\n        - strong: Você\n        - paragraph: Crie a capa e as especificações do TA-25N\n        - text: 12:56\n      - article:\n        - strong: Assistente\n        - paragraph: Estrutura de ficha técnica em três páginas, com os campos técnicos em branco para você preencher. Revise a proposta de 3 página(s) antes de aplicar. Nenhum valor técnico será inventado.\n        - text: 12:56\n      - article:\n        - strong: Assistente\n        - paragraph: Apliquei 3 página(s) e 1 tabela(s) editáveis no catálogo. Os campos técnicos ficam vazios; revise e depois salve.\n        - text: 12:56\n    - text: Seu pedido ao Gemini\n    - textbox \"Seu pedido ao Gemini\":\n      - /placeholder: Crie um catálogo técnico com capa, índice e tabelas comparativas…\n      - text: Rascunho que o pai estava escrevendo\n    - button \"Enviar ao Gemini\"\n    - paragraph: A IA propõe a estrutura das páginas e você confere antes de inserir; ela não inventa valores técnicos. Os arquivos soltos acima são lidos aqui no computador e não vão para a IA.",
+    "prontidaoLimite": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.",
+    "alertaLimite": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova. O catálogo não foi alterado.",
+    "prontidaoSemIA": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.",
+    "alertaSemIA": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado."
+  },
+  "observations": {
+    "sequenciaProntidao": [
+      "Verificando a IA…",
+      "IA pronta."
+    ],
+    "avancadoPiscou": {
+      "viu": false,
+      "apareceuEmMs": null,
+      "sumiuEmMs": null,
+      "duracaoMs": 0
+    },
+    "palavrasNoPainel": [
+      "propõe",
+      "estrutura",
+      "páginas A4",
+      "Gemini",
+      "IA",
+      "inserir",
+      "confirma"
+    ],
+    "vezesGemini": 4,
+    "vezesIA": 5,
+    "viuPreparando": false,
+    "palavrasNaProposta": [
+      "proposta",
+      "revisar",
+      "estrutura",
+      "dados ainda vazios",
+      "inserir",
+      "Rejeitar"
+    ],
+    "tituloDaPropostaCortado": {
+      "topDaRolagem": 357,
+      "tituloTop": 14,
+      "tituloBottom": 34,
+      "pagina1Bottom": 167,
+      "cortado": true
+    },
+    "tabelaInserida": {
+      "rows": 5,
+      "columns": 3,
+      "styleKeys": [
+        "base",
+        "rowRoles",
+        "annotation",
+        "annotationGapMm"
+      ],
+      "frame": {
+        "xMm": 17,
+        "yMm": 66,
+        "widthMm": 176,
+        "heightMm": 77
+      }
+    },
+    "paginasNovas": [
+      [
+        "Catálogo técnico PRESYS",
+        "Proposta para sua revisão"
+      ],
+      [
+        "Ficha técnica"
+      ],
+      [
+        "Notas de revisão",
+        "Confira o manual de origem antes de pree"
+      ]
+    ],
+    "avisoDoEditorAoInserir": null,
+    "painelPaginas": {
+      "antes": "PÁGINAS 1 Página 1 Adicionar página Usar modelo…",
+      "depois": "PÁGINAS 4 Página 1 Página 2 Página 3 Página 4 Adicionar página Usar modelo…"
+    },
+    "indicadorPagina": {
+      "antes": "Página 1 de 1",
+      "depois": "Página 1 de 4"
+    },
+    "cliquesAteInserir": 3,
+    "ctrlZ": {
+      "caminho": "Ctrl+Z logo depois de \"Confirmar\"",
+      "focoAntes": "BODY#"
+    },
+    "escFechaPainel": true,
+    "avancadoPiscouAoReabrir": false,
+    "textoDepoisDoEsc": "Rascunho que o pai estava escrevendo",
+    "sequenciaProntidaoLimite": [
+      "Verificando a IA…",
+      "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova."
+    ],
+    "avancadoPiscouLimite": {
+      "viu": false,
+      "duracaoMs": 0
+    },
+    "avancadoPiscouSemIA": {
+      "viu": false,
+      "duracaoMs": 0
+    }
+  },
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "server": "http://127.0.0.1:5190",
+  "status": "pass",
+  "findingSummary": [
+    {
+      "id": "D-07",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+      "detail": "título da proposta termina em y=34 px, acima do topo da área rolável (y=357 px); \"Página 1\" termina em y=167 px"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "a2ae97d9-e7e9-4a80-a2ad-65d6b8b1159b",
+    "startedAt": "2026-10-20T15:56:23.764Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

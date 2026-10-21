@@ -1,0 +1,512 @@
+{
+  "at": "2026-10-20T15:56:31.875Z",
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "9595cab4-7f52-4416-9ad6-834e048b67c4",
+    "startedAt": "2026-10-20T15:51:04.728Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": false
+    },
+    "nodeVersion": "v24.13.0",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "baseUrl": "http://127.0.0.1:5190",
+  "durationMs": 326968,
+  "journeys": [
+    {
+      "journey": "j00-smoke",
+      "title": "Fumaça: biblioteca → novo catálogo → editor salvo → voltar à biblioteca",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "8b595d87-6ba3-4050-98a5-73f8f62b1298",
+      "durationMs": 8321,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j00-smoke.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j00-01-biblioteca.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j00-02-novo-catalogo.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j00-03-editor-salvo.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j00-04-biblioteca-com-catalogo.png"
+      ],
+      "findings": 0,
+      "findingDetails": [],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j01-entrar-meus-catalogos",
+      "title": "J1 — Entrar e ver \"Meus catálogos\" sem digitar nada, tudo em português",
+      "status": "pending",
+      "exitCode": 0,
+      "executionId": "1bfa1d34-f282-4945-8f84-e545f51668f7",
+      "durationMs": 3418,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j01-entrar-meus-catalogos.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j01-01-biblioteca-vazia.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j01-02-dialogo-novo-catalogo.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j01-03-editor-aberto.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j01-04-biblioteca-com-catalogo.png"
+      ],
+      "findings": 4,
+      "findingDetails": [
+        {
+          "id": "A-02",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+          "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "textos da biblioteca abaixo de 13 px",
+          "detail": "ordenar: 12 px"
+        },
+        {
+          "id": "A-03",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+          "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px"
+        },
+        {
+          "text": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela).",
+          "severity": "P3",
+          "where": "biblioteca, barra de cima",
+          "name": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela)."
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": [
+        {
+          "name": "o endereço raiz leva a \"Meus catálogos\" sem digitar /v2 (redirecionamento após login)",
+          "reason": "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto."
+        }
+      ]
+    },
+    {
+      "journey": "j02-j03-ia-arquivos-conversa",
+      "title": "J2/J3 — Onde soltar PDF/planilha (\"Criar com IA a partir de arquivos\") e ajustar por conversa (\"aumente a foto da capa\")",
+      "status": "pending",
+      "exitCode": 0,
+      "executionId": "d8eb06d2-9136-4269-9443-8f1ee9d3922c",
+      "durationMs": 5738,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j02-j03-ia-arquivos-conversa.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j02-01-criar-com-arquivos.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j02-02-arquivos-lidos-erro-isolado.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j03-01-gemini-foto-da-capa.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j03-02-ferramentas-respostas.png"
+      ],
+      "findings": 0,
+      "findingDetails": [],
+      "failedSteps": [],
+      "pendingSteps": [
+        {
+          "name": "J2 completa: fontes verificadas, conflitos, prévia de 4–6 páginas e aplicação em uma transação",
+          "reason": "pendente Ondas 3/4 (3A/3B/3C/4A): esta prova cobre intake e inserção local; não executa extração Gemini real, resolução dos conflitos TA-25N nem o aceite do pai."
+        },
+        {
+          "name": "J3-A \"aumente a foto da capa\" mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B: ajustar por conversa) — hoje o pedido vai pelo mesmo caminho de \"criar páginas\" (tarefa compose_scaffold); no harness volta uma proposta FALSA de páginas novas (a resposta real do Gemini a este pedido NÃO foi verificada aqui). O painel nunca mexe na foto: veio \"Proposta para revisar\" de páginas novas"
+        },
+        {
+          "name": "J3-C cada pedido mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B) — hoje: \"Ferramentas\" aplica na hora (sem prévia) só \"compactar tabelas\", e responde \"Ainda não consigo…\" para foto e para separar seções; a aba Gemini só cria páginas novas"
+        }
+      ]
+    },
+    {
+      "journey": "j04-editar-a-mao",
+      "title": "J4 — edita à mão sem travar (tabela, colar do Excel, título, páginas, zoom, campo X)",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "74c2bfe1-6ce0-4cc9-b8df-04378d91f875",
+      "durationMs": 44353,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j04-editar-a-mao.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-01-colar-12x4.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-02-celula-enter-tab-esc.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-04-caixa-colar-vazia.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-05-caixa-colar-previa.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-06-tabela-colada-pelo-botao.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-07-texto-com-estilo-titulo.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-08-confirmar-excluir-pagina.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-09-paginas-depois-dos-ctrl-z.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-10-zoom-100.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-10-zoom-125.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-11-campo-x-abc.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j04-editar-a-mao-12-fim.png"
+      ],
+      "findings": 4,
+      "findingDetails": [
+        {
+          "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+          "severity": "P3",
+          "detail": "sumiu sozinha após 4105 ms; 21 palavras pedem ~8400 ms a 150 palavras/min"
+        },
+        {
+          "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+          "severity": "P2",
+          "detail": "sobreposição medida: 28289 px²; conhecido FR-12/2C; botão Fechar usado sem force"
+        },
+        {
+          "name": "Letras dos botões ≥ 15 px",
+          "severity": "P2",
+          "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]"
+        },
+        {
+          "text": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]",
+          "severity": "P2",
+          "where": "editor",
+          "name": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j05-tabela-longa",
+      "title": "J5 — continuar tabela de 40 linhas, repetir cabeçalho, desfazer e publicar PDF A4 pesquisável",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "c4b26da4-5c06-4298-9e13-6d4e65e08570",
+      "durationMs": 15558,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j05-tabela-longa.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j05-tabela-longa-01-antes-de-continuar.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j05-tabela-longa-02-continuada.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j05-tabela-longa-03-cabecalho-segunda-pagina.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j05-tabela-longa-04-publicacao.png"
+      ],
+      "findings": 0,
+      "findingDetails": [],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j06-foto-celular",
+      "title": "J6 — foto de celular: JPEG retrato (EXIF 6) de pé, HEIC explicado, Publicar / PDF não bloqueia",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "cecf9833-9095-41ef-aa36-986211307b86",
+      "durationMs": 10821,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j06-foto-celular.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-01-foto-inserida.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-02-foto-close.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-03-heic-mensagem.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-04-publicar-pronto.png"
+      ],
+      "findings": 3,
+      "findingDetails": [
+        {
+          "id": "C-01",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+          "detail": "moldura 58×58 mm · foto desenhada com 143 de 215 px de largura (33 % vazio)"
+        },
+        {
+          "id": "C-03",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+          "detail": "sumiu depois de 4004 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\""
+        },
+        {
+          "id": "C-02",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+          "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j07-salvar-reabrir",
+      "title": "J7 — Salvar e reabrir: fechar a aba no meio da edição, reabrir outro catálogo e depois o mesmo",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "13fc0685-9e2c-463c-aae2-9b0cbdb9f5b9",
+      "durationMs": 31747,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j07-salvar-reabrir.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-01-editado-salvo.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-02-salvando-servidor-lento.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-03-outro-catalogo-sem-bloqueio.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-04-recuperacao-local.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-05-recuperado.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-06-texto-digitando-recuperado.png"
+      ],
+      "findings": 1,
+      "findingDetails": [
+        {
+          "text": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar.",
+          "severity": "P3",
+          "where": "Recuperação local",
+          "name": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar."
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j08-publicar-pdf",
+      "title": "J8 — Publicar / PDF logo depois de editar: salva sozinho; Pronto ou \"Corrigir este item\" com foco; PDF A4 pesquisável",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "efa3f7a6-b81a-4298-9e2b-cf335972e3a8",
+      "durationMs": 29538,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j08-publicar-pdf.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-01-pronto.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-02-salvando.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-03-bloqueado.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-04-corrigir-leva-ao-texto.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-05-pronto-2-paginas.png"
+      ],
+      "findings": 1,
+      "findingDetails": [
+        {
+          "id": "C-04",
+          "severity": "P3",
+          "knownFR": "FR-13",
+          "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+          "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j09-idiomas",
+      "title": "J9 — Idiomas: Traduzir → Centro de Tradução → inglês com ponto decimal e \"% FS\", \"1.500\" pede confirmação, glossário PRESYS → cópia EN salva, aberta e publicada; espanhol mantém a vírgula",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "90ef62a1-433d-4e80-b780-22e44253acf7",
+      "durationMs": 54744,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j09-idiomas.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-01-ficha-em-portugues.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-02-centro-de-traducao.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-03-revisao-com-avisos.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-03b-confirmacao-1500.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-04-avisos-aplicados.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-05-copia-salva.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-06-copia-en-aberta.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-07-publicar-copia-en.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-08-biblioteca-dois-idiomas.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j09-09-espanhol-reaberto.png"
+      ],
+      "findings": 2,
+      "findingDetails": [
+        {
+          "id": "E-01",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+          "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo"
+        },
+        {
+          "id": "E-02",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+          "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j10-dois-funcionarios",
+      "title": "J10 — Dois funcionários (duas abas, A e B) editam o mesmo catálogo: aviso de conflito, cópia sem perder nada, abrir a versão mais recente com confirmação",
+      "status": "pending",
+      "exitCode": 0,
+      "executionId": "89e1f4f3-6f56-454a-bd36-ea1248884600",
+      "durationMs": 11748,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j10-dois-funcionarios.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j10-01-aviso-de-conflito.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j10-02-copia-aberta.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j10-03-confirmar-descartar.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j10-04-versao-mais-recente.png"
+      ],
+      "findings": 0,
+      "findingDetails": [],
+      "failedSteps": [],
+      "pendingSteps": [
+        {
+          "name": "2 ao abrir, a aba 2 é avisada de que outra pessoa está no catálogo",
+          "reason": "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar"
+        }
+      ]
+    },
+    {
+      "journey": "j11-biblioteca",
+      "title": "J11 — Biblioteca: buscar \"Y18\", duplicar como modelo, arquivar por engano e recuperar",
+      "status": "pending",
+      "exitCode": 0,
+      "executionId": "5476705d-0d01-4279-9fee-c65c16707985",
+      "durationMs": 66652,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j11-biblioteca.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-01-lista-3-catalogos.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-02-busca-y18.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-03-copia-renomeada.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-04-confirmar-arquivar.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-05-arquivados.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-06-recuperado-em-ativos.png"
+      ],
+      "findings": 3,
+      "findingDetails": [
+        {
+          "id": "A-04",
+          "severity": "P2",
+          "knownFR": "FR-04 (4D: Restaurar)",
+          "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+          "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+          "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px"
+        },
+        {
+          "text": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto).",
+          "severity": "P3",
+          "where": "biblioteca, Ativos",
+          "name": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto)."
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": [
+        {
+          "name": "\"Restaurar\" na linha arquivada (voltar com o mesmo nome, sem criar cópia)",
+          "reason": "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados"
+        }
+      ]
+    },
+    {
+      "journey": "j12-planilha-empresa",
+      "title": "J12 — Planilha da empresa: importar PCON-MASTER-ENGLISHV2.xlsx e escolher DB_SENSORS (interface integrada + comparação célula a célula com o Excel real)",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "12036d7b-e6cf-4cfe-8aee-17b2d05fefba",
+      "durationMs": 26039,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j12-planilha-empresa.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-01-caminho-criar-com-arquivos.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-02-planilha-lida-no-assistente.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-03-db-sensors-colunas-previa.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-04-planilha-inserida-e-dividida.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j12-05-publicacao-da-planilha.png"
+      ],
+      "findings": 0,
+      "findingDetails": [],
+      "failedSteps": [],
+      "pendingSteps": []
+    },
+    {
+      "journey": "j13-falhas",
+      "title": "J13 — falhas: foto grande (6000×4000) sem travar e com PDF; IA indisponível avisa em português; rede/sessão reais fora do harness",
+      "status": "pending",
+      "exitCode": 0,
+      "executionId": "336a7882-c981-402a-bfe5-6822a61d85b4",
+      "durationMs": 9367,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/j13-falhas.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j13-falhas-01-foto-grande-inserida.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j13-falhas-02-publicar-pronto-foto-grande.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j13-falhas-03-ia-limite-diario.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j13-falhas-04-servidor-sem-ia.png"
+      ],
+      "findings": 1,
+      "findingDetails": [
+        {
+          "id": "C-05",
+          "severity": "P3",
+          "knownFR": "FR-61",
+          "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+          "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": [
+        {
+          "name": "R1 rede desligada por 30 s durante a edição: \"Sem conexão\" visível, nada se perde, salvamento retomado sozinho",
+          "reason": "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real."
+        },
+        {
+          "name": "R2 sessão expirada: aviso \"Sessão expirada\" com o que fazer, sem perder o trabalho",
+          "reason": "FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações."
+        }
+      ]
+    },
+    {
+      "journey": "jia1-assistente",
+      "title": "J-IA1 — Abrir o Assistente IA sem chave, pedir capa e especificações do TA-25N, confirmar e desfazer com um Ctrl+Z",
+      "status": "pass",
+      "exitCode": 0,
+      "executionId": "a2ae97d9-e7e9-4a80-a2ad-65d6b8b1159b",
+      "durationMs": 8433,
+      "failureReason": null,
+      "result": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/results/jia1-assistente.json",
+      "evidence": [
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-01-painel-pronto.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-02-proposta.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-03-inserido.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-04-depois-ctrl-z.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-05-limite-diario.png",
+        "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/jia1-06-sem-ia.png"
+      ],
+      "findings": 1,
+      "findingDetails": [
+        {
+          "id": "D-07",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+          "detail": "título da proposta termina em y=34 px, acima do topo da área rolável (y=357 px); \"Página 1\" termina em y=167 px"
+        }
+      ],
+      "failedSteps": [],
+      "pendingSteps": []
+    }
+  ]
+}

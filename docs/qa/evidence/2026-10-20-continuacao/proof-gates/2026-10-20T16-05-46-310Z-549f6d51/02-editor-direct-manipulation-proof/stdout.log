@@ -1,0 +1,101 @@
+W2.C Chromium editor proof: PASS
+{
+  "chromiumVersion": "151.0.7922.34",
+  "scale": 1.18,
+  "legacyBootstrapLoaded": false,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "initialCanonical": {
+    "x": 341.406,
+    "y": 438.188,
+    "width": 365.703,
+    "height": 98.109
+  },
+  "dragPreviewOverlay": {
+    "x": 383.406,
+    "y": 462.203,
+    "width": 365.703,
+    "height": 98.109
+  },
+  "dragCommitted": {
+    "x": 383.406,
+    "y": 462.203,
+    "width": 365.703,
+    "height": 98.109
+  },
+  "leftResize": {
+    "before": {
+      "x": 383.406,
+      "y": 462.203,
+      "width": 365.703,
+      "height": 98.109
+    },
+    "preview": {
+      "x": 353.422,
+      "y": 462.203,
+      "width": 395.703,
+      "height": 98.109
+    },
+    "after": {
+      "x": 353.422,
+      "y": 462.203,
+      "width": 395.703,
+      "height": 98.109
+    }
+  },
+  "topResize": {
+    "before": {
+      "x": 353.422,
+      "y": 462.203,
+      "width": 395.703,
+      "height": 98.109
+    },
+    "preview": {
+      "x": 353.422,
+      "y": 438.188,
+      "width": 395.703,
+      "height": 122.109
+    },
+    "after": {
+      "x": 353.422,
+      "y": 438.188,
+      "width": 395.703,
+      "height": 122.109
+    }
+  },
+  "cornerResize": {
+    "before": {
+      "x": 353.422,
+      "y": 438.188,
+      "width": 395.703,
+      "height": 122.109
+    },
+    "preview": {
+      "x": 333.406,
+      "y": 422.188,
+      "width": 415.703,
+      "height": 138.109
+    },
+    "after": {
+      "x": 333.406,
+      "y": 422.188,
+      "width": 415.703,
+      "height": 138.109
+    }
+  },
+  "imageAssetBefore": "w2c-demo-ta25n",
+  "imageAssetAfter": "w2c-demo-replacement",
+  "inspectorX": "33,25",
+  "imageBeforeInspector": {
+    "x": 341.406,
+    "y": 759.297,
+    "width": 258.672,
+    "height": 258.672
+  },
+  "imageAfterInspector": {
+    "x": 400.5,
+    "y": 759.297,
+    "width": 258.672,
+    "height": 258.672
+  }
+}

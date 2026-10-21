@@ -1,0 +1,748 @@
+{
+  "journey": "j09-idiomas",
+  "title": "J9 — Idiomas: Traduzir → Centro de Tradução → inglês com ponto decimal e \"% FS\", \"1.500\" pede confirmação, glossário PRESYS → cópia EN salva, aberta e publicada; espanhol mantém a vírgula",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:59:34.197Z",
+  "steps": [
+    {
+      "name": "0 texto 1 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Exatidão: ±0,02 % FE",
+      "atMs": 3131
+    },
+    {
+      "name": "0 texto 2 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Estabilidade: ±0,02 °C",
+      "atMs": 5364
+    },
+    {
+      "name": "0 texto 3 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Faixa de Operação: -25 a 140 °C",
+      "atMs": 7565
+    },
+    {
+      "name": "0 texto 4 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Código de Encomenda",
+      "atMs": 9782
+    },
+    {
+      "name": "0 texto 5 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Fornecimento Padrão",
+      "atMs": 11981
+    },
+    {
+      "name": "0 texto 6 foi confirmado automaticamente no catálogo",
+      "ok": true,
+      "detail": "Pressão máxima: 1.500 mbar",
+      "atMs": 14182
+    },
+    {
+      "name": "0 os 6 textos técnicos estão na página e salvos",
+      "ok": true,
+      "detail": "6/6 · Saved",
+      "atMs": 14187
+    },
+    {
+      "name": "1 há UM botão de idiomas na barra de cima, chamado \"Traduzir\", visível sem rolar, alvo ≥ 24 px",
+      "ok": true,
+      "detail": "botões com tradu/idioma: [\"Traduzir\"] · 84×44 px · letra 15 px",
+      "atMs": 14234
+    },
+    {
+      "name": "2 \"Traduzir\" logo depois de editar abre o Centro de Tradução (a edição aberta é concluída, nada se perde)",
+      "ok": true,
+      "detail": "aberto em 46 ms · ao abrir: ainda salvando (idle)",
+      "atMs": 14390
+    },
+    {
+      "name": "3 o Centro explica o que vai acontecer (\"Gere e revise uma cópia… O catálogo original será preservado\"), em 3 etapas nomeadas, letra ≥ 13 px",
+      "ok": true,
+      "detail": "descrição 15 px · etapas: \"1 Idioma 2 Revisão 3 Cópia salva\" · título 22 px",
+      "atMs": 14431
+    },
+    {
+      "name": "4 \"Idioma de destino\" é uma lista com Espanhol e Inglês; \"Gerar tradução\" é o botão principal, ≥ 24 px, visível sem rolar",
+      "ok": true,
+      "detail": "opções: [\"Espanhol (Espanha)\",\"Inglês (Estados Unidos)\"] · padrão: es-ES · Gerar 141×44 px letra 15 px · lista 44 px letra 15 px",
+      "atMs": 14432
+    },
+    {
+      "name": "5 Centro de Tradução antes de gerar: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 14435
+    },
+    {
+      "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+      "ok": false,
+      "finding": {
+        "id": "E-01",
+        "severity": "P2",
+        "knownFR": null
+      },
+      "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo",
+      "atMs": null
+    },
+    {
+      "name": "7 aparece a revisão com um trecho por texto (6 textos + título), lado a lado \"Original · Português\" / \"Tradução · Inglês\", e o contador \"0 de N trechos revisados\"",
+      "ok": true,
+      "detail": "trechos: 7 · \"0 de 7 trechos revisados 0 correções\" · em -1 ms",
+      "atMs": 47735
+    },
+    {
+      "name": "8 letras legíveis na revisão (original, tradução e avisos ≥ 13 px) e botões ≥ 24 px; \"Salvar cópia traduzida\" visível sem rolar",
+      "ok": true,
+      "detail": "original 15 px · tradução 15 px · aviso 15 px · botão do aviso 44 px · Marcar 44 px · Salvar 44 px (visível: true)",
+      "atMs": 47772
+    },
+    {
+      "name": "9 depois de rolar até Exatidão, o aviso e seu botão aparecem integralmente ao lado do trecho",
+      "ok": true,
+      "detail": "estado inicial preservado: {\"text\":\"Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS\",\"fontPx\":15,\"heightPx\":25,\"widthPx\":744,\"top\":972,\"inViewport\":false,\"fullyVisible\":false} · no trecho: {\"aviso\":{\"text\":\"Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS\",\"fontPx\":15,\"heightPx\":25,\"widthPx\":744,\"top\":479,\"inViewport\":true,\"fullyVisible\":true},\"botao\":{\"text\":\"Aplicar ajuste de números (2)\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":239,\"top\":469,\"inViewport\":true,\"fullyVisible\":true}}",
+      "atMs": 47804
+    },
+    {
+      "name": "10 revisão (todos os trechos e avisos): tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 47807
+    },
+    {
+      "name": "11 em \"Exatidão: ±0,02 % FE\" a tradução vem com \"EN: \" e o aviso mostra os ajustes 0,02 → 0.02 e % FE → % FS com o botão \"Aplicar ajuste de números (…)\"",
+      "ok": true,
+      "detail": "tradução: \"EN: Exatidão: ±0,02 % FE\" · aviso: \"Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS\" · botão: Aplicar ajuste de números (2)",
+      "atMs": 47866
+    },
+    {
+      "name": "12 um clique aplica \"0.02 % FS\" no texto, o botão some e o trecho passa a \"Corrigido e revisado\" (resposta visível no próprio trecho)",
+      "ok": true,
+      "detail": "\"EN: Exatidão: ±0.02 % FS\" · estado: corrected · status: \"Corrigido e revisado\" · em 36 ms",
+      "atMs": 47909
+    },
+    {
+      "name": "13 \"Estabilidade: ±0,02 °C\" também oferece o ajuste e vira \"±0.02 °C\"",
+      "ok": true,
+      "detail": "botão: 1 · \"EN: Estabilidade: ±0.02 °C\"",
+      "atMs": 47953
+    },
+    {
+      "name": "14 o glossário PRESYS lembra os termos oficiais (\"Glossário PRESYS: use 'Order Code'…\" / \"Operating Range\" / \"Standard Delivery\") e NÃO oferece ajuste de números em \"-25 a 140 °C\" (inteiros ficam)",
+      "ok": true,
+      "detail": "Faixa de Operação: -25 a 140 °C → \"Glossário PRESYS: use 'Operating Range'.\" · botão de números: 0 | Código de Encomenda → \"Glossário PRESYS: use 'Order Code'.\" · botão de números: 0 | Fornecimento Padrão → \"Glossário PRESYS: use 'Standard Delivery'.\" · botão de números: 0",
+      "atMs": 47973
+    },
+    {
+      "name": "15 \"1.500 mbar\" permanece inalterado antes da escolha; depois de rolar até o trecho aparecem a pergunta e duas opções legíveis, com as três casas decimais preservadas",
+      "ok": true,
+      "detail": "antes da escolha: \"EN: Pressão máxima: 1.500 mbar \" · pergunta: \"Confirme: '1.500' é mil e quinhentos ou um vírgula cinco?\" · opções: [\"mil e quinhentos (1,500)\",\"um vírgula cinco (1.500)\"] · botão \"Aplicar ajuste\" neste trecho: 0 · medidas: {\"texto\":{\"text\":\"Confirme: '1.500' é mil e quinhentos ou um vírgula cinco?\",\"fontPx\":15,\"heightPx\":24,\"widthPx\":577,\"top\":479,\"inViewport\":true,\"fullyVisible\":true},\"milhar\":{\"text\":\"mil e quinhentos (1,500)\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":201,\"top\":469,\"inViewport\":true,\"fullyVisible\":true},\"decimal\":{\"text\":\"um vírgula cinco (1.500)\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":199,\"top\":469,\"inViewport\":true,\"fullyVisible\":true}}",
+      "atMs": 48011
+    },
+    {
+      "name": "16 escolher \"mil e quinhentos\" grava \"1,500 mbar\" no inglês e a pergunta some",
+      "ok": true,
+      "detail": "\"EN: Pressão máxima: 1,500 mbar \"",
+      "atMs": 48105
+    },
+    {
+      "name": "17 \"Marcar como revisado\" responde na hora (\"Revisado\" com ✓) e o contador sobe",
+      "ok": true,
+      "detail": "46 ms · \"4 de 7 trechos revisados 3 correções\" (antes: \"3 de 7 trechos revisados 3 correções\")",
+      "atMs": 48201
+    },
+    {
+      "name": "18 \"Salvar cópia traduzida\" cria a cópia (sem mexer no original), diz \"Cópia em inglês salva e aceita\" e oferece \"Abrir cópia traduzida\" como botão principal",
+      "ok": true,
+      "detail": "3096 ms · \"Salvando…\" visto: false · \"Cópia em inglês salva e aceita. Abra o catálogo para conferir as páginas antes de publicar.\" · cópia: \"EN: TA-25N — Ficha técnica 2026\"",
+      "atMs": 51308
+    },
+    {
+      "name": "19 Centro de Tradução depois de salvar: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 51310
+    },
+    {
+      "name": "20 \"Abrir cópia traduzida\" abre o catálogo em INGLÊS (idioma en-US) com \"0.02 % FS\" e \"1,500 mbar\"; o original continua em português com \"0,02 % FE\"",
+      "ok": true,
+      "detail": "aberto em 395 ms · título: \"EN: TA-25N — Ficha técnica 2026\" · idioma: en-US · original: pt-BR",
+      "atMs": 51761
+    },
+    {
+      "name": "21 \"Publicar / PDF\" da cópia EN fica \"Pronto para imprimir ou salvar PDF.\"",
+      "ok": true,
+      "detail": "80 ms · \"Pronto para imprimir ou salvar PDF.\"",
+      "atMs": 51891
+    },
+    {
+      "name": "22 o PDF da cópia EN é A4, pesquisável, com \"0.02 % FS\" e \"1,500 mbar\" (e sem \"0,02 % FE\")",
+      "ok": true,
+      "detail": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j09-copia-en@1280.pdf · 1 página(s) · A4: true · título sugerido: \"EN TA-25N — Ficha técnica 2026\" · texto: \"EN: Exatidão: ±0.02 % FS EN: Estabilidade: ±0.02 °C EN: Faixa de Operação: -25 a 140 °C EN: Código de Encomenda EN: Fornecimento Padrão EN: Pressão máxima: 1,500 mbar\"",
+      "atMs": 52029
+    },
+    {
+      "name": "23 na biblioteca aparecem o original \"Português (Brasil)\" e a cópia \"Inglês (Estados Unidos)\"",
+      "ok": true,
+      "detail": "P PRESYS · CATALOG BUILDER Meus catálogos Novo catálogo Seus catálogos técnicos Encontre um catálogo, continue o trabalho ou comece um novo. Ativos Arquivados Buscar catálogos Ordenar catálogos Mais recentes Título A–Z Título Z–A EN: TA-25N — Ficha técnica 2026 Cópia traduzida Inglês (Estados Unidos",
+      "atMs": 52373
+    },
+    {
+      "name": "24 em espanhol a vírgula e o \"% FE\" ficam (\"ES: Exatidão: ±0,02 % FE\"): nenhum \"Aplicar ajuste de números\" e nenhuma pergunta sobre \"1.500\"",
+      "ok": true,
+      "detail": "\"ES: Exatidão: ±0,02 % FE\" · \"ES: Pressão máxima: 1.500 mbar \" · botões de ajuste: 0 · perguntas: 0",
+      "atMs": 52888
+    },
+    {
+      "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+      "ok": false,
+      "finding": {
+        "id": "E-02",
+        "severity": "P2",
+        "knownFR": null
+      },
+      "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez",
+      "atMs": null
+    },
+    {
+      "name": "26 \"Cancelar\" fecha o Centro sem criar nada: continuam só o original e a cópia EN",
+      "ok": true,
+      "detail": "catálogos: EN: TA-25N — Ficha técnica 2026 · TA-25N — Ficha técnica 2026",
+      "atMs": 53640
+    },
+    {
+      "name": "27 zero erros de console e de página",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do servidor de desenvolvimento: 0",
+      "atMs": 53640
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-01-ficha-em-portugues@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-02-centro-de-traducao@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-03-revisao-com-avisos@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-03b-confirmacao-1500@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-04-avisos-aplicados@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-05-copia-salva@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-06-copia-en-aberta@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-07-publicar-copia-en@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-08-biblioteca-dois-idiomas@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j09-09-espanhol-reaberto@1280.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "findingSteps": [
+    {
+      "id": "E-01",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+      "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo"
+    },
+    {
+      "id": "E-02",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+      "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "clicks": {
+    "escrever a ficha": 48,
+    "traduzir": 1,
+    "escolher inglês": 1,
+    "gerar tradução": 2,
+    "ajustar números": 2,
+    "confirmar 1.500": 1,
+    "marcar revisado": 1,
+    "salvar cópia": 1,
+    "abrir cópia": 1,
+    "publicar": 1,
+    "imprimir pdf": 1,
+    "traduzir (ES)": 1,
+    "gerar tradução (ES)": 1,
+    "traduzir (de novo)": 1,
+    "cancelar (ES)": 1
+  },
+  "timings": {
+    "abrirCentroMs": 46,
+    "gerarMs": -1,
+    "ajusteNumerosMs": 36,
+    "marcarRevisadoMs": 46,
+    "salvarCopiaMs": 3096,
+    "abrirCopiaMs": 395,
+    "publicarMs": 80
+  },
+  "measures": {
+    "traduzir": {
+      "text": "Traduzir",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 84,
+      "top": 12,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "centro": {
+      "titulo": {
+        "text": "Centro de Tradução",
+        "fontPx": 22,
+        "heightPx": 29,
+        "widthPx": 203,
+        "top": 218,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "descricao": {
+        "text": "Gere e revise uma cópia em outro idioma. O catálogo original será preservado.",
+        "fontPx": 15,
+        "heightPx": 24,
+        "widthPx": 1042,
+        "top": 257,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "etapas": {
+        "text": "Etapas da tradução",
+        "fontPx": 16,
+        "heightPx": 26,
+        "widthPx": 1042,
+        "top": 297,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "idioma": {
+        "text": "Idioma de destino",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 444,
+        "top": 371,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "gerar": {
+        "text": "Gerar tradução",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 141,
+        "top": 482,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "fechar": {
+        "text": "Fechar",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 79,
+        "top": 194,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "revisao": {
+      "original": {
+        "text": "Original · PortuguêsTA-25N — Ficha técnica 2026",
+        "fontPx": 15,
+        "heightPx": 129,
+        "widthPx": 502,
+        "top": 482,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "traducao": {
+        "text": "Tradução 1",
+        "fontPx": 15,
+        "heightPx": 104,
+        "widthPx": 502,
+        "top": 507,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "sugestao": {
+        "text": "Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS",
+        "fontPx": 15,
+        "heightPx": 25,
+        "widthPx": 744,
+        "top": 972,
+        "inViewport": false,
+        "fullyVisible": false
+      },
+      "botaoSugestao": {
+        "text": "Aplicar ajuste de números (2)",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 239,
+        "top": 962,
+        "inViewport": false,
+        "fullyVisible": false
+      },
+      "marcarRevisado": {
+        "text": "Marcar trecho 1 como revisado",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 188,
+        "top": 623,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "salvarCopia": {
+        "text": "Salvar cópia traduzida",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 191,
+        "top": 637,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "cancelar": {
+        "text": "Cancelar",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 94,
+        "top": 637,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "avisoExatidaoNoTrecho": {
+      "aviso": {
+        "text": "Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS",
+        "fontPx": 15,
+        "heightPx": 25,
+        "widthPx": 744,
+        "top": 479,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "botao": {
+        "text": "Aplicar ajuste de números (2)",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 239,
+        "top": 469,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "pergunta": {
+      "texto": {
+        "text": "Confirme: '1.500' é mil e quinhentos ou um vírgula cinco?",
+        "fontPx": 15,
+        "heightPx": 24,
+        "widthPx": 577,
+        "top": 479,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "milhar": {
+        "text": "mil e quinhentos (1,500)",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 201,
+        "top": 469,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "decimal": {
+        "text": "um vírgula cinco (1.500)",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 199,
+        "top": 469,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "abrirCopia": {
+      "text": "Abrir cópia traduzida",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 183,
+      "top": 523,
+      "inViewport": true,
+      "fullyVisible": true
+    }
+  },
+  "texts": {
+    "etapas": "1 Idioma 2 Revisão 3 Cópia salva",
+    "5 Centro de Tradução antes de gerar": {
+      "hits": [],
+      "mm": [],
+      "sample": "Catálogos em outros idiomas Centro de Tradução Fechar Gere e revise uma cópia em outro idioma. O catálogo original será preservado. 1 Idioma 2 Revisão 3 Cópia salva Catálogo original TA-25N — Ficha técnica 2026 Português (Brasil) Idioma de destino Espanhol (Espanha) Inglês (Estados Unidos) Español Cancelar Gerar tradução"
+    },
+    "progresso": "0 de 7 trechos revisados 0 correções",
+    "10 revisão (todos os trechos e avisos)": {
+      "hits": [],
+      "mm": [],
+      "sample": "Catálogos em outros idiomas Centro de Tradução Fechar Gere e revise uma cópia em outro idioma. O catálogo original será preservado. 1 Idioma 2 Revisão 3 Cópia salva Catálogo original TA-25N — Ficha técnica 2026 Português (Brasil) Idioma de destino Espanhol (Espanha) Inglês (Estados Unidos) English Revise a tradução Compare com o original e corrija os textos se necessário. Os dados técnicos devem permanecer iguais. 0 de 7 trechos revisados 0 correções Catálogo Título do catálogo 1 trecho Título d"
+    },
+    "exatidaoAntes": "EN: Exatidão: ±0,02 % FE",
+    "exatidaoAviso": "Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS",
+    "exatidaoDepois": "EN: Exatidão: ±0.02 % FS",
+    "estabilidade": "EN: Estabilidade: ±0.02 °C",
+    "glossario": [
+      {
+        "source": "Faixa de Operação: -25 a 140 °C",
+        "expected": "Operating Range",
+        "hint": "Glossário PRESYS: use 'Operating Range'.",
+        "numberButton": 0,
+        "translation": "EN: Faixa de Operação: -25 a 140 °C"
+      },
+      {
+        "source": "Código de Encomenda",
+        "expected": "Order Code",
+        "hint": "Glossário PRESYS: use 'Order Code'.",
+        "numberButton": 0,
+        "translation": "EN: Código de Encomenda"
+      },
+      {
+        "source": "Fornecimento Padrão",
+        "expected": "Standard Delivery",
+        "hint": "Glossário PRESYS: use 'Standard Delivery'.",
+        "numberButton": 0,
+        "translation": "EN: Fornecimento Padrão"
+      }
+    ],
+    "pressaoAntes": "EN: Pressão máxima: 1.500 mbar ",
+    "pressaoPergunta": "Confirme: '1.500' é mil e quinhentos ou um vírgula cinco?",
+    "pressaoOpcoes": [
+      "mil e quinhentos (1,500)",
+      "um vírgula cinco (1.500)"
+    ],
+    "pressaoDepois": "EN: Pressão máxima: 1,500 mbar ",
+    "progressoDepois": "3 de 7 trechos revisados 3 correções",
+    "progressoFinal": "4 de 7 trechos revisados 3 correções",
+    "copiaSalva": "Cópia em inglês salva e aceita. Abra o catálogo para conferir as páginas antes de publicar.",
+    "19 Centro de Tradução depois de salvar": {
+      "hits": [],
+      "mm": [],
+      "sample": "Catálogos em outros idiomas Centro de Tradução Fechar Gere e revise uma cópia em outro idioma. O catálogo original será preservado. 1 Idioma 2 Revisão 3 Cópia salva Catálogo original TA-25N — Ficha técnica 2026 Português (Brasil) Idioma de destino Espanhol (Espanha) Inglês (Estados Unidos) English Cópia em inglês salva e aceita. Abra o catálogo para conferir as páginas antes de publicar. Abrir cópia traduzida"
+    },
+    "exatidaoEs": "ES: Exatidão: ±0,02 % FE",
+    "pressaoEs": "ES: Pressão máxima: 1.500 mbar "
+  },
+  "observations": {
+    "preparacao": [
+      {
+        "id": "c3fdd411-a647-46fd-a35e-8791348c0366",
+        "frame": {
+          "xMm": 20,
+          "yMm": 20,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 1
+      },
+      {
+        "id": "34b57fc2-ce96-426f-8040-ed88e80c1019",
+        "frame": {
+          "xMm": 20,
+          "yMm": 48,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 2
+      },
+      {
+        "id": "2d023315-f58e-42c0-b782-5b8d481b4322",
+        "frame": {
+          "xMm": 20,
+          "yMm": 76,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 3
+      },
+      {
+        "id": "eb45d41f-3f9b-4b44-ad69-94caba99d837",
+        "frame": {
+          "xMm": 20,
+          "yMm": 104,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 4
+      },
+      {
+        "id": "e73d6e28-6d52-4224-9846-be6f73c32801",
+        "frame": {
+          "xMm": 20,
+          "yMm": 132,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 5
+      },
+      {
+        "id": "5efac4f9-a987-4965-ad66-2a380cef8db8",
+        "frame": {
+          "xMm": 20,
+          "yMm": 160,
+          "widthMm": 170,
+          "heightMm": 22
+        },
+        "dirty": false,
+        "phase": "idle",
+        "saveDispatchCount": 6
+      }
+    ],
+    "nomeRealDoBotao": "Traduzir",
+    "estadoAoAbrir": {
+      "dirty": true,
+      "savePhase": "idle"
+    },
+    "idiomaPadrao": "es-ES",
+    "opcoesDeIdioma": [
+      "Espanhol (Espanha)",
+      "Inglês (Estados Unidos)"
+    ],
+    "mensagemAoGerar": "Salve o catálogo e conclua as edições antes de traduzir.",
+    "trechos": 7,
+    "primeiroAvisoAntesDeRolar": {
+      "text": "Números e abreviações no formato do inglês: 0,02 → 0.02 · % FE → % FS",
+      "fontPx": 15,
+      "heightPx": 25,
+      "widthPx": 744,
+      "top": 972,
+      "inViewport": false,
+      "fullyVisible": false
+    },
+    "copia": {
+      "id": "0c9812b9-1d9d-4fc6-a753-a60095c2ace4",
+      "titulo": "EN: TA-25N — Ficha técnica 2026",
+      "idioma": "en-US",
+      "textos": [
+        "EN: Exatidão: ±0.02 % FS",
+        "EN: Estabilidade: ±0.02 °C",
+        "EN: Faixa de Operação: -25 a 140 °C",
+        "EN: Código de Encomenda",
+        "EN: Fornecimento Padrão",
+        "EN: Pressão máxima: 1,500 mbar "
+      ]
+    },
+    "original": {
+      "idioma": "pt-BR",
+      "temVirgula": true,
+      "titulo": "TA-25N — Ficha técnica 2026"
+    },
+    "comoSabeQueEEN": {
+      "tituloNaBarra": "P PRESYS · Catalog Builder EN: TA-25N — Ficha técnica 2026 Salvo ✦ Assistente IA Meus catálogos Salvar Desfazer Refazer Traduzir Publicar / PDF",
+      "haPalavraIngles": false
+    },
+    "publicacao": {
+      "estado": "READY",
+      "status": "Pronto para imprimir ou salvar PDF.",
+      "itens": []
+    },
+    "pdf": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j09-copia-en@1280.pdf",
+      "bytes": 6588,
+      "printed": 1,
+      "approved": "true",
+      "suggestedTitle": "EN TA-25N — Ficha técnica 2026",
+      "numPages": 1,
+      "pages": [
+        {
+          "widthPt": 594.96,
+          "heightPt": 841.92,
+          "text": "EN: Exatidão: ±0.02 % FS EN: Estabilidade: ±0.02 °C EN: Faixa de Operação: -25 a 140 °C EN: Código de Encomenda EN: Fornecimento Padrão EN: Pressão máxima: 1,500 mbar"
+        }
+      ],
+      "allA4": true,
+      "text": "EN: Exatidão: ±0.02 % FS EN: Estabilidade: ±0.02 °C EN: Faixa de Operação: -25 a 140 °C EN: Código de Encomenda EN: Fornecimento Padrão EN: Pressão máxima: 1,500 mbar"
+    },
+    "biblioteca": {
+      "portugues": true,
+      "ingles": true,
+      "amostra": "P PRESYS · CATALOG BUILDER Meus catálogos Novo catálogo Seus catálogos técnicos Encontre um catálogo, continue o trabalho ou comece um novo. Ativos Arquivados Buscar catálogos Ordenar catálogos Mais recentes Título A–Z Título Z–A EN: TA-25N — Ficha técnica 2026 Cópia traduzida Inglês (Estados Unidos"
+    },
+    "idiomaPadraoNaSegundaVez": "es-ES",
+    "escNaRevisao": {
+      "trechoCorrigidoAntes": "corrected",
+      "fechouComEsc": true,
+      "dialogoDeConfirmacao": false,
+      "trechosAoReabrir": 0,
+      "textoAoReabrir": "Catálogos em outros idiomas Centro de Tradução Fechar Gere e revise uma cópia em outro idioma. O catálogo original será preservado. 1 Idioma 2 Revisão 3 Cópia salva Catálogo original TA-25N — Ficha té"
+    },
+    "cliquesDaTarefaPrincipal": {
+      "traduzir": 1,
+      "escolher inglês": 1,
+      "gerar tradução": 2,
+      "ajustar números": 2,
+      "confirmar 1.500": 1,
+      "marcar revisado": 1,
+      "salvar cópia": 1,
+      "abrir cópia": 1,
+      "publicar": 1,
+      "imprimir pdf": 1
+    }
+  },
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "status": "pass",
+  "findingSummary": [
+    {
+      "id": "E-01",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+      "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo"
+    },
+    {
+      "id": "E-02",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+      "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "fb04155e-48fd-4259-97fd-99a7c9e3db32",
+    "startedAt": "2026-10-20T15:58:40.262Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

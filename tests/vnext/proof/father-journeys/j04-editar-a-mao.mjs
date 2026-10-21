@@ -116,14 +116,17 @@ async function issuesChip() {
 /** Abre o chip → "Problemas do catálogo", lê o texto e usa "Localizar" para descobrir a que objeto o aviso se refere. */
 async function inspectIssues(label) {
   const chip = await issuesChip();
-  const out = { chip, panel: null, located: null };
+  const out = { chip, panel: null, issues: [], located: null };
   const chipButton = page.locator('[data-page-diagnostic-summary]');
   if (await chipButton.count() && chip && !/0 a corrigir · 0 para revisar$/.test(chip)) {
     await chipButton.click();
     await page.waitForTimeout(300);
     const dialog = page.getByRole('dialog', { name: 'Problemas do catálogo' });
     if (await dialog.count()) {
-      out.panel = (await dialog.innerText()).replace(/\s+/g, ' ').slice(0, 400);
+      out.panel = (await dialog.innerText()).replace(/\s+/g, ' ').slice(0, 1600);
+      out.issues = await dialog.locator('[data-issue-code]').evaluateAll((nodes) => nodes.map((node) => ({
+        code: node.getAttribute('data-issue-code'), severity: node.getAttribute('data-severity'),
+      })));
       const locate = dialog.locator('[data-issue-action="locate"]').first();
       if (await locate.count()) {
         await locate.click();
@@ -452,6 +455,11 @@ try {
   await waitSaved(page, 20000).catch(() => {});
   st = await state(page);
   j.step('A2 tudo salvo sozinho ao fim (Salvo)', st.runtime.saveLabel === 'Saved' && !st.runtime.dirty, `saveLabel: ${st.runtime.saveLabel}`);
+  // Preserve the actual publication diagnostic after typing, not only the one from an empty table.
+  const afterInlineIssues = await inspectIssues('A2 após Enter, Tab e Esc');
+  j.step('A2 digitar Parâmetro/Faixa numa tabela nova não introduz bloqueio de altura para publicar (B-01)',
+    !afterInlineIssues.issues.some((issue) => issue.code === 'TABLE_CONTENT_OVERFLOW'), JSON.stringify(afterInlineIssues));
+  j.addEvidence(await shot(page, 'j04-editar-a-mao-02b-diagnostico-apos-editar'));
   const errorsA = consoleErrors(log);
   j.step('A console limpo no catálogo "Em branco"', errorsA.length === 0 && log.pageErrors.length === 0,
     `console: ${errorsA.map((e) => e.text).join(' | ') || '-'} · página: ${log.pageErrors.join(' | ') || '-'}`);

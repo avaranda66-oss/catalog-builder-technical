@@ -4,7 +4,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { appendFile, copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, readdir, stat, statfs, writeFile } from 'node:fs/promises';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -142,7 +142,8 @@ if (options.list) {
 const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
 const runDir = resolve(root, 'scratch/continuacao/proof-gates', runId);
 await mkdir(runDir, { recursive: true });
-let interrupted = false, activeChild, cleanupUncertain = false;
+let interrupted = false, activeChild, cleanupUncertain = false, diskStopReason = null;
+const minimumFreeDiskBytes = 5 * 1024 ** 3;
 
 // Kill only the process tree created by this runner, never a port or a process name.
 function stopOwned(child) {
@@ -178,7 +179,7 @@ const summary = { schemaVersion: 1, runId, startedAt: new Date().toISOString(), 
   boundary: 'Local harness regression only; no production, real Gemini/Supabase or human acceptance claim.',
   environmentPolicy: { sanitizedInheritedNames,
     rule: 'Known proof controls removed from inherited environment; literal workflow env and isolated output reapplied. CI=1. System/runtime/cache variables preserved.' },
-  options, prerequisites: { chromiumPath, chromiumExists: !!chromiumPath && existsSync(chromiumPath),
+  options, minimumFreeDiskBytes, prerequisites: { chromiumPath, chromiumExists: !!chromiumPath && existsSync(chromiumPath),
     playwrightError, edgePath: edgeCandidates.find(path => existsSync(path)) || null,
     e2eEntry: resolve(root, 'dist/e2e/ai-catalog-prototype.html'), browserCheck: 'File presence only; launch is verified by each proof.' },
   results: [] };
@@ -259,6 +260,7 @@ for (const [index, proof] of proofs.entries()) {
     requirements: { chromium: proof.needsChromium, edge: proof.needsEdge, e2eBuild: proof.needsE2e }, status: 'skipped' };
   summary.results.push(record);
   const skip = !proof.selected ? 'Excluded by --only filter.' : interrupted ? 'Runner interrupted.'
+    : diskStopReason ? diskStopReason
     : cleanupUncertain ? 'Previous owned process cleanup uncertain; further execution stopped.'
       : proof.missing ? null
         : proof.needsE2e && options.skipE2e ? 'Excluded by --skip-e2e.'
@@ -268,6 +270,12 @@ for (const [index, proof] of proofs.entries()) {
                 : proof.needsE2e && !existsSync(summary.prerequisites.e2eEntry) ? 'Required dist/e2e/ai-catalog-prototype.html is missing; build E2E separately.' : null;
   if (skip) { record.reason = skip; await saveSummary(); continue; }
   try {
+    const disk = await statfs(root);
+    record.freeDiskBytesBefore = disk.bavail * disk.bsize;
+    if (record.freeDiskBytesBefore < minimumFreeDiskBytes) {
+      diskStopReason = `Free disk below 5 GiB (${record.freeDiskBytesBefore} bytes); further heavy proofs stopped.`;
+      throw new Error(diskStopReason);
+    }
     await mkdir(directory, { recursive: true });
     if (proof.missing) { record.status = 'fail'; record.reason = 'Discovered proof file is missing or empty.'; await saveSummary(); continue; }
     const env = { ...inheritedEnv, ...proof.env, CI: '1' };

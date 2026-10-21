@@ -1,0 +1,1137 @@
+{
+  "journey": "j04-editar-a-mao",
+  "title": "J4 — edita à mão sem travar (tabela, colar do Excel, título, páginas, zoom, campo X)",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:57:26.551Z",
+  "steps": [
+    {
+      "name": "A0 catálogo \"Em branco\" abre salvo, com uma página vazia",
+      "ok": true,
+      "detail": "páginas: 1 · objetos: 0",
+      "atMs": 959
+    },
+    {
+      "name": "A1 Ctrl+V do bloco 12 × 4 cria uma tabela na página vazia",
+      "ok": true,
+      "detail": "Ctrl+V real · {\"rows\":12,\"columns\":4,\"headerRows\":1,\"headerStyled\":true,\"styleKeys\":[\"base\",\"rowRoles\",\"annotation\",\"annotationGapMm\"],\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":93.1644},\"fitsPage\":true}",
+      "atMs": 5607
+    },
+    {
+      "name": "A1 aparece uma mensagem visível (sem rolar) dizendo o que aconteceu, em menos de 1 s",
+      "ok": true,
+      "detail": "129 ms · success · \"Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer. Fechar\"",
+      "atMs": 5608
+    },
+    {
+      "name": "A1 a mensagem é de sucesso (verde), não parece erro",
+      "ok": true,
+      "detail": "tom: success",
+      "atMs": 5608
+    },
+    {
+      "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+      "ok": false,
+      "detail": "sumiu sozinha após 4152 ms; 21 palavras pedem ~8400 ms a 150 palavras/min",
+      "atMs": 5608,
+      "finding": "P3"
+    },
+    {
+      "name": "A1 a tabela colada tem cabeçalho (primeira linha em destaque, fundo diferente do corpo) e estilo próprio",
+      "ok": true,
+      "detail": "{\"headers\":[\"Modelo\",\"Faixa de medição\",\"Exatidão\",\"Pontos de memória\"],\"headerBg\":\"rgb(0, 114, 206)\",\"bodyBg\":\"rgb(255, 255, 255)\",\"headerStyled\":true}",
+      "atMs": 5616
+    },
+    {
+      "name": "A1 valores com vírgula, ±, ° e ponto de milhar chegaram iguais (\"±0,1 °C\", \"-25 a 140 °C\", \"1.500\")",
+      "ok": true,
+      "detail": "1ª linha do corpo: TA-25N|-25 a 140 °C|±0,1 °C|1.500",
+      "atMs": 5616
+    },
+    {
+      "name": "A1 \"0,02 % FE\" preservado",
+      "ok": true,
+      "detail": null,
+      "atMs": 5617
+    },
+    {
+      "name": "A1 a tabela colada cabe na página e foi salva sozinha",
+      "ok": true,
+      "detail": "frame: {\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":93.1644} · salvo: Saved",
+      "atMs": 5645
+    },
+    {
+      "name": "A1 texto da célula legível no zoom \"Ajustar à largura\" (≥ 13 px efetivos)",
+      "ok": false,
+      "detail": "{\"text\":\"TA-25N\",\"fontPx\":13.3,\"zoomRatio\":0.9,\"effectiveFontPx\":11.7,\"lineBoxPx\":16,\"w\":94,\"h\":15,\"inViewport\":true} · janela 1280×720",
+      "atMs": 5653,
+      "finding": "P3"
+    },
+    {
+      "name": "A1 sem jargão/inglês na tela depois de colar",
+      "ok": true,
+      "detail": "-",
+      "atMs": 5700
+    },
+    {
+      "name": "A2 botão \"Tabela\" cria uma tabela pronta (6 × 3, com cabeçalho) na página nova",
+      "ok": true,
+      "detail": "{\"rows\":6,\"columns\":3,\"headerRows\":1,\"headerStyled\":true,\"styleKeys\":[\"base\",\"rowRoles\",\"annotation\",\"annotationGapMm\"],\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":39.1646},\"fitsPage\":true}",
+      "atMs": 6773
+    },
+    {
+      "name": "A2 mensagem visível logo depois de inserir, dizendo como escrever nela",
+      "ok": true,
+      "detail": "138 ms · \"Tabela de 6 linhas × 3 colunas adicionada, com a primeira linha como cabeçalho. Para escrever nela, clique em Editar tabela. Fechar\"",
+      "atMs": 6773
+    },
+    {
+      "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+      "ok": false,
+      "detail": "sobreposição medida: 28205 px²; conhecido FR-12/2C; botão Fechar usado sem force",
+      "atMs": 7786,
+      "finding": "P2"
+    },
+    {
+      "name": "A2 o aviso amarelo que aparece ao inserir \"Tabela\" (se houver) é sobre linhas vazias, diz que nada impede o PDF e não fala de área segura",
+      "ok": true,
+      "detail": "chip: \"Problemas do catálogo: 0 a corrigir · 1 para revisar\" · painel: \"Problemas do catálogo Fechar lista Nada impede o PDF. Confira os pontos abaixo. Página 2 Página 2 · tabela 1 · linha 1 Revisar Esta tabela tem 6 linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram. Ir até lá\" · \"Localizar\" selecionou: a tabela nova",
+      "atMs": 7821
+    },
+    {
+      "name": "A2 dois cliques na tabela abrem a grade de edição (\"Editar tabela\")",
+      "ok": true,
+      "detail": null,
+      "atMs": 8286
+    },
+    {
+      "name": "A2 o campo Conteúdo da célula abre sobre a grade, visível e com foco",
+      "ok": true,
+      "detail": "{\"x\":261.1875,\"y\":573.609375,\"width\":226.171875,\"height\":40}",
+      "atMs": 8765
+    },
+    {
+      "name": "A2 abrir a célula sem digitar não altera o documento",
+      "ok": true,
+      "detail": "Salvo",
+      "atMs": 8789
+    },
+    {
+      "name": "A2 Enter salva Parâmetro na linha 2, coluna 1",
+      "ok": true,
+      "detail": null,
+      "atMs": 9209
+    },
+    {
+      "name": "A2 Enter desce para a linha seguinte e uma tecla inicia a edição",
+      "ok": true,
+      "detail": null,
+      "atMs": 9296
+    },
+    {
+      "name": "A2 Tab salva Faixa na linha 3, coluna 1",
+      "ok": true,
+      "detail": null,
+      "atMs": 9618
+    },
+    {
+      "name": "A2 Tab avança para a coluna da direita",
+      "ok": true,
+      "detail": null,
+      "atMs": 9769
+    },
+    {
+      "name": "A2 Esc cancela apenas a digitação da célula atual e mantém as anteriores",
+      "ok": true,
+      "detail": null,
+      "atMs": 9822
+    },
+    {
+      "name": "A2 o editor segue responsivo após Enter, Tab e Esc",
+      "ok": true,
+      "detail": null,
+      "atMs": 9889
+    },
+    {
+      "name": "A2 sem jargão/inglês na tela durante a edição da célula",
+      "ok": true,
+      "detail": "-",
+      "atMs": 9891
+    },
+    {
+      "name": "A2 tudo salvo sozinho ao fim (Salvo)",
+      "ok": true,
+      "detail": "saveLabel: Saved",
+      "atMs": 11085
+    },
+    {
+      "name": "A console limpo no catálogo \"Em branco\"",
+      "ok": true,
+      "detail": "console: - · página: -",
+      "atMs": 11086
+    },
+    {
+      "name": "B0 catálogo \"Ficha técnica essencial\" abre salvo, com texto e tabela de exemplo",
+      "ok": true,
+      "detail": "objetos: text, table",
+      "atMs": 11803
+    },
+    {
+      "name": "Alvos na tela ≥ 24 px (botões principais)",
+      "ok": true,
+      "detail": "[]",
+      "atMs": 11808
+    },
+    {
+      "name": "Letras dos botões ≥ 15 px",
+      "ok": false,
+      "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]",
+      "atMs": 11808,
+      "finding": "P2"
+    },
+    {
+      "name": "B1 \"Tabela\" no modelo cria 6 × 3 com cabeçalho",
+      "ok": true,
+      "detail": "{\"rows\":6,\"columns\":3,\"headerRows\":1,\"headerStyled\":true,\"styleKeys\":[\"base\",\"rowRoles\",\"annotation\",\"annotationGapMm\"],\"frame\":{\"xMm\":12,\"yMm\":116,\"widthMm\":186,\"heightMm\":39.1646},\"fitsPage\":true}",
+      "atMs": 12461
+    },
+    {
+      "name": "B1 o aviso amarelo que aparece ao inserir \"Tabela\" no modelo (se houver) é sobre linhas vazias, diz que nada impede o PDF e não fala de área segura",
+      "ok": true,
+      "detail": "chip antes: \"-\" · depois: \"Problemas do catálogo: 0 a corrigir · 1 para revisar\" · painel: \"Problemas do catálogo Fechar lista Nada impede o PDF. Confira os pontos abaixo. Página 1 Página 1 · tabela 2 · linha 1 Revisar Esta tabela tem 6 linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram. Ir até lá\" · \"Localizar\" selecionou: a tabela nova",
+      "atMs": 13454
+    },
+    {
+      "name": "B1 digitar na célula + Enter escreve no modelo Ficha técnica",
+      "ok": true,
+      "detail": null,
+      "atMs": 14746
+    },
+    {
+      "name": "B1 nada travou (sem erro de página; botão Tabela ativo)",
+      "ok": true,
+      "detail": null,
+      "atMs": 14750
+    },
+    {
+      "name": "B2 botão \"Colar tabela do Excel\" visível na barra",
+      "ok": true,
+      "detail": null,
+      "atMs": 15609
+    },
+    {
+      "name": "B2 a caixa \"Cole aqui (Ctrl+V)\" abre já com o cursor dentro",
+      "ok": true,
+      "detail": null,
+      "atMs": 15662
+    },
+    {
+      "name": "B2 a caixa explica em português o que fazer (Excel → Ctrl+C → Ctrl+V)",
+      "ok": true,
+      "detail": "No Excel, selecione as células e copie (Ctrl+C). Depois clique na caixa abaixo e cole (Ctrl+V). A tabela entra na página aberta, na largura da área útil. Cole aqui (Ctrl+V) Criar tabela Cancelar",
+      "atMs": 15665
+    },
+    {
+      "name": "B2 a caixa mostra \"12 linhas × 4 colunas\", prévia e cabeçalho marcado",
+      "ok": true,
+      "detail": "Ctrl+V real · resumo: \"12 linhas × 4 colunas\"",
+      "atMs": 16339
+    },
+    {
+      "name": "B2 \"Criar tabela\" põe a tabela 12 × 4 na página nova, com cabeçalho em destaque e estilo",
+      "ok": true,
+      "detail": "{\"rows\":12,\"columns\":4,\"headerRows\":1,\"headerStyled\":true,\"styleKeys\":[\"base\",\"rowRoles\",\"annotation\",\"annotationGapMm\"],\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":93.1644},\"fitsPage\":true,\"headers\":[\"Modelo\",\"Faixa de medição\",\"Exatidão\",\"Pontos de memória\"],\"headerBg\":\"rgb(0, 114, 206)\",\"bodyBg\":\"rgb(255, 255, 255)\"}",
+      "atMs": 20852
+    },
+    {
+      "name": "B2 a caixa fecha sozinha depois de criar",
+      "ok": true,
+      "detail": null,
+      "atMs": 20853
+    },
+    {
+      "name": "B2 mensagem de sucesso visível logo depois de \"Criar tabela\" (em menos de 1 s)",
+      "ok": true,
+      "detail": "143 ms · success · \"Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer. Fechar\" · sumiu após 4132 ms",
+      "atMs": 20853
+    },
+    {
+      "name": "B2 cabe na página e foi salvo",
+      "ok": true,
+      "detail": "{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":93.1644}",
+      "atMs": 20876
+    },
+    {
+      "name": "B3 há controles Título e Corpo para o texto selecionado",
+      "ok": true,
+      "detail": "controles: Título, Subtítulo, Corpo, Negrito, Tamanho, Alinhamento",
+      "atMs": 22375
+    },
+    {
+      "name": "B3 clicar Título aplica 16 pt e negrito, sem alterar o texto",
+      "ok": true,
+      "detail": "{\"fontSizePt\":16,\"fontWeight\":700,\"color\":\"#003366\"}",
+      "atMs": 22566
+    },
+    {
+      "name": "B3 um Desfazer devolve o estilo Corpo",
+      "ok": true,
+      "detail": null,
+      "atMs": 22645
+    },
+    {
+      "name": "B3 Refazer restaura Título",
+      "ok": true,
+      "detail": null,
+      "atMs": 22731
+    },
+    {
+      "name": "B3 dois cliques no texto abrem a edição do texto (sem travar)",
+      "ok": true,
+      "detail": null,
+      "atMs": 23149
+    },
+    {
+      "name": "B3 sem jargão/inglês com o texto selecionado e os painéis abertos",
+      "ok": true,
+      "detail": "-",
+      "atMs": 23399
+    },
+    {
+      "name": "B4 \"Adicionar página\" cria uma página extra",
+      "ok": true,
+      "detail": "2 → 3",
+      "atMs": 24147
+    },
+    {
+      "name": "B4 o menu ⋯ da página oferece Duplicar, Mover e Excluir em português",
+      "ok": true,
+      "detail": "- menu \"Opções da Página 3\": - menuitem \"Duplicar página\" - menuitem \"Mover para cima\" - menuitem \"Mover para baixo\" [disabled] - menuitem \"Excluir página…\"",
+      "atMs": 24436
+    },
+    {
+      "name": "B4 aparece uma confirmação clara antes de excluir (\"Excluir a Página N?\", diz que dá para desfazer com Ctrl+Z)",
+      "ok": true,
+      "detail": "Excluir a Página 3? Ela tem 1 objeto: 1 tabela. Tudo o que está nela será excluído. Se mudar de ideia, use Desfazer (Ctrl+Z). Cancelar Excluir Página 3",
+      "atMs": 24772
+    },
+    {
+      "name": "B4 a página some e a mensagem diz como recuperar",
+      "ok": true,
+      "detail": "páginas: 2 · 95 ms · \"Página 3 excluída. Para recuperar, use Desfazer. Fechar\"",
+      "atMs": 25246
+    },
+    {
+      "name": "B4 Ctrl+Z traz a página excluída de volta",
+      "ok": true,
+      "detail": "páginas: 3",
+      "atMs": 25718
+    },
+    {
+      "name": "B4 \"Mover para baixo\" troca a ordem e avisa",
+      "ok": true,
+      "detail": "105 ms · \"Página 1 movida para baixo. Agora ela é a Página 2. Fechar\"",
+      "atMs": 26431
+    },
+    {
+      "name": "B4 Ctrl+Z desfaz a mudança de ordem",
+      "ok": true,
+      "detail": null,
+      "atMs": 26901
+    },
+    {
+      "name": "B4 outro Ctrl+Z remove a página extra adicionada",
+      "ok": true,
+      "detail": "páginas: 2",
+      "atMs": 27362
+    },
+    {
+      "name": "B5 o controle de zoom está visível com Ajustar à largura / 75% / 100% / 125% e botões de aproximar/afastar",
+      "ok": true,
+      "detail": null,
+      "atMs": 27748
+    },
+    {
+      "name": "B5 escolher 100% aplica o zoom (página com 794 px de largura; a janela não ganha rolagem horizontal)",
+      "ok": true,
+      "detail": "{\"zoom\":1,\"choice\":\"100\",\"windowOverflow\":false,\"pageWidthPx\":794,\"canvasScrollable\":false,\"textPx\":21.3,\"cellPx\":13.3,\"cellLineBoxPx\":18}",
+      "atMs": 28288
+    },
+    {
+      "name": "B5 escolher 125% aplica o zoom (página com 992 px de largura; a janela não ganha rolagem horizontal)",
+      "ok": true,
+      "detail": "{\"zoom\":1.25,\"choice\":\"125\",\"windowOverflow\":false,\"pageWidthPx\":992,\"canvasScrollable\":false,\"textPx\":26.7,\"cellPx\":16.7,\"cellLineBoxPx\":23}",
+      "atMs": 28862
+    },
+    {
+      "name": "B5 texto de célula legível a 100 % (≥ 13 px) e maior a 125 %",
+      "ok": true,
+      "detail": "{\"fit\":{\"zoom\":0.88,\"textPx\":18.8,\"cellPx\":11.7,\"cellLineBoxPx\":16},\"100%\":{\"zoom\":1,\"choice\":\"100\",\"windowOverflow\":false,\"pageWidthPx\":794,\"canvasScrollable\":false,\"textPx\":21.3,\"cellPx\":13.3,\"cellLineBoxPx\":18},\"125%\":{\"zoom\":1.25,\"choice\":\"125\",\"windowOverflow\":false,\"pageWidthPx\":992,\"canvasScrollable\":false,\"textPx\":26.7,\"cellPx\":16.7,\"cellLineBoxPx\":23}}",
+      "atMs": 28903
+    },
+    {
+      "name": "B5 Ctrl + roda sobre a página sobe o zoom em degraus até 125 % e desce um degrau na volta (e não mexe no zoom do navegador)",
+      "ok": true,
+      "detail": "Ctrl + roda (mouse do Playwright) · 75=0.75 → fit-width=0.88 → 100=1 → 125=1.25 → 125=1.25 → 100=1",
+      "atMs": 31880
+    },
+    {
+      "name": "B6 o campo X aparece em \"Mais propriedades\", com a explicação \"Posição e tamanho em milímetros\"",
+      "ok": true,
+      "detail": null,
+      "atMs": 32956
+    },
+    {
+      "name": "B6 \"12,5\" com vírgula é aceito (X passa a 12,5 mm)",
+      "ok": true,
+      "detail": "X: 12 → 12.5 · campo: \"12,5\"",
+      "atMs": 33537
+    },
+    {
+      "name": "B6 \"abc\" não é aceito: o valor anterior volta e uma frase curta explica, logo abaixo do campo",
+      "ok": true,
+      "detail": "X: 12.5 · campo: \"12,5\" · aviso: \"Use um número, como 12,5.\"",
+      "atMs": 34014
+    },
+    {
+      "name": "B6 Desfazer continua funcionando depois do \"abc\" (X volta ao valor original)",
+      "ok": true,
+      "detail": "X: 12 (original 12)",
+      "atMs": 34575
+    },
+    {
+      "name": "B6 o aviso vermelho some depois de Desfazer",
+      "ok": true,
+      "detail": null,
+      "atMs": 34578
+    },
+    {
+      "name": "B6 Salvar (Ctrl+S) continua funcionando: \"Salvo\", sem diálogo do navegador",
+      "ok": true,
+      "detail": "salvamentos: 4 → 5 · diálogos: 0",
+      "atMs": 35093
+    },
+    {
+      "name": "B6 o X salvo no servidor é o que está na tela",
+      "ok": true,
+      "detail": "salvo: 12.5",
+      "atMs": 35093
+    },
+    {
+      "name": "B6 o editor não travou: clicar na tabela troca o painel para \"Tabela\"",
+      "ok": true,
+      "detail": "painel: \"Tabela\"",
+      "atMs": 35438
+    },
+    {
+      "name": "Alças de redimensionar ≥ 24 px",
+      "ok": true,
+      "detail": "8 alças, menor lado 24 px",
+      "atMs": 35787
+    },
+    {
+      "name": "B6 sem jargão/inglês na tela ao fim",
+      "ok": true,
+      "detail": "-",
+      "atMs": 35790
+    },
+    {
+      "name": "zero erros de console (do aplicativo) e de página em toda a jornada",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do vite (HMR/500) ignorado: 0",
+      "atMs": 35837
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-01-colar-12x4@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-02-celula-enter-tab-esc@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-04-caixa-colar-vazia@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-05-caixa-colar-previa@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-06-tabela-colada-pelo-botao@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-07-texto-com-estilo-titulo@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-08-confirmar-excluir-pagina@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-09-paginas-depois-dos-ctrl-z@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-10-zoom-100@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-10-zoom-125@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-11-campo-x-abc@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j04-editar-a-mao-12-fim@1280.png"
+  ],
+  "findings": [
+    {
+      "text": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]",
+      "severity": "medium",
+      "where": "editor"
+    }
+  ],
+  "pendingSteps": [],
+  "softFindings": [
+    {
+      "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+      "severity": "P3",
+      "detail": "sumiu sozinha após 4152 ms; 21 palavras pedem ~8400 ms a 150 palavras/min"
+    },
+    {
+      "name": "A1 texto da célula legível no zoom \"Ajustar à largura\" (≥ 13 px efetivos)",
+      "severity": "P3",
+      "detail": "{\"text\":\"TA-25N\",\"fontPx\":13.3,\"zoomRatio\":0.9,\"effectiveFontPx\":11.7,\"lineBoxPx\":16,\"w\":94,\"h\":15,\"inViewport\":true} · janela 1280×720"
+    },
+    {
+      "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+      "severity": "P2",
+      "detail": "sobreposição medida: 28205 px²; conhecido FR-12/2C; botão Fechar usado sem force"
+    },
+    {
+      "name": "Letras dos botões ≥ 15 px",
+      "severity": "P2",
+      "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]"
+    }
+  ],
+  "durationMs": 35837,
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "measurements": {
+    "chromium": "151.0.7922.34",
+    "fitZoomA": "0.88",
+    "pasteMethodA": "Ctrl+V real",
+    "noticeTimelineA1": {
+      "first": {
+        "text": "Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer. Fechar",
+        "visible": true,
+        "tone": "success",
+        "bands": "",
+        "afterMs": 129
+      },
+      "vanishedAfterMs": 4152
+    },
+    "noticeReading": {
+      "words": 21,
+      "readingNeededMs": 8400,
+      "vanishedAfterMs": 4152
+    },
+    "cellsA1": {
+      "headers": [
+        "Modelo",
+        "Faixa de medição",
+        "Exatidão",
+        "Pontos de memória"
+      ],
+      "firstBody": [
+        "TA-25N",
+        "-25 a 140 °C",
+        "±0,1 °C",
+        "1.500"
+      ],
+      "rowCount": 12,
+      "headerBg": "rgb(0, 114, 206)",
+      "bodyBg": "rgb(255, 255, 255)",
+      "headerColor": "rgb(255, 255, 255)",
+      "headerWeight": "700",
+      "bodyWeight": "400",
+      "bottomBeyondPagePx": -638
+    },
+    "A1 fonte da célula (Ajustar à largura)": {
+      "text": "TA-25N",
+      "fontPx": 13.3,
+      "zoomRatio": 0.9,
+      "effectiveFontPx": 11.7,
+      "lineBoxPx": 16,
+      "w": 94,
+      "h": 15,
+      "inViewport": true
+    },
+    "issues:A2 logo após inserir Tabela": {
+      "chip": "Problemas do catálogo: 0 a corrigir · 1 para revisar",
+      "panel": "Problemas do catálogo Fechar lista Nada impede o PDF. Confira os pontos abaixo. Página 2 Página 2 · tabela 1 · linha 1 Revisar Esta tabela tem 6 linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram. Ir até lá",
+      "located": "d26cb792-fae5-4e67-9b59-7bf22e201cd0",
+      "cleanup": {
+        "closedNotice": false,
+        "returnedToObject": true
+      }
+    },
+    "gridHintVisible": true,
+    "A2 célula da grade (alvo)": {
+      "w": 226,
+      "h": 22,
+      "minSide": 22,
+      "fontPx": 13.3,
+      "top": 574,
+      "inViewport": true
+    },
+    "inlineKeyboard": {
+      "enter": "Parâmetro",
+      "tab": "Faixa",
+      "escaped": "",
+      "inlineBox": {
+        "x": 261.1875,
+        "y": 573.609375,
+        "width": 226.171875,
+        "height": 40
+      }
+    },
+    "chipB0": "",
+    "alvos:B0 editor recém-aberto": {
+      "total": 23,
+      "small": [],
+      "tinyText": [
+        {
+          "name": "Diminuir o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        },
+        {
+          "name": "Aumentar o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        }
+      ],
+      "smallest": [
+        {
+          "name": "J4 — ficha técnica",
+          "w": 185,
+          "h": 30,
+          "minSide": 30,
+          "fontPx": 18
+        },
+        {
+          "name": "Diminuir o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        },
+        {
+          "name": "Aumentar o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        },
+        {
+          "name": "Abrir assistente de edição",
+          "w": 141,
+          "h": 44,
+          "minSide": 44,
+          "fontPx": 15
+        },
+        {
+          "name": "Voltar aos catálogos",
+          "w": 161,
+          "h": 44,
+          "minSide": 44,
+          "fontPx": 15
+        },
+        {
+          "name": "Salvo",
+          "w": 92,
+          "h": 44,
+          "minSide": 44,
+          "fontPx": 15
+        },
+        {
+          "name": "Desfazer última alteração",
+          "w": 111,
+          "h": 44,
+          "minSide": 44,
+          "fontPx": 15
+        },
+        {
+          "name": "Refazer última alteração",
+          "w": 102,
+          "h": 44,
+          "minSide": 44,
+          "fontPx": 15
+        }
+      ]
+    },
+    "noticeB1": "144 ms · Tabela de 6 linhas × 3 colunas adicionada, com a primeira linha como cabeçalho. Para escrever nela, clique em Editar tabela. Fechar",
+    "issues:B1 logo após inserir Tabela no modelo": {
+      "chip": "Problemas do catálogo: 0 a corrigir · 1 para revisar",
+      "panel": "Problemas do catálogo Fechar lista Nada impede o PDF. Confira os pontos abaixo. Página 1 Página 1 · tabela 2 · linha 1 Revisar Esta tabela tem 6 linhas vazias, que sairão em branco no PDF. Preencha as linhas ou remova as que sobraram. Ir até lá",
+      "located": "643fa3d9-d2eb-47af-9db7-6f0de1c7fd3c",
+      "cleanup": {
+        "closedNotice": false,
+        "returnedToObject": true
+      }
+    },
+    "B2 botão Colar tabela do Excel": {
+      "w": 178,
+      "h": 44,
+      "minSide": 44,
+      "fontPx": 15,
+      "top": 201,
+      "inViewport": true
+    },
+    "B2 fonte da explicação da caixa": {
+      "text": "No Excel, selecione as células e copie (",
+      "fontPx": 15,
+      "zoomRatio": 1,
+      "effectiveFontPx": 15,
+      "lineBoxPx": 20,
+      "w": 742,
+      "h": 45,
+      "inViewport": true
+    },
+    "pasteMethodB": "Ctrl+V real",
+    "noticeTimelineB2": {
+      "first": {
+        "text": "Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer. Fechar",
+        "visible": true,
+        "tone": "success",
+        "bands": "",
+        "afterMs": 143
+      },
+      "vanishedAfterMs": 4132
+    },
+    "textStyleControls": {
+      "hits": [
+        "Título",
+        "Subtítulo",
+        "Corpo",
+        "Negrito",
+        "Tamanho",
+        "Alinhamento"
+      ],
+      "bodyStyle": {
+        "fontSizePt": 10,
+        "fontWeight": 400,
+        "color": "#003366"
+      },
+      "titleStyle": {
+        "fontSizePt": 16,
+        "fontWeight": 700,
+        "color": "#003366"
+      },
+      "undoneStyle": {
+        "fontSizePt": 10,
+        "fontWeight": 400,
+        "color": "#003366"
+      }
+    },
+    "B3 fonte da caixa de edição de texto": {
+      "text": "Ficha técnica",
+      "fontPx": 21.3,
+      "zoomRatio": 0.9,
+      "effectiveFontPx": 18.8,
+      "lineBoxPx": null,
+      "w": 619,
+      "h": 60,
+      "inViewport": true
+    },
+    "textEditToolbar": "± °C Ω µ ≤ ≥ ≈ Cancelar Concluir",
+    "B4 botão ⋯ Opções da Página": {
+      "w": 44,
+      "h": 44,
+      "minSide": 44,
+      "fontPx": 15,
+      "top": 827,
+      "inViewport": false
+    },
+    "B4 item de menu Excluir página": {
+      "w": 196,
+      "h": 44,
+      "minSide": 44,
+      "fontPx": 15,
+      "top": 492,
+      "inViewport": true
+    },
+    "deleteConfirmText": "Excluir a Página 3? Ela tem 1 objeto: 1 tabela. Tudo o que está nela será excluído. Se mudar de ideia, use Desfazer (Ctrl+Z). Cancelar Excluir Página 3",
+    "B4 fonte do texto da confirmação": {
+      "text": "Ela tem 1 objeto: 1 tabela.",
+      "fontPx": 15,
+      "zoomRatio": 1,
+      "effectiveFontPx": 15,
+      "lineBoxPx": 20,
+      "w": 412,
+      "h": 23,
+      "inViewport": true
+    },
+    "B4 botão confirmar exclusão": {
+      "w": 155,
+      "h": 42,
+      "minSide": 42,
+      "fontPx": 15,
+      "top": 405,
+      "inViewport": true
+    },
+    "B5 seletor de zoom": {
+      "w": 157,
+      "h": 44,
+      "minSide": 44,
+      "fontPx": 15,
+      "top": 86,
+      "inViewport": true
+    },
+    "B5 fonte do título a Ajustar à largura": {
+      "text": "Ficha técnica",
+      "fontPx": 21.3,
+      "zoomRatio": 0.9,
+      "effectiveFontPx": 18.8,
+      "lineBoxPx": 25,
+      "w": 619,
+      "h": 23,
+      "inViewport": true
+    },
+    "B5 fonte da célula do modelo a Ajustar à largura": {
+      "text": "Modelo",
+      "fontPx": 13.3,
+      "zoomRatio": 0.9,
+      "effectiveFontPx": 11.7,
+      "lineBoxPx": 16,
+      "w": 213,
+      "h": 15,
+      "inViewport": true
+    },
+    "B5 fonte do título a 100%": {
+      "text": "Ficha técnica",
+      "fontPx": 21.3,
+      "zoomRatio": 1,
+      "effectiveFontPx": 21.3,
+      "lineBoxPx": 29,
+      "w": 703,
+      "h": 27,
+      "inViewport": true
+    },
+    "B5 fonte da célula do modelo a 100%": {
+      "text": "Modelo",
+      "fontPx": 13.3,
+      "zoomRatio": 1,
+      "effectiveFontPx": 13.3,
+      "lineBoxPx": 18,
+      "w": 242,
+      "h": 17,
+      "inViewport": true
+    },
+    "B5 fonte do título a 125%": {
+      "text": "Ficha técnica",
+      "fontPx": 21.3,
+      "zoomRatio": 1.2,
+      "effectiveFontPx": 26.7,
+      "lineBoxPx": 36,
+      "w": 879,
+      "h": 33,
+      "inViewport": true
+    },
+    "B5 fonte da célula do modelo a 125%": {
+      "text": "Modelo",
+      "fontPx": 13.3,
+      "zoomRatio": 1.2,
+      "effectiveFontPx": 16.7,
+      "lineBoxPx": 23,
+      "w": 302,
+      "h": 21,
+      "inViewport": true
+    },
+    "zoomMetrics": {
+      "fit": {
+        "zoom": 0.88,
+        "textPx": 18.8,
+        "cellPx": 11.7,
+        "cellLineBoxPx": 16
+      },
+      "100%": {
+        "zoom": 1,
+        "choice": "100",
+        "windowOverflow": false,
+        "pageWidthPx": 794,
+        "canvasScrollable": false,
+        "textPx": 21.3,
+        "cellPx": 13.3,
+        "cellLineBoxPx": 18
+      },
+      "125%": {
+        "zoom": 1.25,
+        "choice": "125",
+        "windowOverflow": false,
+        "pageWidthPx": 992,
+        "canvasScrollable": false,
+        "textPx": 26.7,
+        "cellPx": 16.7,
+        "cellLineBoxPx": 23
+      }
+    },
+    "wheelZoom": {
+      "method": "Ctrl + roda (mouse do Playwright)",
+      "steps": [
+        {
+          "choice": "75",
+          "zoom": 0.75
+        },
+        {
+          "choice": "fit-width",
+          "zoom": 0.88
+        },
+        {
+          "choice": "100",
+          "zoom": 1
+        },
+        {
+          "choice": "125",
+          "zoom": 1.25
+        },
+        {
+          "choice": "125",
+          "zoom": 1.25
+        },
+        {
+          "choice": "100",
+          "zoom": 1
+        }
+      ],
+      "browserZoomUnchanged": true
+    },
+    "B6 campo X": {
+      "w": 93,
+      "h": 42,
+      "minSide": 42,
+      "fontPx": 15,
+      "top": 531,
+      "inViewport": true
+    },
+    "B6 fonte do aviso do campo X": {
+      "text": "Use um número, como 12,5.",
+      "fontPx": 13,
+      "zoomRatio": 1,
+      "effectiveFontPx": 12.9,
+      "lineBoxPx": 18,
+      "w": 127,
+      "h": 35,
+      "inViewport": true
+    },
+    "resizeHandles": [
+      {
+        "handle": "n",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "ne",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "e",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "se",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "s",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "sw",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "w",
+        "w": 24,
+        "h": 24
+      },
+      {
+        "handle": "nw",
+        "w": 24,
+        "h": 24
+      }
+    ],
+    "alvos:B6 fim, texto selecionado": {
+      "total": 50,
+      "small": [],
+      "tinyText": [
+        {
+          "name": "Diminuir o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        },
+        {
+          "name": "Aumentar o zoom",
+          "w": 40,
+          "h": 44,
+          "minSide": 40,
+          "fontPx": 12
+        }
+      ],
+      "smallest": [
+        {
+          "name": "Redimensionar n",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar ne",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar e",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar se",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar s",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar sw",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar w",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        },
+        {
+          "name": "Redimensionar nw",
+          "w": 24,
+          "h": 24,
+          "minSide": 24,
+          "fontPx": 13.3
+        }
+      ]
+    },
+    "clicks": {
+      "A1 colar (Ctrl+V)": 1,
+      "A2 inserir tabela": 2,
+      "A2 editar célula (caminho esperado)": 4,
+      "B2 colar pelo botão": 3,
+      "B4 adicionar página": 1,
+      "B4 excluir página": 3,
+      "B4 mover página": 2,
+      "B5 zoom 100%": 1,
+      "B5 zoom 125%": 1,
+      "B6 abrir campo X": 1
+    },
+    "devServerNoise": [],
+    "viteEvents": [
+      "debug: [vite] connecting...",
+      "debug: [vite] connected.",
+      "debug: [vite] connecting...",
+      "debug: [vite] connected.",
+      "debug: [vite] connecting...",
+      "debug: [vite] connected.",
+      "debug: [vite] connecting...",
+      "debug: [vite] connected."
+    ]
+  },
+  "jargonSeen": [
+    {
+      "where": "B3 texto selecionado + Mais propriedades + Mais opções",
+      "words": [],
+      "context": [],
+      "mm": [
+        "mm",
+        "mm",
+        "mm",
+        "mm"
+      ]
+    }
+  ],
+  "clicks": {
+    "A1 colar (Ctrl+V)": 1,
+    "A2 inserir tabela": 2,
+    "A2 editar célula (caminho esperado)": 4,
+    "B2 colar pelo botão": 3,
+    "B4 adicionar página": 1,
+    "B4 excluir página": 3,
+    "B4 mover página": 2,
+    "B5 zoom 100%": 1,
+    "B5 zoom 125%": 1,
+    "B6 abrir campo X": 1
+  },
+  "status": "pass",
+  "findingSummary": [
+    {
+      "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+      "severity": "P3",
+      "detail": "sumiu sozinha após 4152 ms; 21 palavras pedem ~8400 ms a 150 palavras/min"
+    },
+    {
+      "name": "A1 texto da célula legível no zoom \"Ajustar à largura\" (≥ 13 px efetivos)",
+      "severity": "P3",
+      "detail": "{\"text\":\"TA-25N\",\"fontPx\":13.3,\"zoomRatio\":0.9,\"effectiveFontPx\":11.7,\"lineBoxPx\":16,\"w\":94,\"h\":15,\"inViewport\":true} · janela 1280×720"
+    },
+    {
+      "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+      "severity": "P2",
+      "detail": "sobreposição medida: 28205 px²; conhecido FR-12/2C; botão Fechar usado sem force"
+    },
+    {
+      "name": "Letras dos botões ≥ 15 px",
+      "severity": "P2",
+      "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]"
+    },
+    {
+      "text": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]",
+      "severity": "P2",
+      "where": "editor",
+      "name": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "da998986-c462-4dad-9407-df87c87dac02",
+    "startedAt": "2026-10-20T15:56:50.348Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

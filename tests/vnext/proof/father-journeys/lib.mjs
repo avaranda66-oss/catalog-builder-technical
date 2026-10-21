@@ -1,6 +1,6 @@
 // Utilitários das provas "father-journeys" (Playwright + vite dev server local).
 // Sem rede, sem produção: tudo roda em http://127.0.0.1:5190 contra fixtures/father-harness.html.
-import { realpathSync } from 'node:fs';
+import { realpathSync, statfsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -51,6 +51,14 @@ export const rel = (path) => relative(ROOT, path).split('\\').join('/');
 
 let currentBaseUrl = (process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
 
+function assertDiskAvailable() {
+  const disk = statfsSync(ROOT);
+  const freeBytes = disk.bavail * disk.bsize;
+  if (freeBytes < 5 * 1024 ** 3) {
+    throw new Error(`Menos de 5 GiB livres (${freeBytes} bytes): prova pesada interrompida antes de iniciar servidor/navegador.`);
+  }
+}
+
 const sameRoot = (other) => typeof other === 'string' && (process.platform === 'win32'
   ? other.toLowerCase() === canonicalRoot.toLowerCase() : other === canonicalRoot);
 
@@ -80,6 +88,7 @@ async function verifyServer(url) {
  * fs.allow inclui realpathSync(node_modules) porque node_modules é uma junção.
  */
 export async function ensureServer() {
+  assertDiskAvailable();
   const start = Date.now();
   if (process.env.BASE_URL) {
     serverIdentity = await verifyServer(currentBaseUrl);
@@ -153,6 +162,7 @@ export function observe(page, log) {
 }
 
 export async function launch({ width = VP.width, height = VP.height } = {}) {
+  assertDiskAvailable();
   const browser = await chromium.launch({ headless: true });
   browserVersion = browser.version();
   const context = await browser.newContext({

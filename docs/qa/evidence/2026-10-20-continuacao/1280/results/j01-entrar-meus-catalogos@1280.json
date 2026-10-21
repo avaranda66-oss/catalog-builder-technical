@@ -1,0 +1,611 @@
+{
+  "journey": "j01-entrar-meus-catalogos",
+  "title": "J1 — Entrar e ver \"Meus catálogos\" sem digitar nada, tudo em português",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:56:43.862Z",
+  "steps": [
+    {
+      "name": "a biblioteca abre direto com o título \"Meus catálogos\"",
+      "ok": true,
+      "detail": "em 437 ms",
+      "atMs": 439
+    },
+    {
+      "name": "a biblioteca aparece em menos de 3 s",
+      "ok": true,
+      "detail": "437 ms",
+      "atMs": 439
+    },
+    {
+      "name": "textos da biblioteca em português, sem jargão técnico",
+      "ok": true,
+      "detail": "termos: - · mm: -",
+      "atMs": 442
+    },
+    {
+      "name": "\"Novo catálogo\" (barra de cima) e \"Criar novo catálogo\" (lista vazia) estão visíveis sem rolar",
+      "ok": true,
+      "detail": "{\"novo\":{\"text\":\"Novo catálogo\",\"fontPx\":13,\"heightPx\":44,\"widthPx\":154,\"top\":16,\"inViewport\":true,\"fullyVisible\":true},\"criar\":{\"text\":\"Criar novo catálogo\",\"fontPx\":13,\"heightPx\":44,\"widthPx\":161,\"top\":501,\"inViewport\":true,\"fullyVisible\":true}}",
+      "atMs": 526
+    },
+    {
+      "name": "botões, abas e caixa de busca com pelo menos 24 px de altura",
+      "ok": true,
+      "detail": "busca (rótulo): 42 px · campo: 20 px",
+      "atMs": 526
+    },
+    {
+      "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+      "ok": false,
+      "finding": {
+        "id": "A-02",
+        "severity": "P3",
+        "knownFR": "FR-05"
+      },
+      "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista",
+      "atMs": null
+    },
+    {
+      "name": "textos da biblioteca abaixo de 13 px",
+      "ok": false,
+      "finding": {
+        "id": "A-01",
+        "severity": "P3",
+        "knownFR": "FR-05"
+      },
+      "detail": "ordenar: 12 px",
+      "atMs": null
+    },
+    {
+      "name": "\"Criar novo catálogo\" abre o diálogo \"Novo catálogo\" com o cursor já em \"Nome do catálogo\"",
+      "ok": true,
+      "detail": "foco no campo: true",
+      "atMs": 621
+    },
+    {
+      "name": "textos do diálogo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 629
+    },
+    {
+      "name": "as opções de começo têm nomes claros: \"Em branco\", \"Ficha técnica essencial\" (recomendada) e o modelo PRESYS",
+      "ok": true,
+      "detail": "Criar com IA a partir de arquivos · Em branco · Ficha técnica essencial · Ficha técnica (4 a 6 páginas) · Folder (8 a 12 páginas) · PRESYS · TA-25N — produto e especificações",
+      "atMs": 634
+    },
+    {
+      "name": "uma opção vem marcada como \"Recomendado para começar\"",
+      "ok": true,
+      "detail": null,
+      "atMs": 636
+    },
+    {
+      "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+      "ok": false,
+      "finding": {
+        "id": "A-03",
+        "severity": "P3",
+        "knownFR": null
+      },
+      "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px",
+      "atMs": null
+    },
+    {
+      "name": "o \"X\" de fechar tem pelo menos 24 px",
+      "ok": true,
+      "detail": "{\"text\":\"Fechar\",\"fontPx\":13.3,\"heightPx\":36,\"widthPx\":36,\"top\":39,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 684
+    },
+    {
+      "name": "Enter com o nome vazio NÃO cria catálogo (o diálogo continua aberto, nenhum catálogo gravado)",
+      "ok": true,
+      "detail": "criações: 0 → 0 · foco agora em: Ficha técnica essencial",
+      "atMs": 1544
+    },
+    {
+      "name": "depois do Enter, o foco vai para a opção recomendada (próximo passo), sem sair do diálogo",
+      "ok": true,
+      "detail": "foco: Ficha técnica essencial",
+      "atMs": 1544
+    },
+    {
+      "name": "Esc fecha o diálogo sem criar nada",
+      "ok": true,
+      "detail": null,
+      "atMs": 1851
+    },
+    {
+      "name": "o catálogo abre no editor já salvo, com o nome digitado",
+      "ok": true,
+      "detail": "título: PCON-Y18 — Folder 2026 · 423 ms · aviso durante a criação: \"(nenhum visto)\"",
+      "atMs": 2305
+    },
+    {
+      "name": "criar o primeiro catálogo leva 2 cliques (Novo catálogo → opção) além de digitar o nome",
+      "ok": true,
+      "detail": "{\"abrir diálogo (lista vazia)\":1,\"criar catálogo\":2}",
+      "atMs": 2305
+    },
+    {
+      "name": "a barra de cima diz \"Salvo\"",
+      "ok": true,
+      "detail": "texto: \"Salvo\"",
+      "atMs": 2322
+    },
+    {
+      "name": "textos do editor em português, sem jargão (varredura estendida)",
+      "ok": true,
+      "detail": "termos: - · mm sem explicação: -",
+      "atMs": 2324
+    },
+    {
+      "name": "o botão de voltar se chama \"Meus catálogos\" na tela",
+      "ok": true,
+      "detail": "texto: \"Meus catálogos\"",
+      "atMs": 2358
+    },
+    {
+      "name": "\"Meus catálogos\" volta à lista e o catálogo novo está lá",
+      "ok": true,
+      "detail": "visível após 2 ms",
+      "atMs": 2636
+    },
+    {
+      "name": "botões da linha do catálogo com pelo menos 24 px",
+      "ok": true,
+      "detail": "-",
+      "atMs": 2688
+    },
+    {
+      "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+      "ok": false,
+      "finding": {
+        "id": "A-01",
+        "severity": "P3",
+        "knownFR": "FR-05"
+      },
+      "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, maisAcoes: 12 px",
+      "atMs": null
+    },
+    {
+      "name": "lista com catálogo: tudo em português (data por extenso, \"Atualizado em …\")",
+      "ok": true,
+      "detail": "-",
+      "atMs": 2689
+    },
+    {
+      "name": "o endereço raiz leva a \"Meus catálogos\" sem digitar /v2 (redirecionamento após login)",
+      "ok": null,
+      "pending": true,
+      "detail": "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto.",
+      "atMs": null
+    },
+    {
+      "name": "zero erros de console e de página (do aplicativo)",
+      "ok": true,
+      "detail": "console: - · página: -",
+      "atMs": 2718
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j01-01-biblioteca-vazia@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j01-02-dialogo-novo-catalogo@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j01-03-editor-aberto@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j01-04-biblioteca-com-catalogo@1280.png"
+  ],
+  "findings": [
+    {
+      "text": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela).",
+      "severity": "low",
+      "where": "biblioteca, barra de cima"
+    }
+  ],
+  "pendingReason": "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto.",
+  "pendingSteps": [
+    "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto."
+  ],
+  "findingSteps": [
+    {
+      "id": "A-02",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+      "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista"
+    },
+    {
+      "id": "A-01",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "textos da biblioteca abaixo de 13 px",
+      "detail": "ordenar: 12 px"
+    },
+    {
+      "id": "A-03",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+      "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px"
+    },
+    {
+      "id": "A-01",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+      "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, maisAcoes: 12 px"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "libraryVisibleMs": 437,
+    "createToEditorSavedMs": 423
+  },
+  "clicks": {
+    "abrir diálogo (lista vazia)": 1,
+    "criar catálogo": 2,
+    "voltar": 1
+  },
+  "measures": {
+    "library": {
+      "titulo": {
+        "text": "Meus catálogos",
+        "fontPx": 20,
+        "heightPx": 27,
+        "widthPx": 169,
+        "top": 33,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "marca": {
+        "text": "PRESYS · Catalog Builder",
+        "fontPx": 11,
+        "heightPx": 15,
+        "widthPx": 169,
+        "top": 16,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "novoCatalogo": {
+        "text": "Novo catálogo",
+        "fontPx": 13,
+        "heightPx": 44,
+        "widthPx": 154,
+        "top": 16,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "criarNovoCatalogo": {
+        "text": "Criar novo catálogo",
+        "fontPx": 13,
+        "heightPx": 44,
+        "widthPx": 161,
+        "top": 501,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "subtitulo": {
+        "text": "Seus catálogos técnicos",
+        "fontPx": 34,
+        "heightPx": 39,
+        "widthPx": 421,
+        "top": 137,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "dica": {
+        "text": "Encontre um catálogo, continue o trabalho ou comece um novo.",
+        "fontPx": 14,
+        "heightPx": 22,
+        "widthPx": 421,
+        "top": 182,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abaAtivos": {
+        "text": "Ativos",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 69,
+        "top": 249,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abaArquivados": {
+        "text": "Arquivados",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 101,
+        "top": 249,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "busca": {
+        "text": "",
+        "fontPx": 13,
+        "heightPx": 20,
+        "widthPx": 272,
+        "top": 259,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "buscaCaixa": {
+        "text": "Buscar catálogos",
+        "fontPx": 16,
+        "heightPx": 42,
+        "widthPx": 320,
+        "top": 248,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ordenar": {
+        "text": "Mais recentesTítulo A–ZTítulo Z–A",
+        "fontPx": 12,
+        "heightPx": 19,
+        "widthPx": 118,
+        "top": 259,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ordenarCaixa": {
+        "text": "Ordenar catálogosMais recentesTítulo A–ZTítulo Z–A",
+        "fontPx": 16,
+        "heightPx": 42,
+        "widthPx": 167,
+        "top": 248,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "vazioTitulo": {
+        "text": "Comece seu primeiro catálogo",
+        "fontPx": 20,
+        "heightPx": 27,
+        "widthPx": 291,
+        "top": 406,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "vazioTexto": {
+        "text": "Use uma ficha técnica pronta para editar ou comece com uma página em branco.",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 470,
+        "top": 441,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "dialog": {
+      "titulo": {
+        "text": "Novo catálogo",
+        "fontPx": 20,
+        "heightPx": 26,
+        "widthPx": 386,
+        "top": 49,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "rotuloNome": {
+        "text": "Nome do catálogo",
+        "fontPx": 12,
+        "heightPx": 68,
+        "widthPx": 422,
+        "top": 83,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "campoNome": {
+        "text": "",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 422,
+        "top": 107,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ajuda": {
+        "text": "Depois escolha como começar. Sem nome, o catálogo fica com o nome do modelo esco",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 422,
+        "top": 167,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "opcaoEmBranco": {
+        "text": "Em branco",
+        "fontPx": 16,
+        "heightPx": 64,
+        "widthPx": 422,
+        "top": 312,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "opcaoRecomendada": {
+        "text": "Ficha técnica essencial",
+        "fontPx": 16,
+        "heightPx": 78,
+        "widthPx": 422,
+        "top": 385,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "descricaoOpcao": {
+        "text": "Abre o catálogo com o assistente, para você soltar PDFs, planilhas e fotos do pr",
+        "fontPx": 12,
+        "heightPx": 34,
+        "widthPx": 362,
+        "top": 258,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "fechar": {
+        "text": "Fechar",
+        "fontPx": 13.3,
+        "heightPx": 36,
+        "widthPx": 36,
+        "top": 39,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "editorStatus": {
+      "status": {
+        "text": "Salvo",
+        "fontPx": 13,
+        "heightPx": 18,
+        "widthPx": 47,
+        "top": 49,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "voltar": {
+        "text": "Voltar aos catálogos",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 161,
+        "top": 12,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "row": {
+      "titulo": {
+        "text": "PCON-Y18 — Folder 2026",
+        "fontPx": 18,
+        "heightPx": 23,
+        "widthPx": 211,
+        "top": 333,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "meta": {
+        "text": "Português (Brasil)·Atualizado em 20 de out. de 2026, 12:56",
+        "fontPx": 12,
+        "heightPx": 17,
+        "widthPx": 698,
+        "top": 363,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abrir": {
+        "text": "Abrir",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 80,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "duplicar": {
+        "text": "Duplicar",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 98,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "renomear": {
+        "text": "Renomear",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 110,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "maisAcoes": {
+        "text": "Mais ações de PCON-Y18 — Folder 2026",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 77,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    }
+  },
+  "texts": {
+    "library": "P\nPRESYS · CATALOG BUILDER\nMeus catálogos\nNovo catálogo\nSeus catálogos técnicos\n\nEncontre um catálogo, continue o trabalho ou comece um novo.\n\nAtivos\nArquivados\nBuscar catálogos\nOrdenar catálogos\nMais recentes\nTítulo A–Z\nTítulo Z–A\nComece seu primeiro catálogo\n\nUse uma ficha técnica pronta para editar ou comece com uma página em branco.\n\nCriar novo catálogo",
+    "dialogAria": "- dialog \"Novo catálogo\":\n  - button \"Fechar\":\n    - img\n  - heading \"Novo catálogo\" [level=2]\n  - text: Nome do catálogo\n  - textbox \"Nome do catálogo\":\n    - /placeholder: \"Ex.: TA-25N — Ficha técnica 2026\"\n  - paragraph: Depois escolha como começar. Sem nome, o catálogo fica com o nome do modelo escolhido. O nome muda depois clicando no título.\n  - button \"Criar com IA a partir de arquivos\":\n    - strong: Criar com IA a partir de arquivos\n    - text: Abre o catálogo com o assistente, para você soltar PDFs, planilhas e fotos do produto.\n  - button \"Em branco\":\n    - strong: Em branco\n    - text: Comece com uma página vazia.\n  - button \"Ficha técnica essencial\":\n    - strong: Ficha técnica essencial\n    - text: Recomendado para começar Título e tabela básica para começar uma ficha de produto.\n  - button \"Ficha técnica (4 a 6 páginas)\":\n    - strong: Ficha técnica (4 a 6 páginas)\n    - text: \"Seis páginas A4 no padrão PRESYS: capa, visão geral, especificações, faixas, código de pedido e fornecimento. Apague as que não usar. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\"\n  - button \"Folder (8 a 12 páginas)\":\n    - strong: Folder (8 a 12 páginas)\n    - text: Dez páginas A4 no padrão PRESYS, da capa à contracapa, com espaços para fotos, tabelas, código de pedido e acessórios. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\n  - button \"PRESYS · TA-25N — produto e especificações\":\n    - strong: PRESYS · TA-25N — produto e especificações\n    - text: Duas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.\n  - status",
+    "dialog": "Novo catálogo\nNome do catálogo\n\nDepois escolha como começar. Sem nome, o catálogo fica com o nome do modelo escolhido. O nome muda depois clicando no título.\n\nCriar com IA a partir de arquivos\nAbre o catálogo com o assistente, para você soltar PDFs, planilhas e fotos do produto.\nEm branco\nComece com uma página vazia.\nFicha técnica essencial\nRecomendado para começar\nTítulo e tabela básica para começar uma ficha de produto.\nFicha técnica (4 a 6 páginas)\nSeis páginas A4 no padrão PRESYS: capa, visão geral, especificações, faixas, código de pedido e fornecimento. Apague as que não usar. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\nFolder (8 a 12 páginas)\nDez páginas A4 no padrão PRESYS, da capa à contracapa, com espaços para fotos, tabelas, código de pedido e acessórios. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\nPRESYS · TA-25N — produto e especificações\nDuas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.",
+    "optionNames": [
+      "Criar com IA a partir de arquivos",
+      "Em branco",
+      "Ficha técnica essencial",
+      "Ficha técnica (4 a 6 páginas)",
+      "Folder (8 a 12 páginas)",
+      "PRESYS · TA-25N — produto e especificações"
+    ],
+    "editor": "P\nPRESYS · Catalog Builder\nPCON-Y18 — Folder 2026\nSalvo\n✦\nAssistente IA\nMeus catálogos\nSalvar\nDesfazer\nRefazer\nTraduzir\nPublicar / PDF\nPÁGINAS\n1\nPágina 1\nAdicionar página\nUsar modelo…\nPágina 1 de 1\nZoom\n−\nPágina inteira\nAjustar à largura\n75%\n100%\n125%\n+\n88%\nProblemas do catálogo:\n1 a corrigir · 0 para revisar\nTexto\nImagem\nTabela\nTamanho da nova tabela\nColar tabela do Excel\nMais opções\n\nFicha técnica\n\nModelo\n\nPreencha o modelo\n\nFaixa\n\nPreencha a faixa\n\nPropriedades\nAssistente\nPROPRIEDADES\nSelecione um objeto\n\nClique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.",
+    "libraryWithRow": "P\nPRESYS · CATALOG BUILDER\nMeus catálogos\nNovo catálogo\nSeus catálogos técnicos\n\nEncontre um catálogo, continue o trabalho ou comece um novo.\n\nAtivos\nArquivados\nBuscar catálogos\nOrdenar catálogos\nMais recentes\nTítulo A–Z\nTítulo Z–A\nPCON-Y18 — Folder 2026\nPortuguês (Brasil)\n·\nAtualizado em 20 de out. de 2026, 12:56\nAbrir\nDuplicar\nRenomear\nMais"
+  },
+  "status": "pending",
+  "findingSummary": [
+    {
+      "id": "A-02",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+      "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista"
+    },
+    {
+      "id": "A-01",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "textos da biblioteca abaixo de 13 px",
+      "detail": "ordenar: 12 px"
+    },
+    {
+      "id": "A-03",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+      "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px"
+    },
+    {
+      "text": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela).",
+      "severity": "P3",
+      "where": "biblioteca, barra de cima",
+      "name": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela)."
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "5a20504f-fbab-4c71-beb9-403c34f24a9a",
+    "startedAt": "2026-10-20T15:56:40.793Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

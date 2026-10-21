@@ -1,0 +1,246 @@
+W2.G Chromium editor direct Text editing proof: PASS
+{
+  "chromiumVersion": "151.0.7922.34",
+  "textId": "5d4571b8-0746-4e5b-bffb-e1d6f320b033",
+  "original": {
+    "id": "5d4571b8-0746-4e5b-bffb-e1d6f320b033",
+    "frame": {
+      "left": "75.5938px",
+      "top": "75.5938px",
+      "width": "309.922px",
+      "height": "83.1562px",
+      "zIndex": "0"
+    },
+    "flowStyle": "",
+    "paragraphs": [
+      {
+        "id": "93b6fcbb-17f1-4ab6-9013-3dd574dcabb5",
+        "text": "Novo texto",
+        "inlines": [
+          {
+            "id": "ec311d01-a517-4510-8af8-fe1701506ee9",
+            "text": "Novo texto",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      }
+    ],
+    "plainText": "Novo texto"
+  },
+  "committed": {
+    "id": "5d4571b8-0746-4e5b-bffb-e1d6f320b033",
+    "frame": {
+      "left": "75.5938px",
+      "top": "75.5938px",
+      "width": "309.922px",
+      "height": "83.1562px",
+      "zIndex": "0"
+    },
+    "flowStyle": "",
+    "paragraphs": [
+      {
+        "id": "93b6fcbb-17f1-4ab6-9013-3dd574dcabb5",
+        "text": "± 0.05 °C",
+        "inlines": [
+          {
+            "id": "ec311d01-a517-4510-8af8-fe1701506ee9",
+            "text": "± 0.05 °C",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "1cb998eb-bb06-4fe9-9d33-d11ef3e69bfb",
+        "text": "100 Ω",
+        "inlines": [
+          {
+            "id": "8bf5695c-0511-4607-9b80-675ff3b7f750",
+            "text": "100 Ω",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "4b6d574c-2ba5-41d8-a12d-3a2538a5c72f",
+        "text": "≤ 50 µV · ≥ 0 ≈",
+        "inlines": [
+          {
+            "id": "32ba61dd-983b-47f3-807f-0e3dba48f8b0",
+            "text": "≤ 50 µV · ≥ 0 ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      }
+    ],
+    "plainText": "± 0.05 °C\n100 Ω\n≤ 50 µV · ≥ 0 ≈"
+  },
+  "overflowCommitted": {
+    "id": "5d4571b8-0746-4e5b-bffb-e1d6f320b033",
+    "frame": {
+      "left": "75.5938px",
+      "top": "75.5938px",
+      "width": "309.922px",
+      "height": "83.1562px",
+      "zIndex": "0"
+    },
+    "flowStyle": "",
+    "paragraphs": [
+      {
+        "id": "93b6fcbb-17f1-4ab6-9013-3dd574dcabb5",
+        "text": "Linha 1: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "ec311d01-a517-4510-8af8-fe1701506ee9",
+            "text": "Linha 1: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "1cb998eb-bb06-4fe9-9d33-d11ef3e69bfb",
+        "text": "Linha 2: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "8bf5695c-0511-4607-9b80-675ff3b7f750",
+            "text": "Linha 2: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "4b6d574c-2ba5-41d8-a12d-3a2538a5c72f",
+        "text": "Linha 3: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "32ba61dd-983b-47f3-807f-0e3dba48f8b0",
+            "text": "Linha 3: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "179dc2a0-0595-41ef-afb7-a89d6cfd98ee",
+        "text": "Linha 4: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "7794e6fe-215a-415f-98b5-b24127f6e43c",
+            "text": "Linha 4: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "49a1c2aa-6053-4235-b850-58fee338344b",
+        "text": "Linha 5: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "64af24cd-f9d1-40f2-85dd-bc2048b60ba2",
+            "text": "Linha 5: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "85769df6-8dd5-47d2-8aa6-a2ba4e7429b6",
+        "text": "Linha 6: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "0607c83e-4b49-4029-9e00-2f2ab747b742",
+            "text": "Linha 6: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "83228cf1-b4c2-44e0-99a0-2c2855f2ce68",
+        "text": "Linha 7: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "26879523-b9a8-4573-b17d-f9e4924b8251",
+            "text": "Linha 7: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "7a243130-2735-49d7-868d-995ea6549945",
+        "text": "Linha 8: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "63c8402b-92d1-47a8-9882-7f3bd0b4b7e9",
+            "text": "Linha 8: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "9d7a9ad8-424a-4104-9963-18e0180209c8",
+        "text": "Linha 9: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "50e808ad-5647-4090-8b98-f636ed8067e8",
+            "text": "Linha 9: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "e05ddafc-13d4-4c98-911d-7f89eebe4ff7",
+        "text": "Linha 10: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "30f4015d-2c19-4f16-8c6b-033a37006be0",
+            "text": "Linha 10: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "2d31cd0b-d858-40c5-9200-1999792c9830",
+        "text": "Linha 11: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "2d3b0bd4-a896-42fb-ad4b-cb4d816446e2",
+            "text": "Linha 11: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      },
+      {
+        "id": "ef30aee7-2f28-414b-934f-da4142e128dd",
+        "text": "Linha 12: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+        "inlines": [
+          {
+            "id": "e61c127c-29c0-4642-b3e1-651de31269ed",
+            "text": "Linha 12: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+            "style": "",
+            "tag": "SPAN"
+          }
+        ]
+      }
+    ],
+    "plainText": "Linha 1: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 2: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 3: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 4: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 5: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 6: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 7: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 8: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 9: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 10: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 11: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 12: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈"
+  },
+  "finalText": "± 0.05 °C\n100 Ω\n≤ 50 µV · ≥ 0 ≈",
+  "technicalPdfText": "PÁGINAS   1  Adicionar página  Inserir modelo  Página 1 de 1   A4 · 210 × 297 mm   Zoom   −   Ajustar à largura   +   118%  Alterações não salvas  Adicionar texto   Adicionar imagem   Adicionar tabela   Tamanho da nova tabela   Colar tabela do Excel   Duplicar Excluir   Editar texto Adicionar forma   Adicionar linha   Encaixe: ligado   Selecionar vários  Página 1  ± 0.05 °C ± 0.05 °C 100   Ω  ≤   50 μV ·   ≥   0   ≈ Editar tabela Agrupar Desagrupar Enviar para o fundo Recuar uma camada Avançar uma camada Trazer para frente Substituir imagem Upload imagem  ± 0.05 °C 100   Ω  ≤   50 μV ·   ≥   0   ≈  P   PRESYS · CATALOG BUILDER  Catálogo PRESYS  Desfazer Alterações não salvas Refazer",
+  "longText": "Linha 1: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 2: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 3: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 4: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 5: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 6: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 7: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 8: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 9: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 10: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 11: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈\nLinha 12: ± 0.05 °C · 100 Ω · ≤ 50 µV · ≥ 0 · ≈",
+  "textEditChromeInsideEditorialRoot": 0,
+  "legacyBootstrapLoaded": false,
+  "consoleErrors": [],
+  "pageErrors": []
+}
