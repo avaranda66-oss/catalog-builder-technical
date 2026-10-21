@@ -1,5 +1,7 @@
 # Usabilidade do pai — consolidação histórica da Equipe B
 
+> O relatório de achados da Equipe B (F-01..F-19, com prioridades e correções) está em [2026-10-17-usabilidade-pai-achados.md](2026-10-17-usabilidade-pai-achados.md).
+
 Data da consolidação: 17/10/2026. Este documento reúne as provas e os checkpoints já existentes da Equipe B. A auditoria documental não executou testes, build, jornadas ou navegadores e não produziu um novo parecer de aprovação.
 
 ## Base e alcance da evidência
