@@ -3,15 +3,26 @@
  * read from the sentence itself:
  * - `progress`: work still running ("Enviando imagem…"); stays until the result replaces it;
  * - `error`: a problem, a refusal or an instruction the person still has to follow; stays until closed or replaced;
- * - `success`: a finished change ("Objeto excluído."); disappears after a few seconds;
- * - `info`: anything else, such as "Texto sem alterações."; also disappears after a few seconds.
+ * - `success`: a finished change ("Objeto excluído."); a short one disappears after a few seconds, a longer one that
+ *   explains what to do next stays long enough to be read (see {@link editorNoticeTimeoutMs});
+ * - `info`: anything else, such as "Texto sem alterações."; same timing as `success`.
  *
  * Problem words win over success words, so "Tabela adicionada. Confira a altura…" stays on screen. A caller that
  * knows the tone passes an {@link EditorNotice} instead, and the sentence is not read at all.
  */
 export type EditorNoticeTone = 'progress' | 'error' | 'success' | 'info';
 
+/** A short finished change ("Objeto excluído.") leaves after this. */
 export const SUCCESS_NOTICE_TIMEOUT_MS = 4000;
+/**
+ * A finished change that explains itself in more words ("… A primeira linha virou o cabeçalho. Para voltar, use
+ * Desfazer.") is an instruction too: it never leaves before this, and longer ones stay longer (C-03, J4).
+ */
+export const LONG_NOTICE_MIN_TIMEOUT_MS = 12_000;
+/** Up to this many words a success is "short" and leaves after {@link SUCCESS_NOTICE_TIMEOUT_MS}. */
+export const SHORT_NOTICE_MAX_WORDS = 8;
+/** Reading time per word for a 60-year-old reader without hurry (100 words per minute). */
+export const NOTICE_READING_MS_PER_WORD = 600;
 
 /**
  * Matches whole words only. `\b` cannot be used: in JavaScript it only knows ASCII letters, so it never matches
@@ -71,7 +82,25 @@ export function editorNoticeTone(notice: EditorNoticeInput): EditorNoticeTone {
   return typeof notice === 'string' ? classifyEditorNotice(notice) : notice.tone;
 }
 
-/** Only errors and work in progress stay on screen; everything else leaves after {@link SUCCESS_NOTICE_TIMEOUT_MS}. */
+/** Only errors and work in progress stay on screen until closed; successes and neutral messages may leave alone. */
 export function editorNoticeAutoHides(tone: EditorNoticeTone): boolean {
   return tone === 'success' || tone === 'info';
+}
+
+export function editorNoticeWordCount(text: string): number {
+  return text.split(/\s+/u).filter(Boolean).length;
+}
+
+/**
+ * How long a message stays before leaving on its own, or `null` when it stays until the person closes it (or the
+ * next message replaces it). The rule the person can rely on: a short success leaves by itself; an error or an
+ * instruction stays until closed; a longer success, which always carries an instruction, stays at least
+ * {@link LONG_NOTICE_MIN_TIMEOUT_MS} and more when it has more words. Pointing at the message (or focusing its
+ * button) pauses the countdown; leaving it starts the full time again.
+ */
+export function editorNoticeTimeoutMs(notice: EditorNoticeInput): number | null {
+  if (!editorNoticeAutoHides(editorNoticeTone(notice))) return null;
+  const words = editorNoticeWordCount(editorNoticeText(notice));
+  if (words <= SHORT_NOTICE_MAX_WORDS) return SUCCESS_NOTICE_TIMEOUT_MS;
+  return Math.max(LONG_NOTICE_MIN_TIMEOUT_MS, words * NOTICE_READING_MS_PER_WORD);
 }

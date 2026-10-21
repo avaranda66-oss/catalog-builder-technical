@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorNotices } from '@/vnext/app/editor/EditorNotices';
 import { SaveConflictDialog } from '@/vnext/app/editor/ConflictDialog';
 import {
-  classifyEditorNotice, editorNoticeAutoHides, editorNoticeText, editorNoticeTone, SUCCESS_NOTICE_TIMEOUT_MS, successNotice,
+  classifyEditorNotice, editorNoticeAutoHides, editorNoticeText, editorNoticeTimeoutMs, editorNoticeTone, LONG_NOTICE_MIN_TIMEOUT_MS,
+  SUCCESS_NOTICE_TIMEOUT_MS, successNotice,
 } from '@/vnext/editor/editor-notices';
 import type { ConflictResolutionResult, ConflictResolutionState, SaveProjection } from '@/vnext/persistence';
 
@@ -62,6 +63,29 @@ describe('FR-12 status message tone', () => {
   });
 });
 
+describe('C-03 how long each message stays', () => {
+  const pasteResult = 'Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.';
+
+  it('lets a short success leave after 4 s and keeps errors, instructions and progress until closed', () => {
+    expect(editorNoticeTimeoutMs('Objeto excluído.')).toBe(SUCCESS_NOTICE_TIMEOUT_MS);
+    expect(editorNoticeTimeoutMs('Texto sem alterações.')).toBe(SUCCESS_NOTICE_TIMEOUT_MS);
+    expect(editorNoticeTimeoutMs('Conteúdo da célula atualizado.')).toBe(SUCCESS_NOTICE_TIMEOUT_MS);
+    // A success that also says how to go back is an instruction: it stays long enough to be read.
+    expect(editorNoticeTimeoutMs('3 linhas inseridas. Use Desfazer para remover o lote.')).toBe(LONG_NOTICE_MIN_TIMEOUT_MS);
+    expect(editorNoticeTimeoutMs('Não foi possível excluir o objeto.')).toBeNull();
+    expect(editorNoticeTimeoutMs('Selecione uma única célula para editar o conteúdo.')).toBeNull();
+    expect(editorNoticeTimeoutMs('Enviando imagem…')).toBeNull();
+  });
+
+  it('keeps a longer success, which tells what to do next, at least 12 s and longer when it has more words', () => {
+    // 21 words: at 150 words per minute a 60-year-old reader needs about 8.4 s (J4 measured it leaving at ~4.1 s).
+    expect(editorNoticeTimeoutMs(successNotice(pasteResult))).toBe(LONG_NOTICE_MIN_TIMEOUT_MS);
+    expect(LONG_NOTICE_MIN_TIMEOUT_MS).toBeGreaterThanOrEqual(12_000);
+    const thirtyWords = Array.from({ length: 30 }, (_, index) => `palavra${index}`).join(' ') + ' atualizado.';
+    expect(editorNoticeTimeoutMs(successNotice(thirtyWords))).toBeGreaterThan(LONG_NOTICE_MIN_TIMEOUT_MS);
+  });
+});
+
 function renderNotices(props: Partial<React.ComponentProps<typeof EditorNotices>> = {}) {
   const onDismissMessage = vi.fn();
   const view = render(<EditorNotices message={null} onDismissMessage={onDismissMessage} save={idle} {...props} />);
@@ -79,13 +103,44 @@ describe('FR-12 editor notices', () => {
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
 
-  it('hides a success passed with its tone after 4 seconds, even when its words look like an instruction', () => {
+  it('keeps a success that carries an instruction for at least 12 seconds, green, and then lets it leave', () => {
     vi.useFakeTimers();
     const tip = 'Tabela de 6 linhas × 3 colunas adicionada. Para escrever nela, clique em Editar tabela.';
     const { onDismissMessage } = renderNotices({ message: successNotice(tip) });
     expect(screen.getByRole('status')).toHaveTextContent(tip);
     expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'success');
+    expect(screen.getByRole('status')).toHaveAttribute('data-notice-stays', 'long');
     act(() => { vi.advanceTimersByTime(SUCCESS_NOTICE_TIMEOUT_MS); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - SUCCESS_NOTICE_TIMEOUT_MS - 100); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('pauses a long message while the pointer is over it and gives the full time again after it leaves', () => {
+    vi.useFakeTimers();
+    const tip = 'Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.';
+    const { onDismissMessage } = renderNotices({ message: successNotice(tip) });
+    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - 1000); });
+    fireEvent.mouseEnter(screen.getByRole('status'));
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(screen.getByRole('status'));
+    act(() => { vi.advanceTimersByTime(LONG_NOTICE_MIN_TIMEOUT_MS - 100); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(onDismissMessage).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the HEIC photo explanation until the person closes it', () => {
+    vi.useFakeTimers();
+    const heic = 'Esta foto está no formato HEIC, do iPhone, que ainda não é aceito. Envie a foto em JPEG ou peça a quem a tirou.';
+    const { onDismissMessage } = renderNotices({ message: heic });
+    expect(screen.getByRole('status')).toHaveAttribute('data-notice-stays', 'until-closed');
+    act(() => { vi.advanceTimersByTime(120_000); });
+    expect(onDismissMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
     expect(onDismissMessage).toHaveBeenCalledOnce();
   });
 
