@@ -28,7 +28,7 @@ function cellLines(cell: Cell): number {
   const content = cell.content;
   if (content.type === 'empty') return 0;
   if (content.type !== 'richText') return 1;
-  const text = projectEditableRichText(content.value);
+  const text = projectEditableRichText(content.value) ?? '';
   return text === '' ? 0 : text.split('\n').length;
 }
 
@@ -122,7 +122,7 @@ function tableObject(session: DocumentSession): TableObject {
 function textAt(session: DocumentSession, row: number, column: number): string {
   const table = tableObject(session).table;
   const cell = table.cells.find((entry) => entry.rowId === table.rows[row].id && entry.columnId === table.columns[column].id);
-  return cell?.content.type === 'richText' ? projectEditableRichText(cell.content.value) : '';
+  return cell?.content.type === 'richText' ? projectEditableRichText(cell.content.value) ?? '' : '';
 }
 
 async function openTableGrid(container: HTMLElement): Promise<HTMLElement> {
