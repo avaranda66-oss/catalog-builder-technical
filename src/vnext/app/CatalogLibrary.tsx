@@ -54,6 +54,15 @@ interface LibraryActionError {
   readonly retryLabel?: string;
 }
 
+/** Confirmation shown above the list after an action, so the result never happens silently. */
+interface LibraryNotice {
+  readonly message: string;
+  /** After archiving: the archived catalog is one click away in "Arquivados" (Restaurar is Onda 4). */
+  readonly showArchived?: boolean;
+}
+
+const ARCHIVED_NOTICE = 'Catálogo arquivado. Ele continua em Arquivados.';
+
 function dateLabel(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -105,6 +114,7 @@ function CatalogRow({
   onArchive,
   disabled,
   duplicating,
+  highlighted = false,
   translationSourceTitle,
 }: {
   readonly item: CatalogListItem;
@@ -115,15 +125,22 @@ function CatalogRow({
   readonly onArchive: (trigger: HTMLElement | null) => void;
   readonly disabled: boolean;
   readonly duplicating: boolean;
+  /** The copy just created by "Duplicar": marked until the next action, so it is easy to find. */
+  readonly highlighted?: boolean;
   readonly translationSourceTitle?: string;
 }) {
   const isTranslatedCopy = item.origin?.originKind === 'translation';
 
   return (
-    <article className="vnext-library-row" data-library-catalog-id={item.catalogId}>
+    <article
+      className={highlighted ? 'vnext-library-row is-highlighted' : 'vnext-library-row'}
+      data-library-catalog-id={item.catalogId}
+      data-library-highlighted={highlighted ? '' : undefined}
+    >
       <div className="vnext-library-row-main">
         <div className="vnext-library-title-line">
           <h2>{item.title}</h2>
+          {highlighted && <span className="vnext-library-origin-badge is-new">Cópia nova</span>}
           {isTranslatedCopy && <span className="vnext-library-origin-badge">Cópia traduzida</span>}
         </div>
         <div className="vnext-library-meta">
@@ -193,9 +210,11 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
   const [createChooserOpen, setCreateChooserOpen] = React.useState(false);
   const [createTitle, setCreateTitle] = React.useState('');
   const [creatingTitle, setCreatingTitle] = React.useState<string | undefined>();
-  const [notice, setNotice] = React.useState<string | undefined>();
+  const [notice, setNotice] = React.useState<LibraryNotice | undefined>();
+  const [highlightId, setHighlightId] = React.useState<string | undefined>();
   const [duplicateTargetId, setDuplicateTargetId] = React.useState<string | undefined>();
   const loadGeneration = React.useRef(0);
+  const noticeRef = React.useRef<HTMLDivElement | null>(null);
   const dialogTrigger = React.useRef<HTMLElement | null>(null);
   const renameDialog = React.useRef<HTMLFormElement | null>(null);
   const archiveDialog = React.useRef<HTMLElement | null>(null);
@@ -299,16 +318,27 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
     return () => window.clearTimeout(timer);
   }, [search, appliedSearch]);
 
+  // A new notice is brought into view: after acting on a row far down the list, it is not left above the screen.
+  React.useEffect(() => {
+    const element = noticeRef.current;
+    if (!notice || !element || typeof element.scrollIntoView !== 'function') return;
+    element.scrollIntoView({ block: 'nearest' });
+  }, [notice]);
+
   const changeView = (nextView: CatalogLibraryView) => {
     setView(nextView);
     setSearch('');
     setAppliedSearch('');
+    // A notice and a highlighted copy belong to the list where they were shown.
+    setNotice(undefined);
+    setHighlightId(undefined);
   };
 
   const beginAction = () => {
     setBusy(true);
     setActionError(undefined);
     setNotice(undefined);
+    setHighlightId(undefined);
   };
 
   const verifyPendingCreate = async () => {
@@ -396,10 +426,14 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
     if (fromArchived) {
       // The copy is an active catalog: show it where the person can open and edit it.
       changeView('active');
-      setNotice(`Cópia criada em Ativos: “${result.value.title}”. O catálogo arquivado continua guardado.`);
+      setHighlightId(result.value.catalogId);
+      setNotice({ message: `Cópia criada em Ativos: “${result.value.title}”. O catálogo arquivado continua guardado.` });
       return;
     }
     await load();
+    // The copy is not only one more row: it is named and marked in the list.
+    setHighlightId(result.value.catalogId);
+    setNotice({ message: `Cópia criada: “${result.value.title}”.` });
   };
 
   const requestNewCatalog = () => {
@@ -420,11 +454,13 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
     setBusy(false);
     if (!result.ok) {
       if (invalidateUnauthorized(result.error.code)) return;
-      setActionError({ message: failureMessage(result.error.code, 'rename') });
+      const error = { message: failureMessage(result.error.code, 'rename') };
       if (result.error.code === 'CONFLICT' || result.error.code === 'STALE_RESULT' || result.error.code === 'ARCHIVED') {
         setRenameTarget(undefined);
+        // Reload first: load() clears action errors, so the message is set after it to stay on screen.
         await load();
       }
+      setActionError(error);
       return;
     }
     setRenameTarget(undefined);
@@ -440,11 +476,14 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
     setArchiveTarget(undefined);
     if (!result.ok) {
       if (invalidateUnauthorized(result.error.code)) return;
-      setActionError({ message: failureMessage(result.error.code, 'archive') });
+      // Reload first: load() clears action errors, so the message is set after it to stay on screen.
       await load();
+      setActionError({ message: failureMessage(result.error.code, 'archive') });
       return;
     }
     setItems((current) => current.filter((item) => item.catalogId !== target.catalogId));
+    // The row leaves the list: say where it went and offer to go there.
+    setNotice({ message: ARCHIVED_NOTICE, showArchived: true });
   };
 
   const titleById = React.useMemo(
@@ -539,7 +578,14 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
         ) : (
           <>
             {notice && !actionError && (
-              <div className="vnext-library-notice" role="status" data-library-notice="">{notice}</div>
+              <div ref={noticeRef} className="vnext-library-notice" role="status" data-library-notice="">
+                <span data-library-notice-text="">{notice.message}</span>
+                {notice.showArchived && view === 'active' && (
+                  <button type="button" onClick={() => changeView('archived')}>
+                    <Archive size={16} aria-hidden="true" />Ver Arquivados
+                  </button>
+                )}
+              </div>
             )}
             {actionError && (
               <div className="vnext-library-error" role="alert" data-library-action-error="">
@@ -573,6 +619,7 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
                 onArchive={(trigger) => { if (!busy && !createPending) { rememberDialogTrigger(trigger); setArchiveTarget(item); } }}
                 disabled={busy || createPending}
                 duplicating={duplicateTargetId === item.catalogId}
+                highlighted={view === 'active' && highlightId === item.catalogId}
                 translationSourceTitle={item.origin?.originKind === 'translation' && item.origin.originId
                   ? titleById.get(item.origin.originId)
                   : undefined}
