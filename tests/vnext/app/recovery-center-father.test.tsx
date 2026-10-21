@@ -147,16 +147,32 @@ describe('FR-42 local backup screen only for the open catalog, in plain language
     expect(within(dialog).getByText(/não chegou a ser confirmado/)).toBeInTheDocument();
     expect(runtime.workspace.getSnapshot().save.phase).toBe('ambiguous');
     expect(view.container.querySelector('[data-vnext-shell]')).toBeNull();
-    // One recommended choice in navy, the others plain; no repeated "Não foi possível confirmar o salvamento" line.
+    // J7: one recommended choice in navy and "Mais opções"; no repeated "Não foi possível confirmar o salvamento" line.
+    expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual(['Conferir se foi salvo', 'Mais opções']);
     expect(within(dialog).getByRole('button', { name: 'Conferir se foi salvo' })).toHaveClass('vnext-btn-primary');
-    expect(within(dialog).getByRole('button', { name: 'Abrir versão salva na nuvem' })).toHaveClass('vnext-btn-secondary');
-    expect(within(dialog).getByRole('button', { name: 'Apagar a cópia deste computador' })).toHaveClass('vnext-btn-secondary');
-    expect(dialog.querySelectorAll('.vnext-btn-primary')).toHaveLength(1);
+    expect(within(dialog).queryByRole('button', { name: 'Abrir versão salva na nuvem' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Apagar a cópia deste computador' })).toBeNull();
     expect(within(dialog).queryByText('Não foi possível confirmar o salvamento')).toBeNull();
     expect(dialog.textContent).not.toMatch(/gravação pendente|recuperação local|descarte local/);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Apagar a cópia deste computador' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Sim, apagar a cópia' }));
+    const more = within(dialog).getByRole('button', { name: 'Mais opções' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    const options = within(dialog).getByRole('group', { name: 'Mais opções' });
+    expect(within(options).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Abrir versão salva na nuvem',
+      'Ver alterações recuperadas',
+      'Apagar a cópia deste computador',
+    ]);
+    expect(within(options).getByRole('button', { name: 'Abrir versão salva na nuvem' })).toHaveClass('vnext-btn-secondary');
+    expect(dialog.querySelectorAll('.vnext-btn-primary')).toHaveLength(1);
+
+    fireEvent.click(within(options).getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    // The first click only asks; the copy is still on this computer.
+    expect(within(options).getByText(/As alterações guardadas nesta cópia serão perdidas/)).toBeInTheDocument();
+    expect(await recoveryRepository.get(recoveryKeyOf(record))).toBeDefined();
+    fireEvent.click(within(options).getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.container.querySelector('[data-vnext-shell]')).not.toBeNull());
     expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull();
@@ -185,6 +201,8 @@ describe('FR-42 local backup screen only for the open catalog, in plain language
 
     const view = render(<VNextApp runtime={runtime} />);
     const dialog = await view.findByRole('dialog', { name: 'Recuperação local' });
+    expect(within(dialog).getByRole('button', { name: 'Recuperar minhas alterações' })).toHaveClass('vnext-btn-primary');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mais opções' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ver alterações recuperadas' }));
 
     const summary = dialog.querySelector('[data-recovery-summary]')?.textContent ?? '';
@@ -197,6 +215,49 @@ describe('FR-42 local backup screen only for the open catalog, in plain language
       .map((element) => element.textContent ?? '')
       .join('\n');
     expect(visibleText).not.toMatch(forbiddenFatherText);
+  });
+
+  it('J7 keeps every choice one click away and closing "Mais opções" cancels a discard waiting for confirmation', async () => {
+    const recoveryRepository = new InMemoryRecoveryRepository();
+    const record = await recoveryRecord({
+      authorityScopeId: SCOPE,
+      documentSnapshot: documentOf(CATALOG_ID, 'Catálogo com alterações'),
+      baseRemoteSnapshotDigest: await digestCanonicalDocument(documentOf(CATALOG_ID, 'Cloud base')),
+    });
+    await recoveryRepository.putIfNewer(record);
+    const { runtime } = openRuntime(documentOf(CATALOG_ID, 'Cloud base'), recoveryRepository);
+
+    const view = render(<VNextApp runtime={runtime} />);
+    const dialog = await view.findByRole('dialog', { name: 'Recuperação local' });
+    expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual(['Recuperar minhas alterações', 'Mais opções']);
+    expect(dialog.querySelectorAll('.vnext-btn-primary')).toHaveLength(1);
+    expect(within(dialog).queryByRole('group', { name: 'Mais opções' })).toBeNull();
+
+    const more = within(dialog).getByRole('button', { name: 'Mais opções' });
+    fireEvent.click(more);
+    const options = within(dialog).getByRole('group', { name: 'Mais opções' });
+    expect(more).toHaveAttribute('aria-controls', options.id);
+    expect(within(options).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Abrir versão salva na nuvem',
+      'Ver alterações recuperadas',
+      'Apagar a cópia deste computador',
+    ]);
+    fireEvent.click(within(options).getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    expect(within(options).getByRole('button', { name: 'Sim, apagar a cópia' })).toBeInTheDocument();
+
+    // Closing the options means "no": opening them again asks for the confirmation once more.
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).queryByRole('button', { name: 'Sim, apagar a cópia' })).toBeNull();
+    fireEvent.click(more);
+    expect(within(dialog).getByRole('button', { name: 'Apagar a cópia deste computador' })).toBeInTheDocument();
+    expect(within(dialog).queryByText(/serão perdidas/)).toBeNull();
+    expect((await recoveryRepository.get(recoveryKeyOf(record)))?.status).toBe('VALID');
+
+    // The recommended choice still recovers the work in one click.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Recuperar minhas alterações' }));
+    await waitFor(() => expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull());
+    expect(runtime.workspace.getSnapshot().session.getSnapshot().document.title).toBe('Catálogo com alterações');
   });
 
   it('describes position drafts and damaged backups without technical terms', () => {

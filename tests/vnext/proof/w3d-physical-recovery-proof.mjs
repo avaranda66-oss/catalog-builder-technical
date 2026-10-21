@@ -149,6 +149,12 @@ async function clearDatabase(run) {
   }, databaseName);
 }
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 async function api(page, method, ...args) {
   return page.evaluate(
     ({ methodName, methodArgs }) => window.__W3D_PROOF__[methodName](...methodArgs),
@@ -320,6 +326,7 @@ async function runH() {
   run = await launchProfile(profile);
   page = await pageFor(run, 'mismatch');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  await openMoreRecoveryOptions(page);
   assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Ver alterações recuperadas' }).count(), 1);
   assert.equal((await api(page, 'snapshot')).document.title, 'Unexpected same revision');
@@ -534,6 +541,7 @@ async function runJ() {
 
   await page.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
   assert.equal(await page.getByText('Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.').count(), 1);
+  await openMoreRecoveryOptions(page);
   await page.getByRole('button', { name: 'Apagar a cópia deste computador' }).click();
   await page.getByRole('button', { name: 'Sim, apagar a cópia' }).waitFor();
   const afterFirstClick = await committedRecordsFromFreshConnection(page);

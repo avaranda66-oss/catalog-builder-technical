@@ -1,7 +1,8 @@
 // J7 — Salvar e reabrir (grupo A, Equipe B). O pai edita o PCON-Y18, vê "Salvo" voltar sozinho, fecha
 // a aba; reabre e está tudo lá. Depois, com o servidor lento (holdSaves), edita e fecha a aba no meio do
 // salvamento; reabre OUTRO catálogo (TA-25N): nada bloqueia. Reabre o MESMO: aparece "Recuperação local"
-// em linguagem simples; "Conferir se foi salvo" confirma e nada se perde. Por fim, fecha a aba com um
+// em linguagem simples, com UMA opção recomendada e as outras em "Mais opções" (apagar ainda pede
+// confirmação); "Conferir se foi salvo" confirma e nada se perde. Por fim, fecha a aba com um
 // texto ainda sendo digitado (caixa aberta) e confere se esse texto volta.
 // FR-44: depois de editar, o horário de salvamento confirmado é obrigatório.
 //   BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j07-salvar-reabrir.mjs
@@ -210,8 +211,9 @@ try {
     && /Guardada em \d{2}\/\d{2}\/\d{4} às \d{2}:\d{2} · \d+ página/.test(texts.recovery),
     `${dialogMs} ms · "${texts.recovery.slice(0, 420)}"`);
   jargonStep('tela "Recuperação local"', texts.recovery);
-  j.step('uma opção vem destacada como recomendada ("Conferir se foi salvo") e as outras ficam discretas',
-    primary.length === 1 && primary[0] === 'Conferir se foi salvo', `destacada: ${primary.join(' · ')} · botões: ${recoveryButtons.join(' · ')}`);
+  j.step('uma opção vem destacada como recomendada ("Conferir se foi salvo") e as outras ficam em "Mais opções"',
+    primary.length === 1 && primary[0] === 'Conferir se foi salvo' && recoveryButtons.join(' · ') === 'Conferir se foi salvo · Mais opções',
+    `destacada: ${primary.join(' · ')} · botões: ${recoveryButtons.join(' · ')}`);
   const smallRecovery = Object.entries(measures.recovery).filter(([, m]) => m && m.fontPx < MIN_BODY_FONT_PX).map(([key, m]) => `${key}: ${m.fontPx} px`);
   const smallRecoveryTargets = ['botaoRecomendado', 'botaoSecundario'].filter((key) => measures.recovery[key] && measures.recovery[key].heightPx < MIN_TARGET_PX).map((key) => `${key}: ${measures.recovery[key].heightPx} px`);
   j.step(`a tela de recuperação tem textos ≥ ${MIN_BODY_FONT_PX} px e botões ≥ ${MIN_TARGET_PX} px`, smallRecovery.length === 0 && smallRecoveryTargets.length === 0,
@@ -220,6 +222,31 @@ try {
     j.finding(`A tela de recuperação oferece ${recoveryButtons.length} botões (${recoveryButtons.join(' / ')}). A recomendada vem destacada, mas "Ver alterações recuperadas" e "Apagar a cópia deste computador" poderiam ficar atrás de "Mais opções" para o pai não hesitar.`, { severity: 'low', where: 'Recuperação local' });
   }
   j.addEvidence(await shot(page, 'j07-04-recuperacao-local'));
+
+  // 5b. "Mais opções": nenhuma escolha se perdeu, e apagar continua pedindo confirmação.
+  const moreToggle = dialog.getByRole('button', { name: 'Mais opções', exact: true });
+  measures.recoveryMore = await measureAll({ maisOpcoes: moreToggle });
+  await clicks.click('conferir mais opções', moreToggle);
+  const moreGroup = dialog.getByRole('group', { name: 'Mais opções' });
+  const moreShown = await waitMs(() => moreGroup.isVisible().catch(() => false), { timeout: 5000 });
+  const moreButtons = moreShown >= 0 ? (await moreGroup.getByRole('button').allInnerTexts()).map((item) => item.trim()) : [];
+  const expectedMore = ['Abrir versão salva na nuvem', 'Ver alterações recuperadas', 'Apagar a cópia deste computador'];
+  j.step('"Mais opções" mostra as outras escolhas, sem perder nenhuma (versão salva, ver alterações, apagar a cópia)',
+    moreShown >= 0 && expectedMore.every((name) => moreButtons.includes(name)) && (measures.recoveryMore.maisOpcoes?.heightPx ?? 0) >= MIN_TARGET_PX,
+    `botões: ${moreButtons.join(' · ')} · "Mais opções": ${JSON.stringify(measures.recoveryMore.maisOpcoes)}`);
+  await clicks.click('conferir mais opções', moreGroup.getByRole('button', { name: 'Apagar a cópia deste computador' }));
+  const confirmDiscard = moreGroup.getByRole('button', { name: 'Sim, apagar a cópia' });
+  const confirmMs = await waitMs(() => confirmDiscard.isVisible().catch(() => false), { timeout: 5000 });
+  texts.recoveryDiscardWarning = ((await moreGroup.locator('[data-recovery-discard-warning]').textContent().catch(() => '')) ?? '').trim();
+  const recordsWhileConfirming = await page.evaluate(() => window.__FATHER__.recoveryRecords());
+  j.step('"Apagar a cópia deste computador" só pede confirmação ("Sim, apagar a cópia", avisando que as alterações serão perdidas); a cópia continua guardada',
+    confirmMs >= 0 && /serão perdidas/.test(texts.recoveryDiscardWarning) && recordsWhileConfirming.some((record) => record.catalogId === idA),
+    `aviso: "${texts.recoveryDiscardWarning}" · cópias locais: ${JSON.stringify(recordsWhileConfirming)}`);
+  j.addEvidence(await shot(page, 'j07-04b-mais-opcoes-confirmar-apagar'));
+  await clicks.click('conferir mais opções', moreToggle);
+  const closedMore = await waitMs(async () => !(await moreGroup.isVisible().catch(() => false)), { timeout: 5000 });
+  j.step('fechar "Mais opções" desiste de apagar: volta a mostrar só a opção recomendada e "Mais opções"',
+    closedMore >= 0 && (await dialog.getByRole('button').allInnerTexts()).map((item) => item.trim()).join(' · ') === 'Conferir se foi salvo · Mais opções');
 
   // 6. "Conferir se foi salvo": confirma o salvamento preso, abre com a rev. 2, nada se perde.
   await clicks.click('recuperar', dialog.getByRole('button', { name: 'Conferir se foi salvo' }));
@@ -259,6 +286,10 @@ try {
     j.step('texto que estava sendo digitado (sem "Concluir") ao fechar a aba: o navegador avisou e a recuperação oferece esse texto de volta ("inclui: texto que estava sendo digitado")',
       askedTyping, `aviso do navegador: ${askedTyping} · sujo: ${typingDirty} · "${texts.recoveryTyping.slice(0, 300)}"`);
     const typingButtons = (await typingDialog.getByRole('button').allInnerTexts()).map((item) => item.trim());
+    j.step('com o texto que estava sendo digitado, a opção recomendada é "Recuperar minhas alterações" e as outras ficam em "Mais opções"',
+      typingButtons.join(' · ') === 'Recuperar minhas alterações · Mais opções', `botões: ${typingButtons.join(' · ')}`);
+    // J7: "Recuperar minhas alterações" is the recommended choice; looking first is one of the "Mais opções".
+    await typingDialog.getByRole('button', { name: 'Mais opções', exact: true }).click();
     await typingDialog.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
     await page.waitForTimeout(500);
     const inspection = (await typingDialog.innerText()).replace(/\s+/g, ' ');

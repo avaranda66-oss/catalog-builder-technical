@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { VNextPersistenceRuntime } from '../persistence';
 import type { RecoveryStartupCandidate } from '../recovery';
 import { compilePlans, DocumentRenderer } from '../rendering';
@@ -14,6 +15,9 @@ import {
 import { fatherSaveLabel } from './save-presentation';
 
 export type RecoveryGatePhase = 'PENDING' | 'DECISION' | 'FAILED' | 'RELEASED';
+
+/** The non-destructive choices of one backup; discarding is handled apart, behind its confirmation. */
+type RecoveryChoice = 'recover' | 'check' | 'cloud' | 'view';
 
 function pendingMutationOf(candidate: RecoveryStartupCandidate) {
   return candidate.inspection.status === 'VALID' ? candidate.inspection.record.pendingRemoteMutation : undefined;
@@ -86,7 +90,9 @@ export function RecoveryCenter({
 }) {
   const [candidates, setCandidates] = React.useState<readonly RecoveryStartupCandidate[]>([]);
   const [inspectionId, setInspectionId] = React.useState<string>();
+  const [moreOptionsId, setMoreOptionsId] = React.useState<string>();
   const [confirmDiscardId, setConfirmDiscardId] = React.useState<string>();
+  const moreOptionsBaseId = React.useId();
   const [message, setMessage] = React.useState<string>();
   const [phase, setPhase] = React.useState<'PENDING' | 'READY' | 'FAILED'>('PENDING');
   const refreshGeneration = React.useRef(0);
@@ -141,6 +147,7 @@ export function RecoveryCenter({
   React.useEffect(() => {
     setCandidates([]);
     setInspectionId(undefined);
+    setMoreOptionsId(undefined);
     setConfirmDiscardId(undefined);
     void refresh();
     return () => {
@@ -225,9 +232,20 @@ export function RecoveryCenter({
     refreshGeneration.current += 1;
     setCandidates([]);
     setInspectionId(undefined);
+    setMoreOptionsId(undefined);
     setConfirmDiscardId(undefined);
     setMessage(undefined);
     setPhase('READY');
+  };
+
+  const toggleMoreOptions = (candidateId: string) => {
+    if (moreOptionsId === candidateId) {
+      // Closing "Mais opções" cancels a discard that was waiting for "Sim, apagar a cópia".
+      setMoreOptionsId(undefined);
+      if (confirmDiscardId === candidateId) setConfirmDiscardId(undefined);
+      return;
+    }
+    setMoreOptionsId(candidateId);
   };
 
   if (phase === 'PENDING') {
@@ -265,7 +283,7 @@ export function RecoveryCenter({
         <h2>Encontramos alterações deste catálogo que não foram salvas.</h2>
         <p>Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar.</p>
         {message && <p role="status">{message}</p>}
-        {candidates.map((candidate) => {
+        {candidates.map((candidate, index) => {
           const valid = candidate.inspection.status === 'VALID';
           const pending = pendingMutationOf(candidate);
           const canRecover = valid
@@ -273,11 +291,39 @@ export function RecoveryCenter({
             && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
           const canOpenCloud = 'remote' in candidate.decision;
           const summary = recoveryCandidateSummary(candidate);
-          // One recommended choice (navy), the others plain: recover, else check the pending save, else open the saved version.
-          const recommended = canRecover ? 'recover' : pending ? 'check' : canOpenCloud ? 'cloud' : undefined;
-          const style = (action: 'recover' | 'check' | 'cloud') => action === recommended ? 'vnext-btn-primary' : 'vnext-btn-secondary';
+          // J7: ONE recommended choice (navy) in view; every other choice stays one click away in "Mais opções".
+          // Recover, else check the pending save, else open the saved version, else just look at the copy.
+          // Discarding is never the recommended choice.
+          const recommended: RecoveryChoice = canRecover ? 'recover' : pending ? 'check' : canOpenCloud ? 'cloud' : 'view';
           // This decision sentence already says the last save was not confirmed: do not repeat it in a second line.
           const decisionMentionsPendingSave = Boolean(pending) && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
+          const moreOpen = moreOptionsId === candidate.id;
+          const moreId = `${moreOptionsBaseId}-${index}`;
+          const confirmingDiscard = confirmDiscardId === candidate.id;
+          const choiceButton = (choice: RecoveryChoice) => {
+            const className = choice === recommended ? 'vnext-btn-primary' : 'vnext-btn-secondary';
+            switch (choice) {
+              case 'recover':
+                return <button key={choice} type="button" className={className} onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>;
+              case 'check':
+                return <button key={choice} type="button" className={className} onClick={() => void reconcile(candidate)}>Conferir se foi salvo</button>;
+              case 'cloud':
+                return <button key={choice} type="button" className={className} onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>;
+              case 'view':
+                return (
+                  <button key={choice} type="button" className={className} aria-expanded={inspectionId === candidate.id} onClick={() => setInspectionId(
+                    inspectionId === candidate.id ? undefined : candidate.id
+                  )}>Ver alterações recuperadas</button>
+                );
+            }
+          };
+          const available: readonly RecoveryChoice[] = [
+            ...(canRecover ? ['recover' as const] : []),
+            ...(pending ? ['check' as const] : []),
+            ...(canOpenCloud ? ['cloud' as const] : []),
+            'view',
+          ];
+          const others = available.filter((choice) => choice !== recommended);
           return (
             <article key={candidate.id} className="vnext-recovery-card">
               <h3>{recoveryCandidateTitle(candidate)}</h3>
@@ -285,16 +331,31 @@ export function RecoveryCenter({
               <p data-recovery-decision="">{recoveryDecisionMessage(candidate)}</p>
               {pending && !decisionMentionsPendingSave && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
               <div className="vnext-recovery-actions">
-                {canRecover && <button type="button" className={style('recover')} onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
-                {pending && <button type="button" className={style('check')} onClick={() => void reconcile(candidate)}>Conferir se foi salvo</button>}
-                {canOpenCloud && <button type="button" className={style('cloud')} onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>}
-                <button type="button" className="vnext-btn-secondary" onClick={() => setInspectionId(
-                  inspectionId === candidate.id ? undefined : candidate.id
-                )}>Ver alterações recuperadas</button>
-                <button type="button" className="vnext-btn-secondary" onClick={() => void discard(candidate)}>
-                  {confirmDiscardId === candidate.id ? 'Sim, apagar a cópia' : 'Apagar a cópia deste computador'}
+                {choiceButton(recommended)}
+                <button
+                  type="button"
+                  className="vnext-btn-secondary vnext-recovery-more-toggle"
+                  aria-expanded={moreOpen}
+                  aria-controls={moreOpen ? moreId : undefined}
+                  onClick={() => toggleMoreOptions(candidate.id)}
+                >
+                  {moreOpen ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+                  Mais opções
                 </button>
               </div>
+              {moreOpen && (
+                <div id={moreId} className="vnext-recovery-actions vnext-recovery-more" role="group" aria-label="Mais opções" data-recovery-more-options="">
+                  {others.map(choiceButton)}
+                  <button type="button" className="vnext-btn-secondary" onClick={() => void discard(candidate)}>
+                    {confirmingDiscard ? 'Sim, apagar a cópia' : 'Apagar a cópia deste computador'}
+                  </button>
+                  {confirmingDiscard && (
+                    <p className="vnext-recovery-discard-warning" data-recovery-discard-warning="">
+                      As alterações guardadas nesta cópia serão perdidas. Clique em “Sim, apagar a cópia” para confirmar.
+                    </p>
+                  )}
+                </div>
+              )}
               {inspectionId === candidate.id && (
                 <ProtectedRecoveryInspection candidate={candidate} />
               )}
