@@ -3267,20 +3267,31 @@ export function EditorWorkspace({
       });
       return;
     }
+    const lockedMessage = groupHasLockedDescendant(object)
+      ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
+      : 'Objeto bloqueado. Desbloqueie para mover ou redimensionar.';
+    const lockedCompanion = companions.some((id) => {
+      const companion = selectedPage.objects.find((entry) => entry.id === id);
+      return !companion || Boolean(objectClosureLockedId(companion));
+    });
+    if (companions.length > 0 && (lockedCompanion || closureLockedId)) {
+      // These objects cannot move together, so there is no drag to start: say why, and let a click on one of the
+      // selected objects still keep only that one selected (a drag draws a selection box), like on any other object.
+      event.currentTarget.focus();
+      setStatusMessage(lockedCompanion
+        ? 'Um dos objetos selecionados está travado. Destrave-o em Camadas para mover todos juntos.'
+        : lockedMessage);
+      beginEmptyAreaPointer(event, () => {
+        selectObject(object.id);
+        setStatusMessage(closureLockedId ? lockedMessage : null);
+      });
+      return;
+    }
     if (companions.length === 0) selectObject(object.id);
     collapseOnClickRef.current = companions.length > 0 ? object.id : null;
     event.currentTarget.focus();
-    if (companions.some((id) => {
-      const companion = selectedPage.objects.find((entry) => entry.id === id);
-      return !companion || Boolean(objectClosureLockedId(companion));
-    })) {
-      setStatusMessage('Um dos objetos selecionados está travado. Destrave-o em Camadas para mover todos juntos.');
-      return;
-    }
     if (closureLockedId) {
-      setStatusMessage(groupHasLockedDescendant(object)
-        ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
-        : 'Objeto bloqueado. Desbloqueie para mover ou redimensionar.');
+      setStatusMessage(lockedMessage);
       return;
     }
     const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;

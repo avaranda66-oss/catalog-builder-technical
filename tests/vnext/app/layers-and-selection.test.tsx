@@ -213,6 +213,25 @@ describe('Onda 3.5 · several objects at once', () => {
     expect(objectsOf(session).map((object) => object.frame.xMm)).toEqual(before);
   });
 
+  it('a click on one of several selected objects keeps only that one, even when another selected object is locked', () => {
+    const base = openDocument();
+    const withLocked: CatalogDocument = { ...base, pages: [{ ...base.pages[0], objects: base.pages[0].objects.map((object) => object.id === 'c' ? { ...object, locked: true } : object) }] };
+    const { container, session } = setup(withLocked);
+    press(hit(container, 'a'), 30, 25);
+    press(hit(container, 'c'), 130, 205, { shiftKey: true });
+    press(hit(container, 'b'), 30, 55, { shiftKey: true });
+    expect(selectedIds(container).sort()).toEqual(['a', 'b', 'c']);
+    const before = JSON.stringify(objectsOf(session));
+    // A drag cannot move a selection that holds a locked object: nothing moves and the explanation shows.
+    const target = hit(container, 'a');
+    fireEvent.pointerDown(target, { pointerId: 5, button: 0, clientX: 30 * 2, clientY: 25 * 2 });
+    expect(screen.getByRole('status')).toHaveTextContent('Um dos objetos selecionados está travado');
+    fireEvent.pointerUp(target, { pointerId: 5, button: 0, clientX: 30 * 2, clientY: 25 * 2 });
+    expect(JSON.stringify(objectsOf(session))).toBe(before);
+    // The same press and release in place is a click: only the clicked object stays selected.
+    expect(selectedIds(container)).toEqual(['a']);
+  });
+
   it('groups objects that are not neighbours, then a double click edits a text of the group in place', () => {
     const { container, session } = setup(openDocument());
     press(hit(container, 'a'), 30, 25);
