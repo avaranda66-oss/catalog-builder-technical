@@ -16,6 +16,11 @@ node tests/vnext/proof/father-journeys/run-all.mjs j00 j02 jia1
 # Uma jornada.
 node tests/vnext/proof/father-journeys/j09-idiomas.mjs
 
+# J2-lite (Onda 3 · 3B): tabela de especificações a partir do folder e do manual TA, no chat.
+# A resposta da IA é controlada (window.__FATHER_DRAFT__, fatos reais de fixtures/spec-table-facts.mjs);
+# sem ela o harness responde como hoje em produção: a leitura de PDFs ainda não está implantada.
+node tests/vnext/proof/father-journeys/j02l-tabela-do-pdf.mjs
+
 # Janela menor; remover a variável para voltar ao padrão.
 $env:VP='1280'
 node tests/vnext/proof/father-journeys/run-all.mjs

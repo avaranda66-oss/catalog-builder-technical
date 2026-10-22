@@ -14,7 +14,6 @@ interface Props {
   readonly activePageId?: string;
   /** "Mostrar na tabela" in the pending list after the table went in. */
   readonly onShowTable?: (pageId: string, objectId: string) => void;
-  readonly previewRef?: React.Ref<HTMLDivElement>;
 }
 
 const pageRange = (first: number, last: number) => pageListText(Array.from({ length: last - first + 1 }, (_, index) => first + index));
@@ -63,7 +62,7 @@ function ReadSummaries({ reads }: { readonly reads: readonly SpecTableRead[] }) 
 }
 
 /** The J2-lite messages and cards of the conversation, in order. */
-export function SpecTableMessages({ controller, document, activePageId, onShowTable, previewRef }: Props) {
+export function SpecTableMessages({ controller, document, activePageId, onShowTable }: Props) {
   const { flow } = controller;
   const stage = flow?.stage;
   const set = stage?.kind === 'review' ? stage.set : undefined;
@@ -131,7 +130,7 @@ export function SpecTableMessages({ controller, document, activePageId, onShowTa
     <ChatCard label="Pendências antes de inserir" title="Confira antes de inserir" actions={null}>
       <PendingFactsPanel factSet={stage.set} onChange={controller.choose} />
     </ChatCard>
-    <ChatCard label="Prévia da tabela de especificações" title="Prévia da tabela" cardRef={previewRef}
+    <ChatCard label="Prévia da tabela de especificações" title="Prévia da tabela"
       actions={<>
         <button type="button" className="vnext-btn-primary" disabled={!compiled?.ok} onClick={controller.apply}>Aplicar</button>
         <button type="button" onClick={controller.choosePages}>Escolher outras páginas</button>
@@ -139,7 +138,7 @@ export function SpecTableMessages({ controller, document, activePageId, onShowTa
       </>}>
       {preview && compiled?.ok ? <div data-spec-table="preview">
         <p>{`${preview.filled} ${preview.filled === 1 ? 'valor conferido' : 'valores conferidos'} no PDF ${preview.filled === 1 ? 'entra' : 'entram'} na tabela.`
-          + (preview.blank ? ` ${preview.blank} ${preview.blank === 1 ? 'fica' : 'ficam'} em branco para você conferir.` : '')}</p>
+          + (preview.blank ? ` ${preview.blank} ${preview.blank === 1 ? 'fica' : 'ficam'} em branco para você conferir (veja as Pendências acima).` : '')}</p>
         <p className="ai-chat-note">{where}{compiled.draft.parts > 1 ? ` A tabela é longa e continua em ${compiled.draft.parts} páginas.` : ''}</p>
         {preview.parts.map(part => <div key={part.part} className="ai-spec-preview-wrap">
           <table className="ai-spec-preview">
@@ -149,7 +148,7 @@ export function SpecTableMessages({ controller, document, activePageId, onShowTa
                 const Tag = row.role === 'header' ? 'th' : 'td';
                 const empty = cell.state && cell.state !== 'verified' && cell.state !== 'chosen';
                 return <Tag key={cellIndex} data-cell-state={cell.state}>
-                  {empty ? <span className="ai-spec-blank">em branco</span> : cell.text}
+                  {empty ? <span className="ai-spec-blank">{cell.toChoose ? 'a escolher' : 'em branco'}</span> : cell.text}
                 </Tag>;
               })}
             </tr>)}</tbody>

@@ -67,6 +67,11 @@ describe('J2-lite fixture: the real TA folder p. 9 and manual p. 5 facts, checke
     if (!before.ok) throw new Error(before.message);
     const preview = draftPreview(before.draft);
     expect(preview).toMatchObject({ filled: 6, blank: 6 });
+    // The divergent range is "a escolher"; the resolution, only visible on the page image, is "em branco".
+    const rowOf = (label: string) => preview.parts[0].rows.find(row => row.cells[0].text === label)!;
+    expect(rowOf('Operating Range').cells.slice(1).map(cell => cell.toChoose)).toEqual([true, true, true]);
+    expect(rowOf('Resolution').cells.slice(1).map(cell => [cell.state, cell.toChoose])).toEqual([
+      ['pending', undefined], ['pending', undefined], ['pending', undefined]]);
     expect(preview.parts[0].rows[0].cells.map(cell => cell.text)).toEqual(['Característica', ...TA]);
     expect(preview.parts[0].rows.find(row => row.cells[0].text === 'Weight')!.cells.map(cell => cell.text))
       .toEqual(['Weight', '10.5 kg', '10.5 kg', '12.5 kg']);

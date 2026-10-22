@@ -10,6 +10,8 @@ export interface DraftPreviewCell {
   readonly text: string;
   /** Only for cells that hold a fact: 'verified' / 'chosen' are filled, the others stay for the person. */
   readonly state?: DraftCellTrace['state'];
+  /** The files disagree here and the person has not chosen yet ("a escolher"). */
+  readonly toChoose?: true;
 }
 export interface DraftPreviewPart {
   readonly part: number;
@@ -38,19 +40,22 @@ function cellText(table: TableModel, rowId: string, columnId: string): string {
 
 export function draftPreview(draft: CompiledDraft): DraftPreview {
   const parts: DraftPreviewPart[] = [];
+  const toChoose = new Set(draft.pending.filter(item => item.status === 'CONFLICT' && !item.resolved && item.choice !== 'missing')
+    .map(item => item.id));
   for (const step of draft.steps) {
     if (step.kind !== 'table' || step.action.object.type !== 'table') continue;
     const table = step.action.object.table;
     const traces = new Map(draft.cells.filter(cell => cell.part === step.part && cell.kind === 'value')
-      .map(cell => [`${cell.rowIndex}:${cell.columnIndex}`, cell.state]));
+      .map(cell => [`${cell.rowIndex}:${cell.columnIndex}`, cell]));
     parts.push({
       part: step.part,
       title: plain(table.title),
       rows: table.rows.map((row, rowIndex) => ({
         role: row.role ?? 'body',
         cells: table.columns.map((column, columnIndex) => {
-          const state = traces.get(`${rowIndex}:${columnIndex}`);
-          return { text: cellText(table, row.id, column.id), ...(state ? { state } : {}) };
+          const trace = traces.get(`${rowIndex}:${columnIndex}`);
+          return { text: cellText(table, row.id, column.id), ...(trace ? { state: trace.state } : {}),
+            ...(trace?.state === 'pending' && toChoose.has(trace.factId) ? { toChoose: true as const } : {}) };
         }),
       })),
       notes: table.annotations.map(note => plain(note.text)).filter(Boolean),

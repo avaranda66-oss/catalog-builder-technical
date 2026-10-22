@@ -102,14 +102,14 @@ describe('J2-lite inside the chat: a verified specification table from the dropp
       (body.source as { lastPage: number }).lastPage])).toEqual([[FOLDER_FILE, 9, 9], [MANUAL_FILE, 5, 5]]);
     // No credential ever leaves the browser: the server key reads the file.
     expect(JSON.stringify(extractions)).not.toMatch(/key|credential|byok/i);
-    expect(within(preview).getByText('6 valores conferidos no PDF entram na tabela. 6 ficam em branco para você conferir.')).toBeInTheDocument();
+    expect(within(preview).getByText('6 valores conferidos no PDF entram na tabela. 6 ficam em branco para você conferir (veja as Pendências acima).')).toBeInTheDocument();
     expect(within(preview).getByRole('table')).toHaveTextContent('10.5 kg');
 
     const pending = screen.getByRole('group', { name: 'Pendências antes de inserir' });
     expect(within(pending).getByRole('heading', { name: 'Pendências (7)' })).toBeInTheDocument();
     fireEvent.click(within(pending).getByRole('button', { name: 'Usar -25 °C to +155 °C' }));
     expect(within(pending).getByRole('heading', { name: 'Pendências (6)' })).toBeInTheDocument();
-    expect(within(preview).getByText('7 valores conferidos no PDF entram na tabela. 5 ficam em branco para você conferir.')).toBeInTheDocument();
+    expect(within(preview).getByText('7 valores conferidos no PDF entram na tabela. 5 ficam em branco para você conferir (veja as Pendências acima).')).toBeInTheDocument();
     expect(session.getSnapshot().document).toEqual(doc);
 
     fireEvent.click(within(preview).getByRole('button', { name: 'Aplicar' }));

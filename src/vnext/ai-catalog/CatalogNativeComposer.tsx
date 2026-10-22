@@ -399,7 +399,6 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
     },
   });
-  const specTableRef = React.useRef<HTMLDivElement>(null);
   const undoFromConversation = (entryId: string) => {
     if (undoable.get(entryId) !== session.getSnapshot().localSequence || !session.getSnapshot().canUndo) return;
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -465,7 +464,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       key: `spec-table:${shownSpecTable.at}`, at: shownSpecTable.at, order: 2,
       tail: `spec-table:${shownSpecTable.id}:${shownSpecTable.stage.kind}`,
       node: <SpecTableMessages key={`spec-table:${shownSpecTable.at}`} controller={specTable} document={snapshot.document}
-        activePageId={activePageId} onShowTable={onShowTable} previewRef={specTableRef} />,
+        activePageId={activePageId} onShowTable={onShowTable} />,
     });
   }
   if (insertion.notice && noticeAt) {
@@ -550,10 +549,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     });
   }
   const empty = items.length === 0;
-  const specPreview = shownSpecTable?.stage.kind === 'review';
+  // The spec-table preview is not revealed from its top: the conversation follows to its end, where "Aplicar" is.
   const revealKey = shownPending ? `pages:${shownPending.requestSequence}`
-    : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}`
-      : specPreview ? `spec-table:${shownSpecTable.id}` : '';
+    : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}` : '';
 
   // ------------------------------------------------------------------ header menus
   const history: ChatMenuSection[] = [{
@@ -635,7 +633,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       </div>
     )}
     <ChatThread label="Conversa com o assistente" tailKey={items.map((item) => item.tail ?? item.key).join('|')} followKey={follow}
-      empty={empty} revealKey={revealKey} revealRef={specPreview && !shownPending && !shownRewrite ? specTableRef : proposalRef}>
+      empty={empty} revealKey={revealKey} revealRef={proposalRef}>
       {empty && <div className="ai-chat-welcome">
         <p className="ai-chat-welcome-title">O que vamos fazer neste catálogo?</p>
         <div className="ai-chat-suggestions">
