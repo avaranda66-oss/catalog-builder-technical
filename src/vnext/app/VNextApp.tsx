@@ -1,5 +1,6 @@
 import React from 'react';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
+import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
 import { createDocumentSession, createStaticPageTemplateRegistry, type DocumentSession } from '../application';
 import type { VNextPersistenceRuntime } from '../persistence';
 import type { AssetPersistenceBridge } from '../asset';
@@ -24,6 +25,8 @@ export interface VNextAppProps {
   session?: DocumentSession;
   runtime?: VNextPersistenceRuntime;
   composerClient?: NativeComposeFunctionsClient;
+  /** J2-lite: reading a PDF with the AI to build a verified specification table (server key). */
+  factExtraction?: SpecTableGateway;
   assetBridge?: AssetPersistenceBridge;
   simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
@@ -36,6 +39,7 @@ function RuntimeWorkspace({
   runtime,
   assetBridge,
   composerClient,
+  factExtraction,
   simpleByDefault,
   onRequestLibrary,
   translation,
@@ -45,6 +49,8 @@ function RuntimeWorkspace({
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
   composerClient?: NativeComposeFunctionsClient;
+  /** J2-lite: reading a PDF with the AI to build a verified specification table (server key). */
+  factExtraction?: SpecTableGateway;
   simpleByDefault?: boolean;
   onRequestLibrary?: () => void;
   translation?: TranslationReviewCoordinator;
@@ -91,6 +97,7 @@ function RuntimeWorkspace({
           key={snapshot.binding.openSessionId}
           session={snapshot.session}
           composerClient={composerClient}
+          factExtraction={factExtraction}
           simpleByDefault={simpleByDefault}
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
@@ -147,8 +154,8 @@ function InMemoryWorkspace({ suppliedSession, simpleByDefault }: { suppliedSessi
   return <EditorWorkspace session={session} demoAssets simpleByDefault={simpleByDefault} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, composerClient, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, composerClient, factExtraction, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} composerClient={composerClient} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} composerClient={composerClient} factExtraction={factExtraction} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
     : <InMemoryWorkspace suppliedSession={suppliedSession} simpleByDefault={simpleByDefault} />;
 }

@@ -19,6 +19,10 @@
 //   ?ia=limite|off    IA: limite diário atingido (429 AGENT_DAILY_BUDGET_EXCEEDED) | servidor sem IA
 //                     (503 PROVIDER_NOT_CONFIGURED). Sem o parâmetro, a IA responde uma proposta.
 //   ?catalog=<id>     abre o editor direto neste catálogo (como /v2?catalog=<id>)
+//
+// Leitura de PDF pela IA (J2-lite): window.__FATHER_DRAFT__ = { answers: { "<arquivo.pdf>": <sheet> } }, definido pela
+// prova ANTES de a página carregar (addInitScript), faz o papel da função vnext-catalog-draft com um provedor
+// controlado. Sem ele, a função "não está implantada" (404), como hoje em produção.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {
@@ -60,6 +64,8 @@ import { IndexedDbRecoveryRepository } from '@/vnext/recovery';
 import type { PublicationSource } from '@/vnext/publication/review';
 import type { NativeComposeFunctionsClient } from '@/vnext/ai-catalog/native-compose-client';
 import type { ComposerErrorCode } from '@/vnext/ai-catalog/composer-codes';
+import type { DraftClient } from '@/vnext/ai-catalog/draft-client';
+import { serverSpecTableGateway } from '@/vnext/ai-catalog/spec-table/spec-table-gateway';
 import {
   ControlledTranslationProvider,
   MemoryTranslationRequestCache,
@@ -424,6 +430,67 @@ const composerClient = {
 } as NativeComposeFunctionsClient;
 
 // ---------------------------------------------------------------------------------------------
+// Leitura de PDF pela IA (J2-lite, FR-66): vnext-catalog-draft CONTROLADA. Só a resposta da IA (sheet) é da
+// prova; guardar o arquivo, conferir cada valor com o texto do próprio PDF, pendências e compilador são o código real.
+// ---------------------------------------------------------------------------------------------
+interface FatherDraftConfig { readonly answers: Readonly<Record<string, unknown>> }
+declare global { interface Window { __FATHER_DRAFT__?: FatherDraftConfig } }
+const HARNESS_USER_ID = user === 'B' ? '7c9e6679-7425-40de-944b-e07fc1f90ae7' : '0f8fad5b-d9cb-469f-a165-70867728950e';
+const draftCalls: Array<{ task: string; fileName?: string; firstPage?: number; lastPage?: number; outcome: string }> = [];
+const draftUploads: string[] = [];
+function draftHttpFailure(status: number, body: unknown) {
+  return {
+    data: null,
+    error: {
+      name: 'FunctionsHttpError',
+      message: 'Edge Function returned a non-2xx status code',
+      context: new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }),
+    },
+  };
+}
+const draftClient: DraftClient = {
+  functions: {
+    invoke: async (name, { body }) => {
+      const request = (body ?? {}) as { task?: string; source?: { path?: string; fileName?: string; firstPage?: number; lastPage?: number } };
+      const task = request.task ?? 'unknown';
+      const record = (outcome: string) => {
+        draftCalls.push({ task, fileName: request.source?.fileName, firstPage: request.source?.firstPage, lastPage: request.source?.lastPage, outcome });
+      };
+      const config = window.__FATHER_DRAFT__;
+      if (name !== 'vnext-catalog-draft' || !config) {
+        // Como o Supabase responde para uma função que ainda não foi implantada.
+        record('NOT_DEPLOYED');
+        return draftHttpFailure(404, { code: 'NOT_FOUND', message: 'Requested function was not found' });
+      }
+      if (task === 'status') {
+        record('OK');
+        return { data: { code: 'OK', status: { serverKey: true, budget: 'ok', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880 } }, error: null };
+      }
+      if (task !== 'extract_facts' || !request.source?.fileName) { record('INVALID_REQUEST'); return draftHttpFailure(400, { code: 'INVALID_REQUEST' }); }
+      if (!request.source.path || !draftUploads.includes(request.source.path)) { record('SOURCE_NOT_FOUND'); return draftHttpFailure(404, { code: 'SOURCE_NOT_FOUND' }); }
+      const sheet = config.answers[request.source.fileName];
+      if (!sheet) { record('PROVIDER_UNAVAILABLE'); return draftHttpFailure(502, { code: 'PROVIDER_UNAVAILABLE' }); }
+      record('OK');
+      return {
+        data: { code: 'OK', extraction: { promptVersion: 'father-journeys-controlado', model: 'provedor-controlado', modelVersion: null,
+          cached: false, sheet, trimmed: 0, usage: { inputTokens: 0, outputTokens: 0, estimatedUsd: 0 }, ms: 0 } },
+        error: null,
+      };
+    },
+  },
+  storage: {
+    from: () => ({
+      upload: async (path) => {
+        if (!window.__FATHER_DRAFT__) return { data: null, error: { statusCode: '404', message: 'Bucket not found' } };
+        if (!draftUploads.includes(path)) draftUploads.push(path);
+        return { data: { path }, error: null };
+      },
+    }),
+  },
+};
+const factExtraction = serverSpecTableGateway(draftClient, HARNESS_USER_ID);
+
+// ---------------------------------------------------------------------------------------------
 // Montagem (espelha mountVNextApp)
 // ---------------------------------------------------------------------------------------------
 const presysTemplates = createPresysPageTemplateRegistry();
@@ -604,6 +671,7 @@ function installEditorRuntime(runtime: VNextPersistenceRuntime, bridge: DefaultA
         runtime={runtime}
         assetBridge={bridge}
         composerClient={composerClient}
+        factExtraction={factExtraction}
         simpleByDefault
         onRequestLibrary={() => { void requestLibrary(); }}
         translation={translation}
@@ -713,6 +781,8 @@ const api = {
       uploads: [...assetRepository.uploads],
       finalized: [...assetRepository.finalized],
       composerCalls: [...composerCalls],
+      draftCalls: [...draftCalls],
+      draftUploads: [...draftUploads],
       translationRequests: translationProvider.requests.length,
     };
   },

@@ -26,6 +26,8 @@ export interface PendingFactsPanelProps {
   /** After insertion: where each fact landed (`AppliedDraft.cells`). */
   readonly cells?: ReadonlyMap<string, DraftCellTarget>;
   readonly onSelectCell?: (target: DraftCellTarget) => void;
+  /** After the table went in: the list stays to find the cells, but choices can no longer change it. */
+  readonly readOnly?: boolean;
 }
 
 const STATUS_TEXT: Readonly<Record<PendingFact['status'], string>> = {
@@ -49,13 +51,15 @@ function chosenText(item: PendingFact): string | undefined {
   return chosen ? `Escolhido: ${shownValue(item, chosen)} (${chosen.where}).` : undefined;
 }
 
-function PendingItem({ item, target, onChoose, onSelectCell }: {
+function PendingItem({ item, target, onChoose, onSelectCell, readOnly }: {
   readonly item: PendingFact;
+  readonly readOnly?: boolean;
   readonly target?: DraftCellTarget;
   readonly onChoose: (choice: number | 'missing') => void;
   readonly onSelectCell?: (target: DraftCellTarget) => void;
 }) {
   const conflict = item.status === 'CONFLICT';
+  const canChoose = conflict && !readOnly;
   const title = pendingTitle(item);
   const chosen = chosenText(item);
   return (
@@ -81,13 +85,13 @@ function PendingItem({ item, target, onChoose, onSelectCell }: {
                 <span className="ai-pending-value">{value}</span>
                 <span className="ai-pending-where">{candidate.where}</span>
                 <blockquote className="ai-pending-quote">“{candidate.source.quote}”</blockquote>
-                {conflict && candidate.choosable && (
+                {canChoose && candidate.choosable && (
                   <button type="button" className={picked ? 'vnext-btn-primary' : undefined} aria-pressed={picked}
                     onClick={() => onChoose(candidate.index)}>
                     {`Usar ${value}`}
                   </button>
                 )}
-                {conflict && !candidate.choosable && (
+                {canChoose && !candidate.choosable && (
                   <span className="ai-pending-note">Este valor não foi conferido no texto do arquivo e não pode ser usado direto.</span>
                 )}
               </li>
@@ -95,7 +99,7 @@ function PendingItem({ item, target, onChoose, onSelectCell }: {
           })}
         </ul>
       )}
-      {conflict && (
+      {canChoose && (
         <div className="ai-pending-actions">
           <button type="button" aria-pressed={item.choice === 'missing'} onClick={() => onChoose('missing')}>Deixar em branco</button>
         </div>
@@ -106,7 +110,7 @@ function PendingItem({ item, target, onChoose, onSelectCell }: {
   );
 }
 
-export function PendingFactsPanel({ factSet, onChange, cells, onSelectCell }: PendingFactsPanelProps) {
+export function PendingFactsPanel({ factSet, onChange, cells, onSelectCell, readOnly }: PendingFactsPanelProps) {
   const headingId = useId();
   const items = pendingFacts(factSet);
   const open = openPendingCount(items);
@@ -119,7 +123,7 @@ export function PendingFactsPanel({ factSet, onChange, cells, onSelectCell }: Pe
       {items.length > 0 && (
         <ol className="ai-pending-list">
           {items.map((item) => (
-            <PendingItem key={item.id} item={item} target={cells?.get(item.id)} onSelectCell={onSelectCell}
+            <PendingItem key={item.id} item={item} target={cells?.get(item.id)} onSelectCell={onSelectCell} readOnly={readOnly}
               onChoose={(choice) => onChange(recordChoice(factSet, item.id, choice))} />
           ))}
         </ol>
