@@ -149,6 +149,12 @@ async function clearDatabase(run) {
   }, databaseName);
 }
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 async function api(page, method, ...args) {
   return page.evaluate(
     ({ methodName, methodArgs }) => window.__W3D_PROOF__[methodName](...methodArgs),
@@ -207,7 +213,7 @@ async function runD() {
   let page = await pageFor(run, 'committed');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
   assert.equal(await page.locator('[data-save-state]').textContent(), 'Não foi possível confirmar o salvamento');
-  await page.getByRole('button', { name: 'Verificar gravação pendente' }).click();
+  await page.getByRole('button', { name: 'Conferir se foi salvo' }).click();
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor({ state: 'detached' });
   const committedAfterRestart = await api(page, 'snapshot');
   assert.equal(committedAfterRestart.document.title, 'Pending committed remotely');
@@ -226,7 +232,7 @@ async function runE() {
   const replayPending = await createPendingCrash(replayProfile, 'Pending exact replay');
   let run = await launchProfile(replayProfile);
   let page = await pageFor(run, 'replay');
-  await page.getByRole('button', { name: 'Verificar gravação pendente' }).click();
+  await page.getByRole('button', { name: 'Conferir se foi salvo' }).click();
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor({ state: 'detached' });
   const replaySnapshot = await api(page, 'snapshot');
   assert.equal(replaySnapshot.lastSaveRequest.mutationId, replayPending.mutationId);
@@ -244,7 +250,7 @@ async function runE() {
   run = await launchProfile(divergentProfile);
   page = await pageFor(run, 'mismatch');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
-  await page.getByRole('button', { name: 'Verificar gravação pendente' }).click();
+  await page.getByRole('button', { name: 'Conferir se foi salvo' }).click();
   assert.equal((await api(page, 'snapshot')).lastSaveRequest, undefined);
   assert.equal((await api(page, 'list')).length, 1);
   assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
@@ -320,6 +326,7 @@ async function runH() {
   run = await launchProfile(profile);
   page = await pageFor(run, 'mismatch');
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
+  await openMoreRecoveryOptions(page);
   assert.equal(await page.getByRole('button', { name: 'Recuperar minhas alterações' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Ver alterações recuperadas' }).count(), 1);
   assert.equal((await api(page, 'snapshot')).document.title, 'Unexpected same revision');
@@ -524,7 +531,7 @@ async function runJ() {
   await page.getByRole('dialog', { name: 'Recuperação local' }).waitFor();
   assert.equal(await page.locator('[data-editor-action="add-shape"]').count(), 0);
   assert.equal(
-    await page.getByText('O registro local é inválido ou incompatível e não será aberto.').count(),
+    await page.getByText('Esta cópia de segurança está danificada e não pode ser aberta.').count(),
     1
   );
   const beforeDiscard = await committedRecordsFromFreshConnection(page);
@@ -533,14 +540,15 @@ async function runJ() {
   assert.deepEqual(beforeDiscard[0].key, seeded.invalidKey);
 
   await page.getByRole('button', { name: 'Ver alterações recuperadas' }).click();
-  assert.equal(await page.getByText('Registro local inválido preservado').count(), 1);
-  await page.getByRole('button', { name: 'Descartar recuperação local' }).click();
-  await page.getByRole('button', { name: 'Confirmar descarte local' }).waitFor();
+  assert.equal(await page.getByText('Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.').count(), 1);
+  await openMoreRecoveryOptions(page);
+  await page.getByRole('button', { name: 'Apagar a cópia deste computador' }).click();
+  await page.getByRole('button', { name: 'Sim, apagar a cópia' }).waitFor();
   const afterFirstClick = await committedRecordsFromFreshConnection(page);
   assert.equal(afterFirstClick.length, 1, 'First discard click must not delete invalid recovery');
   assert.equal(afterFirstClick[0].status, 'INVALID');
 
-  await page.getByRole('button', { name: 'Confirmar descarte local' }).click();
+  await page.getByRole('button', { name: 'Sim, apagar a cópia' }).click();
   await page.locator('[data-editor-action="add-shape"]').waitFor();
   const afterConfirmation = await committedRecordsFromFreshConnection(page);
   const neighborAfterConfirmation = await committedRecordsFromFreshConnection(page, 'physical:user-b');

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fillProvisionalContent } from './fixtures/content-placeholders.mjs';
 
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -271,7 +272,7 @@ async function save(page) {
   await page.waitForFunction(() => { const value = window.__C1_STATE__(); return value && !value.dirty && value.save.phase !== 'saving'; });
 }
 async function selectPage(page, index) {
-  await page.locator('.vnext-page-list button').nth(index).click();
+  await page.locator('.vnext-page-list [data-page-nav-id]').nth(index).click();
 }
 
 function authoredStructure(document) {
@@ -318,7 +319,7 @@ async function printProof(page, name) {
     assert(Math.abs((pdfPage.view[3] - pdfPage.view[1]) * 25.4 / 72 - 297) < .5);
     content += (await pdfPage.getTextContent()).items.filter(item => 'str' in item).map(item => item.str).join(' ');
   }
-  assert(content.includes('TA-25N')); assert(content.includes('A COMPLETAR'));
+  assert(content.includes('TA-25N')); assert(!content.includes('A COMPLETAR'), 'FR-51: provisional text must not be printed');
   assert(!content.includes('Centro de Tradução')); assert(!content.includes('Imprimir / salvar PDF'));
   await pdf.destroy();
   observations.push({ pdf: path, pages: 2, a4: true, interfaceExcluded: true, text: content });
@@ -331,7 +332,7 @@ async function workflow(browser, width) {
   const page = await context.newPage(); watch(page, String(width));
   await page.goto(origin + '/v2', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
-  await page.getByRole('button', { name: /PRESYS.*TA-25N/ }).click();
+  await page.getByRole('button', { name: 'PRESYS · TA-25N — produto e especificações', exact: true }).click();
   await page.locator('[data-vnext-shell]').waitFor();
   await page.locator('[data-editorial-root] img').first().evaluate(node => node.decode());
   const source = (await state(page)).document;
@@ -399,7 +400,14 @@ async function workflow(browser, width) {
     await shot(page, targetLocale + '-generating', width);
     holdTranslation = false; releaseTranslation?.();
     await page.locator('[data-translation-run="0"]').waitFor();
-    assert.equal(await selector.isDisabled(), true, 'Target stays pinned to the generated candidate');
+    // F-09: with runs on screen the selector gives way to one line "<título> · origem → destino"; the target stays pinned to
+    // the generated candidate (no control left to change it) and the father still reads which language he is reviewing.
+    assert.equal(await selector.count(), 0, 'Target stays pinned to the generated candidate: no selector during review');
+    assert.equal(await dialog.getByRole('combobox').count(), 0);
+    const languages = dialog.locator('[data-translation-languages="compact"]');
+    assert.equal(await languages.count(), 1);
+    const compactText = (await languages.innerText()).replace(/\s+/g, ' ');
+    assert(compactText.includes('Português (Brasil)') && compactText.includes('→') && compactText.includes(language), `Compact header must name source and target: ${compactText}`);
     await modalKeyboard(page, dialog);
     await shot(page, targetLocale + '-review', width);
     const title = page.locator('[data-translation-run="0"]');
@@ -463,6 +471,16 @@ async function workflow(browser, width) {
     await page.locator('[data-text-edit-textarea]').waitFor({ state: 'detached' });
     await save(page);
     assert.deepEqual((await state(page)).document.pages[0].objects.find(object => object.id === text.id).frame, frame);
+    // FR-51: the copy still carries the starter's provisional fields; they block the PDF until they are filled.
+    await page.locator('[data-editor-action="publish"]').click();
+    await page.locator('[data-publication-status="BLOCKED"]').waitFor();
+    // FR-81: the source note is no longer printed, so the six pending fields are what blocks.
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 6);
+    assert.equal(await page.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').count(), 0);
+    await closePublication(page);
+    const provisionalFilled = await fillProvisionalContent(page);
+    assert(provisionalFilled.length >= 6);
+    await save(page);
     assert(catalogs.get(copy.catalogId).remoteRevision >= 2);
     await returnToLibrary(page); await openCatalog(page, copy.catalogId);
     assert.equal((await state(page)).document.locale, targetLocale);
@@ -477,7 +495,8 @@ async function workflow(browser, width) {
     assert.equal(JSON.stringify(catalogs.get(sourceId).documentSnapshot), original);
     result.copies.push({ targetLocale, catalogId: copy.catalogId, sourceRevision: copy.origin.originRevision,
       savedRevision: catalogs.get(copy.catalogId).remoteRevision, originalUnchanged: true,
-      duplicateAcceptCreatedOnce: true, reopenPreserved: true, overflowBlocked: true, manualCorrectionReady: true,
+      duplicateAcceptCreatedOnce: true, reopenPreserved: true, overflowBlocked: true, provisionalBlocked: true,
+      provisionalFilled: provisionalFilled.length, manualCorrectionReady: true,
       manualCorrection: correctedText });
     await returnToLibrary(page); await openCatalog(page, sourceId);
   }

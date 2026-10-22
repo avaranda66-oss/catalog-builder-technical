@@ -1,0 +1,78 @@
+/*
+ * FR-30 — editor inside the table cell (slice 2A). styles.css belongs to slice 2C in this wave, so these rules sit
+ * beside the component. The editor is counter-zoomed (inline `zoom`), so every size here is in screen px.
+ */
+.vnext-cell-inline-anchor { position: absolute; z-index: 9; pointer-events: none; }
+.vnext-cell-inline-editor { position: absolute; left: 0; top: 0; pointer-events: auto; scroll-margin: 56px 16px 76px; }
+.vnext-cell-inline-editor textarea,
+.vnext-cell-inline-editor .vnext-cell-inline-note {
+  display: block;
+  box-sizing: border-box;
+  max-width: 560px;
+  margin: 0;
+  border: 2px solid #0072ce;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(23, 32, 51, .22);
+  color: #172033;
+  font: 16px/1.4 'Noto Sans', Arial, sans-serif;
+  padding: 6px 8px;
+}
+.vnext-cell-inline-editor textarea { resize: none; overflow: auto; white-space: pre-wrap; outline: none; }
+.vnext-cell-inline-editor textarea.is-single-line { overflow: hidden; white-space: nowrap; }
+.vnext-cell-inline-editor textarea:focus-visible { box-shadow: 0 0 0 3px rgba(0, 114, 206, .28), 0 6px 18px rgba(23, 32, 51, .22); }
+.vnext-cell-inline-note { color: #31445b; font-size: 14px; }
+
+.vnext-cell-inline-toolbar {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  display: flex;
+  width: max-content;
+  max-width: 560px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #b8c7d8;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(23, 32, 51, .14);
+  padding: 4px;
+}
+.vnext-cell-inline-toolbar button {
+  display: inline-grid;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #fff;
+  color: #003f78;
+  cursor: pointer;
+  font: 700 15px/1 'Noto Sans', Arial, sans-serif;
+  padding: 0 6px;
+}
+.vnext-cell-inline-toolbar button:hover:not(:disabled),
+.vnext-cell-inline-toolbar button:focus-visible { border-color: #0072ce; background: #edf5ff; outline: 0; }
+.vnext-cell-inline-toolbar button:disabled { color: #9aa7b6; cursor: not-allowed; }
+.vnext-cell-inline-toolbar-gap { width: 6px; }
+
+.vnext-cell-inline-help {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  /* Wraps inside the editor's width, so it never runs past the editor. */
+  min-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 6px;
+  background: #003f78;
+  color: #fff;
+  font: 13px/1.35 'Noto Sans', Arial, sans-serif;
+  padding: 4px 8px;
+  pointer-events: none;
+}
+
+/* A cell on the right half of the page: the editor grows to the left from the cell's right edge. */
+.vnext-cell-inline-editor.is-align-end { left: auto; right: 0; }
+.vnext-cell-inline-editor.is-align-end .vnext-cell-inline-toolbar { left: auto; right: 0; }

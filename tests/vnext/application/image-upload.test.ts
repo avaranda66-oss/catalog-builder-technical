@@ -4,7 +4,7 @@ import { mmToU, type CatalogDocument, type TableObject } from '@/vnext/domain';
 import { VNextPersistenceRuntime, type CatalogRepository } from '@/vnext/persistence';
 import type { AssetUploadResult } from '@/vnext/asset';
 import { imageUploadErrorMessage, imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from '@/vnext/app/image-upload';
-import { W2C_DEMO_ASSETS } from '@/vnext/app/editor-defaults';
+import { NEW_IMAGE_LONG_SIDE_MM, W2C_DEMO_ASSETS, createImageInsertSpec, photoFrameSizeMm } from '@/vnext/app/editor-defaults';
 import { emptyTable } from '../proof/test-data';
 
 function setup() {
@@ -24,6 +24,40 @@ function setup() {
   const input = { intent, file, runtime, bridge, getActivePageId: () => document.pages[0].id, isCurrent: () => true };
   return { document, session, runtime, asset, success, input, bridge, release: () => release(success) };
 }
+
+describe('C-01 a new photo frame follows the photo', () => {
+  const page = () => createCatalogDocument(() => crypto.randomUUID()).pages[0];
+
+  it('inserts a portrait phone photo in a portrait frame, as big as before, inside the safe area', async () => {
+    const s = setup();
+    const portrait = { ...s.asset, widthPx: 2000, heightPx: 3000 };
+    s.bridge.upload.mockResolvedValue({ ok: true, asset: portrait, runtimeState: { status: 'resolved', asset: portrait, url: 'blob:x', expiresAt: 9999999999999 } });
+    await uploadWorkspaceImage(s.input);
+    const inserted = s.session.getSnapshot().document.pages[0].objects[0];
+    expect(inserted.type).toBe('image');
+    expect(inserted.frame.heightMm).toBeCloseTo(NEW_IMAGE_LONG_SIDE_MM, 1);
+    expect(inserted.frame.widthMm).toBeCloseTo(NEW_IMAGE_LONG_SIDE_MM * 2 / 3, 1);
+    // No empty bands: the frame has the photo's own proportion.
+    expect(inserted.frame.widthMm / inserted.frame.heightMm).toBeCloseTo(2000 / 3000, 2);
+    const doc = s.session.getSnapshot().document.pages[0];
+    expect(inserted.frame.xMm).toBeGreaterThanOrEqual(doc.safeArea?.leftMm ?? 20);
+    expect(inserted.frame.yMm + inserted.frame.heightMm).toBeLessThanOrEqual(doc.heightMm - (doc.safeArea?.bottomMm ?? 20));
+  });
+
+  it('keeps landscape photos landscape and very thin ones usable, never larger than the safe area', () => {
+    expect(photoFrameSizeMm(page(), { widthPx: 3000, heightPx: 2000 })).toEqual({ widthMm: 58, heightMm: 38.67 });
+    expect(photoFrameSizeMm(page(), { widthPx: 1000, heightPx: 1000 })).toEqual({ widthMm: 58, heightMm: 58 });
+    const panorama = photoFrameSizeMm(page(), { widthPx: 10_000, heightPx: 1000 });
+    expect(panorama).toEqual({ widthMm: 100, heightMm: 10 });
+    const a4 = page();
+    const strip = photoFrameSizeMm(a4, { widthPx: 100, heightPx: 10_000 });
+    expect(strip.heightMm).toBeLessThanOrEqual(a4.heightMm - (a4.safeArea?.topMm ?? 20) - (a4.safeArea?.bottomMm ?? 20));
+    expect(strip.widthMm / strip.heightMm).toBeCloseTo(0.01, 3);
+    // Without a usable size the square default stays.
+    expect(photoFrameSizeMm(page(), { widthPx: 0, heightPx: 0 })).toEqual({ widthMm: 58, heightMm: 58 });
+    expect(createImageInsertSpec(page(), { widthPx: 2000, heightPx: 3000 })).toMatchObject({ type: 'image', fit: 'contain' });
+  });
+});
 
 describe('shared Image upload orchestration', () => {
   it('links once, then installs runtime data; Redo never uploads', async () => {

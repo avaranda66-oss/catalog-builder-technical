@@ -1,0 +1,22 @@
+{
+  "build": "vite dev (React development build, StrictMode)",
+  "viewport": "1366x768",
+  "pages": 10,
+  "rounds": 3,
+  "visibleThumbnailsDrawnAfterShellMs": 597,
+  "remainingSevenDrawnOnScrollMs": 388,
+  "thumbnailReactRenderMs": {
+    "firstThree": 29,
+    "otherSeven": 94,
+    "fiveEdits": 56
+  },
+  "editedThumbnailVisibleAfterEditPaintMs": 412,
+  "longTaskMsForFiveEdits": {
+    "thumbnailsOn": 13940,
+    "thumbnailsOff": 11304
+  },
+  "editPaintMsMedian": {
+    "thumbnailsOn": 2061,
+    "thumbnailsOff": 1903
+  }
+}

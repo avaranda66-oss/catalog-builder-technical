@@ -1,0 +1,2039 @@
+{
+  "status": "PASS",
+  "runId": "0f603c18-7add-4a8b-8f3a-2ab940cb0754",
+  "startedAt": "2026-10-20T16:05:40.768Z",
+  "boundary": "Real Chromium Range geometry on real RichTextRenderer/intrinsicMetrics; isolated fixture, no production/cloud or whole-editor PDF acceptance claim.",
+  "gitHead": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+  "sourceHashes": {
+    "src/vnext/rendering/measurement.ts": "ba45d5013f33054dd23e4b5bb6b5b19ce88074f4d9764e79c976d591fc4553be",
+    "src/vnext/rendering/RichTextRenderer.tsx": "9b01f1f15960d1b2310ed1f6f942a927bf7c83d01d355cc728d766852c74043d",
+    "tests/vnext/proof/fixtures/hanging-space-browser.html": "c98dbd2bd283078ac5af02c3999b881207d120076bb42d82d7b11d071de38192",
+    "tests/vnext/proof/fixtures/hanging-space-browser.tsx": "38b99e5d8e0c4b7f6f4fee3425fb452ff03b063eb0229eedbc248599ac3d77fd",
+    "tests/vnext/proof/hanging-space-browser-proof.mjs": "188062fe2dc2ed14cc0c6c1f47599f8cd41b2d59d274e86eb660f9c326743476"
+  },
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "screen": [
+    {
+      "id": "hanging",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-hanging:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-hanging:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-hanging:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-hanging:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 4223,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 3519,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-hanging:p"
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-hanging:p"
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 3519,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-hanging:p"
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 3519,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-hanging:p"
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "long-word",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-long-word:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-long-word:t",
+                "text": "AAAAAAAAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-long-word:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-long-word:t",
+                "text": "AAAAAAAAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAAAAAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 8446,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 7742,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-long-word:p"
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          0,
+          0,
+          0,
+          7742,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          1,
+          7742,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-long-word:p"
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          0,
+          0,
+          0,
+          7742,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          1,
+          7742,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 7742,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-long-word:p"
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            0,
+            0,
+            0,
+            7742,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            1,
+            7742,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 7742,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-long-word:p"
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            0,
+            0,
+            0,
+            7742,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            1,
+            7742,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "nbsp",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nbsp:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nbsp:t",
+                "text": "AAAAA BBB C",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nbsp:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nbsp:t",
+                "text": "AAAAA BBB C",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB C",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 7038,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-nbsp:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          1,
+          6334,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          2,
+          0,
+          1536,
+          704,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-nbsp:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          1,
+          6334,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          2,
+          0,
+          1536,
+          704,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nbsp:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            1,
+            6334,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            2,
+            0,
+            1536,
+            704,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nbsp:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            1,
+            6334,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            2,
+            0,
+            1536,
+            704,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "pre",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-pre:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-pre:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-pre:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-pre:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 1536,
+      "rawTextWidthQ": 6334,
+      "rawTextHeightQ": 1536,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-pre:p"
+        ],
+        [
+          "T",
+          "hanging-proof-pre:p",
+          "hanging-proof-pre:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-pre:p"
+        ],
+        [
+          "T",
+          "hanging-proof-pre:p",
+          "hanging-proof-pre:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-pre:p"
+          ],
+          [
+            "T",
+            "hanging-proof-pre:p",
+            "hanging-proof-pre:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-pre:p"
+          ],
+          [
+            "T",
+            "hanging-proof-pre:p",
+            "hanging-proof-pre:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "nowrap",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nowrap:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nowrap:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nowrap:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nowrap:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "nowrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 1536,
+      "rawTextWidthQ": 6334,
+      "rawTextHeightQ": 1536,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-nowrap:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nowrap:p",
+          "hanging-proof-nowrap:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-nowrap:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nowrap:p",
+          "hanging-proof-nowrap:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nowrap:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nowrap:p",
+            "hanging-proof-nowrap:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nowrap:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nowrap:p",
+            "hanging-proof-nowrap:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "image",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-image:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-image:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-image:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-image:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 4223,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 3519,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-image:p"
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-image:p"
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 5630,
+        "heightQ": 4096,
+        "records": [
+          [
+            "P",
+            "hanging-proof-image:p"
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 5630,
+        "heightQ": 4096,
+        "records": [
+          [
+            "P",
+            "hanging-proof-image:p"
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": {
+        "loaded": true,
+        "leftQ": 0,
+        "rightQ": 5630,
+        "topQ": 0,
+        "bottomQ": 4096
+      }
+    }
+  ],
+  "print": [
+    {
+      "id": "hanging",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-hanging:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-hanging:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-hanging:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-hanging:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 4223,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 3519,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-hanging:p"
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-hanging:p"
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-hanging:p",
+          "hanging-proof-hanging:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 3519,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-hanging:p"
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 3519,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-hanging:p"
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-hanging:p",
+            "hanging-proof-hanging:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "long-word",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-long-word:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-long-word:t",
+                "text": "AAAAAAAAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-long-word:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-long-word:t",
+                "text": "AAAAAAAAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAAAAAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 8446,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 7742,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-long-word:p"
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          0,
+          0,
+          0,
+          7742,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          1,
+          7742,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-long-word:p"
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          0,
+          0,
+          0,
+          7742,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          1,
+          7742,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-long-word:p",
+          "hanging-proof-long-word:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 7742,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-long-word:p"
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            0,
+            0,
+            0,
+            7742,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            1,
+            7742,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 7742,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-long-word:p"
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            0,
+            0,
+            0,
+            7742,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            1,
+            7742,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-long-word:p",
+            "hanging-proof-long-word:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "nbsp",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nbsp:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nbsp:t",
+                "text": "AAAAA BBB C",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nbsp:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nbsp:t",
+                "text": "AAAAA BBB C",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB C",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 7038,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-nbsp:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          1,
+          6334,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          2,
+          0,
+          1536,
+          704,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-nbsp:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          1,
+          6334,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-nbsp:p",
+          "hanging-proof-nbsp:t",
+          2,
+          0,
+          1536,
+          704,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nbsp:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            1,
+            6334,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            2,
+            0,
+            1536,
+            704,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 3072,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nbsp:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            1,
+            6334,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-nbsp:p",
+            "hanging-proof-nbsp:t",
+            2,
+            0,
+            1536,
+            704,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "pre",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-pre:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-pre:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-pre:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-pre:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 1536,
+      "rawTextWidthQ": 6334,
+      "rawTextHeightQ": 1536,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-pre:p"
+        ],
+        [
+          "T",
+          "hanging-proof-pre:p",
+          "hanging-proof-pre:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-pre:p"
+        ],
+        [
+          "T",
+          "hanging-proof-pre:p",
+          "hanging-proof-pre:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-pre:p"
+          ],
+          [
+            "T",
+            "hanging-proof-pre:p",
+            "hanging-proof-pre:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-pre:p"
+          ],
+          [
+            "T",
+            "hanging-proof-pre:p",
+            "hanging-proof-pre:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "nowrap",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nowrap:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nowrap:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-nowrap:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-nowrap:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "nowrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 1536,
+      "rawTextWidthQ": 6334,
+      "rawTextHeightQ": 1536,
+      "firstTokenWidthQ": 6334,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-nowrap:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nowrap:p",
+          "hanging-proof-nowrap:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-nowrap:p"
+        ],
+        [
+          "T",
+          "hanging-proof-nowrap:p",
+          "hanging-proof-nowrap:t",
+          0,
+          0,
+          0,
+          6334,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nowrap:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nowrap:p",
+            "hanging-proof-nowrap:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 6334,
+        "heightQ": 1536,
+        "records": [
+          [
+            "P",
+            "hanging-proof-nowrap:p"
+          ],
+          [
+            "T",
+            "hanging-proof-nowrap:p",
+            "hanging-proof-nowrap:t",
+            0,
+            0,
+            0,
+            6334,
+            1472
+          ]
+        ]
+      },
+      "image": null
+    },
+    {
+      "id": "image",
+      "sourceBefore": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-image:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-image:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "sourceAfter": {
+        "paragraphs": [
+          {
+            "id": "hanging-proof-image:p",
+            "inlines": [
+              {
+                "kind": "text",
+                "id": "hanging-proof-image:t",
+                "text": "AAAAA BBB",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "domText": "AAAAA BBB",
+      "whiteSpace": "pre-wrap",
+      "availableWidthQ": 3870,
+      "flowHeightQ": 3072,
+      "rawTextWidthQ": 4223,
+      "rawTextHeightQ": 3072,
+      "firstTokenWidthQ": 3519,
+      "recordsBefore": [
+        [
+          "P",
+          "hanging-proof-image:p"
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "recordsAfter": [
+        [
+          "P",
+          "hanging-proof-image:p"
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          0,
+          0,
+          0,
+          3519,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          1,
+          3519,
+          0,
+          704,
+          1472
+        ],
+        [
+          "T",
+          "hanging-proof-image:p",
+          "hanging-proof-image:t",
+          2,
+          0,
+          1536,
+          2112,
+          1472
+        ]
+      ],
+      "metrics": {
+        "widthQ": 5630,
+        "heightQ": 4096,
+        "records": [
+          [
+            "P",
+            "hanging-proof-image:p"
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "metricsAgain": {
+        "widthQ": 5630,
+        "heightQ": 4096,
+        "records": [
+          [
+            "P",
+            "hanging-proof-image:p"
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            0,
+            0,
+            0,
+            3519,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            1,
+            3519,
+            0,
+            704,
+            1472
+          ],
+          [
+            "T",
+            "hanging-proof-image:p",
+            "hanging-proof-image:t",
+            2,
+            0,
+            1536,
+            2112,
+            1472
+          ]
+        ]
+      },
+      "image": {
+        "loaded": true,
+        "leftQ": 0,
+        "rightQ": 5630,
+        "topQ": 0,
+        "bottomQ": 4096
+      }
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.34",
+  "pdf": {
+    "bytes": 29945,
+    "sha256": "4a34616ed47775cbbd6eb33fec92bb0f30f6df3295c7d9f7e26cb7edf3252e65",
+    "boundary": "Native Chromium fixture PDF generated; full editor/export acceptance is outside this proof."
+  },
+  "finishedAt": "2026-10-20T16:05:46.062Z"
+}

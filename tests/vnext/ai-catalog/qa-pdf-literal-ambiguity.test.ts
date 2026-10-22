@@ -6,6 +6,7 @@ import { sha256 } from '@/vnext/asset/integrity';
 import { sourcePayload, validateTechnicalInput, type TechnicalInput } from '@/vnext/ai-catalog/contracts';
 import { prepareGroundedPdfInput, type RealPdfExtractionProposal } from '@/vnext/ai-catalog/pdf-grounded-input';
 import { extractPdfText } from '@/vnext/ai-catalog/pdf-intake';
+import { pdfEvidenceSource, verifyFactProposal } from '@/vnext/ai-catalog/fact-verifier';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
 afterAll(() => vi.unstubAllGlobals());
@@ -45,20 +46,50 @@ async function nativeFixture(options: { unit: string; sourceUnit?: string; compe
   return { input, proposal, pdf, materials: [{ sourceId: 'qa-native', fileName: pdf.fileName, revision: '1', bytes }] };
 }
 
+type Fixture = Awaited<ReturnType<typeof nativeFixture>>;
+/** The bridge stamps each kept candidate; it must only keep text-verified known values. */
+function withoutStamps(input: TechnicalInput): TechnicalInput {
+  const copy = structuredClone(input);
+  for (const section of copy.sections) for (const row of section.rows) for (const fact of row.values) {
+    if (fact.status === 'known') {
+      expect(fact.candidate.verification).toBe('VERIFIED_TEXT');
+      delete fact.candidate.verification;
+    }
+  }
+  return copy;
+}
+/**
+ * Per-value verification (FR-67): the bridge never certifies the bad values;
+ * it reports them as UNVERIFIED and leaves them out, keeping the good ones.
+ */
+async function expectBridgeNotCertified(fixture: Fixture, badModels: number[]) {
+  const report = verifyFactProposal(fixture.proposal, [pdfEvidenceSource('qa-native', fixture.pdf)]);
+  for (const model of badModels) expect(report.values[model].status).toBe('UNVERIFIED');
+  const prepared = await prepareGroundedPdfInput(fixture.materials, fixture.proposal).then(result => result, (error: Error) => error);
+  if (prepared instanceof Error) {
+    expect(prepared.message).toBe('PDF_EVIDENCE_NONE_VERIFIED');
+    return;
+  }
+  for (const model of badModels) expect(prepared.input.sections[0].rows[0].values[model].status).toBe('missing');
+}
 const entryPoints = [
-  { name: 'actual-byte bridge', check: async (fixture: Awaited<ReturnType<typeof nativeFixture>>) => (await prepareGroundedPdfInput(fixture.materials, fixture.proposal)).input },
-  { name: 'persisted grounded validation', check: async (fixture: Awaited<ReturnType<typeof nativeFixture>>) => validateTechnicalInput(fixture.input) },
+  { name: 'actual-byte bridge',
+    check: async (fixture: Fixture) => withoutStamps((await prepareGroundedPdfInput(fixture.materials, fixture.proposal)).input),
+    rejects: (fixture: Fixture, badModels: number[]) => expectBridgeNotCertified(fixture, badModels) },
+  { name: 'persisted grounded validation',
+    check: async (fixture: Fixture) => validateTechnicalInput(fixture.input),
+    rejects: (fixture: Fixture) => expect(validateTechnicalInput(fixture.input)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/) },
 ];
 
-describe.each(entryPoints)('independent compound-unit and quote ambiguity at $name', ({ check }) => {
+describe.each(entryPoints)('independent compound-unit and quote ambiguity at $name', ({ check, rejects }) => {
   it.each(['Pa-s', 'Pa - s'])('rejects dropping part of the literal %s source unit to Pa', async sourceUnit => {
     const fixture = await nativeFixture({ unit: 'Pa', sourceUnit });
-    await expect(check(fixture)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/);
+    await rejects(fixture, [0, 1]);
   });
 
   it.each(['700', '900'])('rejects selecting %s as known from competing clauses for the same exact model and field', async chosenValue => {
     const fixture = await nativeFixture({ unit: 'Pa', competing: true, chosenValue });
-    await expect(check(fixture)).rejects.toThrow(/PDF_(?:EVIDENCE_VALUE|QUOTE_VALUE)_UNGROUNDED/);
+    await rejects(fixture, [0]);
   });
 
   it.each(['Pa-s', 'Pa - s'])('preserves the complete original %s source unit in one clause', async unit => {

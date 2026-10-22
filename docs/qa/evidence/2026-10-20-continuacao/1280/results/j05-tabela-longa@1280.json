@@ -1,0 +1,249 @@
+{
+  "journey": "j05-tabela-longa",
+  "title": "J5 — continuar tabela de 40 linhas, repetir cabeçalho, desfazer e publicar PDF A4 pesquisável",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:57:36.584Z",
+  "steps": [
+    {
+      "name": "1 colar cria 41 linhas (cabeçalho + 40) e quatro colunas",
+      "ok": true,
+      "detail": "{\"rows\":41,\"columns\":4,\"headerRows\":1,\"headerStyled\":true,\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":273},\"bottomMm\":285,\"fitsPage\":true}",
+      "atMs": 2980
+    },
+    {
+      "name": "1 a tabela original fica salva antes da continuação",
+      "ok": true,
+      "detail": null,
+      "atMs": 3082
+    },
+    {
+      "name": "2 a tabela longa oferece Continuar na próxima página",
+      "ok": true,
+      "detail": null,
+      "atMs": 5590
+    },
+    {
+      "name": "2 a tabela continua em páginas seguintes e cada parte cabe no A4",
+      "ok": true,
+      "detail": "{\"ms\":1784,\"pages\":2,\"parts\":[{\"pageId\":\"5db691db-688b-4aec-a3a1-721443aa13ac\",\"rows\":35,\"columns\":4,\"headerRows\":1,\"headerStyled\":true,\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":272.7333},\"bottomMm\":284.7,\"fitsPage\":true},{\"pageId\":\"2066c22e-7845-4c7c-8048-bba56e0fd3cc\",\"rows\":7,\"columns\":4,\"headerRows\":1,\"headerStyled\":true,\"frame\":{\"xMm\":12,\"yMm\":12,\"widthMm\":186,\"heightMm\":60.8434},\"bottomMm\":72.8,\"fitsPage\":true}]}",
+      "atMs": 7374
+    },
+    {
+      "name": "2 todas as 40 linhas permanecem na mesma ordem, sem perda ou duplicação",
+      "ok": true,
+      "detail": null,
+      "atMs": 7374
+    },
+    {
+      "name": "2 cada continuação repete o cabeçalho e o seu estilo",
+      "ok": true,
+      "detail": null,
+      "atMs": 7375
+    },
+    {
+      "name": "2 o cabeçalho repetido aparece também na página desenhada",
+      "ok": true,
+      "detail": null,
+      "atMs": 7833
+    },
+    {
+      "name": "3 um Desfazer restaura a tabela inteira e remove as páginas de continuação",
+      "ok": true,
+      "detail": null,
+      "atMs": 8127
+    },
+    {
+      "name": "3 Refazer restaura todas as partes e os cabeçalhos",
+      "ok": true,
+      "detail": null,
+      "atMs": 8308
+    },
+    {
+      "name": "4 a publicação fica Pronto e permite imprimir depois de continuar a tabela",
+      "ok": true,
+      "detail": "{\"status\":\"READY\",\"ms\":296,\"diagnostics\":[]}",
+      "atMs": 8610
+    },
+    {
+      "name": "4 o PDF contém todas as partes em A4, cabeçalho em cada página e 40 faixas pesquisáveis",
+      "ok": true,
+      "detail": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j05-tabela-longa@1280.pdf",
+      "atMs": 8981
+    },
+    {
+      "name": "5 zero erros de console e de página",
+      "ok": true,
+      "detail": "{\"errors\":[],\"pageErrors\":[]}",
+      "atMs": 9032
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j05-tabela-longa-01-antes-de-continuar@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j05-tabela-longa-02-continuada@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j05-tabela-longa-03-cabecalho-segunda-pagina@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j05-tabela-longa-04-publicacao@1280.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "softFindings": [],
+  "durationMs": 9032,
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "measurements": {
+    "chromium": "151.0.7922.34",
+    "tsvLines": 41,
+    "pasteMethod": "Ctrl+V real",
+    "notice1": {
+      "text": "Tabela criada com 41 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer. Fechar",
+      "visible": true,
+      "tone": "success",
+      "afterMs": 290
+    },
+    "continuation": {
+      "ms": 1784,
+      "pages": 2,
+      "parts": [
+        {
+          "pageId": "5db691db-688b-4aec-a3a1-721443aa13ac",
+          "rows": 35,
+          "columns": 4,
+          "headerRows": 1,
+          "headerStyled": true,
+          "frame": {
+            "xMm": 12,
+            "yMm": 12,
+            "widthMm": 186,
+            "heightMm": 272.7333
+          },
+          "bottomMm": 284.7,
+          "fitsPage": true
+        },
+        {
+          "pageId": "2066c22e-7845-4c7c-8048-bba56e0fd3cc",
+          "rows": 7,
+          "columns": 4,
+          "headerRows": 1,
+          "headerStyled": true,
+          "frame": {
+            "xMm": 12,
+            "yMm": 12,
+            "widthMm": 186,
+            "heightMm": 60.8434
+          },
+          "bottomMm": 72.8,
+          "fitsPage": true
+        }
+      ]
+    },
+    "publication": {
+      "status": "READY",
+      "ms": 296,
+      "diagnostics": []
+    },
+    "pdf": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j05-tabela-longa@1280.pdf",
+      "pages": [
+        {
+          "widthPt": 594.95996,
+          "heightPt": 841.91998,
+          "text": "Faixa   Mínimo   Máximo   Exatidão  F01   -200 °C   -50 °C   ±0,1 °C F02   -175 °C   -25 °C   ±0,15 °C F03   -150 °C   0 °C   ±0,02 % FE F04   -125 °C   25 °C   ±0,1 °C F05   -100 °C   50 °C   ±0,15 °C F06   -75 °C   75 °C   ±0,02 % FE F07   -50 °C   100 °C   ±0,1 °C F08   -25 °C   125 °C   ±0,15 °C F09   0 °C   150 °C   ±0,02 % FE F10   25 °C   175 °C   ±0,1 °C F11   50 °C   200 °C   ±0,15 °C F12   75 °C   225 °C   ±0,02 % FE F13   100 °C   250 °C   ±0,1 °C F14   125 °C   275 °C   ±0,15 °C F15   150 °C   300 °C   ±0,02 % FE F16   175 °C   325 °C   ±0,1 °C F17   200 °C   350 °C   ±0,15 °C F18   225 °C   375 °C   ±0,02 % FE F19   250 °C   400 °C   ±0,1 °C F20   275 °C   425 °C   ±0,15 °C F21   300 °C   450 °C   ±0,02 % FE F22   325 °C   475 °C   ±0,1 °C F23   350 °C   500 °C   ±0,15 °C F24   375 °C   525 °C   ±0,02 % FE F25   400 °C   550 °C   ±0,1 °C F26   425 °C   575 °C   ±0,15 °C F27   450 °C   600 °C   ±0,02 % FE F28   475 °C   625 °C   ±0,1 °C F29   500 °C   650 °C   ±0,15 °C F30   525 °C   675 °C   ±0,02 % FE F31   550 °C   700 °C   ±0,1 °C F32   575 °C   725 °C   ±0,15 °C F33   600 °C   750 °C   ±0,02 % FE F34   625 °C   775 °C   ±0,1 °C"
+        },
+        {
+          "widthPt": 594.95996,
+          "heightPt": 841.91998,
+          "text": "(continuação)  Faixa   Mínimo   Máximo   Exatidão  F35   650 °C   800 °C   ±0,15 °C F36   675 °C   825 °C   ±0,02 % FE F37   700 °C   850 °C   ±0,1 °C F38   725 °C   875 °C   ±0,15 °C F39   750 °C   900 °C   ±0,02 % FE F40   775 °C   925 °C   ±0,1 °C"
+        }
+      ],
+      "codes": [
+        "F01",
+        "F02",
+        "F03",
+        "F04",
+        "F05",
+        "F06",
+        "F07",
+        "F08",
+        "F09",
+        "F10",
+        "F11",
+        "F12",
+        "F13",
+        "F14",
+        "F15",
+        "F16",
+        "F17",
+        "F18",
+        "F19",
+        "F20",
+        "F21",
+        "F22",
+        "F23",
+        "F24",
+        "F25",
+        "F26",
+        "F27",
+        "F28",
+        "F29",
+        "F30",
+        "F31",
+        "F32",
+        "F33",
+        "F34",
+        "F35",
+        "F36",
+        "F37",
+        "F38",
+        "F39",
+        "F40"
+      ]
+    },
+    "viteEvents": [
+      "debug: [vite] connecting...",
+      "debug: [vite] connected.",
+      "debug: [vite] connecting...",
+      "debug: [vite] connected."
+    ]
+  },
+  "jargonSeen": [],
+  "clicks": {
+    "2 continuar tabela": 1
+  },
+  "status": "pass",
+  "findingSummary": [],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "80999973-38a1-4675-a778-f76815d50923",
+    "startedAt": "2026-10-20T15:57:27.205Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

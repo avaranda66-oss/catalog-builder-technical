@@ -412,8 +412,24 @@ describe('W2.E page template insertion seam', () => {
     );
     expect(moved.ok).toBe(true);
     if (!moved.ok) return;
+    // FR-54: the template shape 1 mm outside the page is evaluated like any authored shape — a bleed WARNING with its
+    // measured detail — and past the 3 mm tolerance it is still the blocking ERROR.
     expect(immediateAuthoringDiagnostics(moved.document)).toContainEqual(expect.objectContaining({
       code: 'OBJECT_OUTSIDE_PAGE',
+      severity: 'WARNING',
+      objectId: shape.id,
+      details: 'bleedMm=1; toleranceMm=3',
+    }));
+    const movedFar = executeApplicationAction(
+      inserted.document,
+      { type: 'object.move', objectId: shape.id, xU: mmToU(-4), yU: mmToU(shape.frame.yMm) },
+      dependencies
+    );
+    expect(movedFar.ok).toBe(true);
+    if (!movedFar.ok) return;
+    expect(immediateAuthoringDiagnostics(movedFar.document)).toContainEqual(expect.objectContaining({
+      code: 'OBJECT_OUTSIDE_PAGE',
+      severity: 'ERROR',
       objectId: shape.id,
     }));
 

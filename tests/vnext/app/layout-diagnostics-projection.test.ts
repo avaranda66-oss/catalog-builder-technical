@@ -237,3 +237,66 @@ describe('W4.E Father-facing diagnostic projection', () => {
     expect(second[0].objectId).toBe(otherChild.id);
   });
 });
+
+describe('FR-54 page-bounds wording for objects that are not tables', () => {
+  const PHOTO_ID = 'photo-band';
+  function shapeDocument(): CatalogDocument {
+    const base = createW4DTableDocument();
+    return {
+      ...base,
+      pages: [{
+        ...base.pages[0],
+        objects: [{
+          id: PHOTO_ID,
+          type: 'shape',
+          frame: { xMm: -4, yMm: 50, widthMm: 100, heightMm: 80 },
+          zIndex: 0,
+          shape: 'rectangle',
+          style: { fill: '#173F52' },
+        }],
+      }],
+    };
+  }
+  const outside = (objectId: string, severity: 'ERROR' | 'WARNING', details: string): Diagnostic =>
+    ({ code: 'OBJECT_OUTSIDE_PAGE', severity, pageId: W4D_PAGE_ID, objectId, details });
+  const safeArea = (objectId: string): Diagnostic =>
+    ({ code: 'SAFE_AREA_VIOLATION', severity: 'WARNING', pageId: W4D_PAGE_ID, objectId, details: 'Authored frame crosses configured safe area' });
+
+  it('says "objeto", never "tabela", when a shape or photo leaves the page or crosses the safe area', () => {
+    const entries = projectLayoutDiagnostics(shapeDocument(), [
+      outside(PHOTO_ID, 'ERROR', 'Authored frame exceeds physical A4 bounds'),
+      safeArea(PHOTO_ID),
+    ], W4D_PAGE_ID, PHOTO_ID);
+    const byCode = new Map(entries.map((entry) => [entry.sourceCodes[0], entry]));
+    expect(byCode.get('OBJECT_OUTSIDE_PAGE')).toMatchObject({
+      message: 'Parte do objeto está fora da página física. Corrija a posição ou o tamanho para liberar a publicação.',
+      publicationBlocked: true, action: 'LOCATE',
+    });
+    expect(byCode.get('SAFE_AREA_VIOLATION')).toMatchObject({
+      message: 'O objeto cruza a área segura. A posição é permitida, mas revise a margem antes de publicar.',
+      publicationBlocked: false, action: 'LOCATE',
+    });
+    for (const entry of entries) expect(entry.message).not.toContain('tabela');
+  });
+
+  it('the same photo dragged from 2 mm to 4 mm outside the page keeps talking about the object, never about a table', () => {
+    const document = shapeDocument();
+    const [bleed] = projectLayoutDiagnostics(document, [outside(PHOTO_ID, 'WARNING', 'bleedMm=2; toleranceMm=3')], W4D_PAGE_ID, PHOTO_ID);
+    const [error] = projectLayoutDiagnostics(document, [outside(PHOTO_ID, 'ERROR', 'Authored frame exceeds physical A4 bounds')], W4D_PAGE_ID, PHOTO_ID);
+    expect(bleed).toMatchObject({ severity: 'WARNING', publicationBlocked: false });
+    expect(bleed.message).toContain('sangria');
+    expect(error).toMatchObject({ severity: 'ERROR', publicationBlocked: true });
+    expect(error.message).toContain('Parte do objeto está fora da página');
+    for (const message of [bleed.message, error.message]) expect(message).not.toContain('tabela');
+  });
+
+  it('keeps the table wording for a Table object and for a diagnostic without a known object', () => {
+    const document = createW4DTableDocument();
+    const table = projectLayoutDiagnostics(document, [
+      outside(W4D_OBJECT_A_ID, 'ERROR', 'Authored frame exceeds physical A4 bounds'), safeArea(W4D_OBJECT_A_ID),
+    ], W4D_PAGE_ID, W4D_OBJECT_A_ID).map((entry) => entry.message);
+    expect(table).toEqual(['Parte da tabela está fora da página', 'A tabela cruza a área segura']);
+    const unknown = projectLayoutDiagnostics(document, [outside('ghost', 'ERROR', 'Authored frame exceeds physical A4 bounds')], W4D_PAGE_ID, 'ghost');
+    expect(unknown[0].message).toContain('Parte do objeto está fora da página');
+  });
+});

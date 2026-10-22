@@ -59,7 +59,13 @@ async function waitForEditor(page) {
 
 async function waitForLibrary(page) {
   await page.locator('[data-catalog-library]').waitFor();
-  await page.getByRole('heading', { name: 'Catálogos', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Meus catálogos', exact: true }).waitFor();
+}
+
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
 }
 
 async function resolveRecoveryByDiscardingThroughUi(page) {
@@ -67,10 +73,11 @@ async function resolveRecoveryByDiscardingThroughUi(page) {
   const shell = page.locator('[data-vnext-shell]');
   await Promise.race([dialog.waitFor(), shell.waitFor()]);
   for (let attempts = 0; attempts < 8 && await dialog.isVisible().catch(() => false); attempts += 1) {
-    const discard = dialog.getByRole('button', { name: 'Descartar recuperação local', exact: true }).first();
+    await openMoreRecoveryOptions(dialog);
+    const discard = dialog.getByRole('button', { name: 'Apagar a cópia deste computador', exact: true }).first();
     if (!await discard.isVisible().catch(() => false)) break;
     await discard.click();
-    await dialog.getByRole('button', { name: 'Confirmar descarte local', exact: true }).first().click();
+    await dialog.getByRole('button', { name: 'Sim, apagar a cópia', exact: true }).first().click();
   }
   await waitForEditor(page);
 }
@@ -232,9 +239,10 @@ async function assertRecoveryPreviewAtViewport(page, width, minimumButtonHeight)
   const actions = [
     'Recuperar minhas alterações',
     'Ver alterações recuperadas',
-    'Descartar recuperação local',
+    'Apagar a cópia deste computador',
   ];
   const buttonGeometry = {};
+  await openMoreRecoveryOptions(dialog);
   for (const name of actions) {
     const button = dialog.getByRole('button', { name, exact: true });
     await button.scrollIntoViewIfNeeded();
@@ -283,7 +291,7 @@ try {
   // W3I-01: Father enters the real Library component and creates from a registered Starter.
   await father.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
   await father.getByRole('dialog', { name: 'Novo catálogo' }).waitFor();
-  await father.getByRole('button', { name: /Ficha técnica essencial/ }).click();
+  await father.getByRole('button', { name: 'Ficha técnica essencial', exact: true }).click();
   await waitForEditor(father);
   const created = await state(father);
   assert(created.runtime);
@@ -438,6 +446,7 @@ try {
   await father.reload({ waitUntil: 'networkidle' });
   const recoveryDialog = father.getByRole('dialog', { name: 'Recuperação local' });
   await recoveryDialog.waitFor();
+  await openMoreRecoveryOptions(recoveryDialog);
   const inspectRecovery = recoveryDialog.getByRole('button', { name: 'Ver alterações recuperadas', exact: true });
   assert.equal(await inspectRecovery.isVisible(), true);
   await inspectRecovery.click();
@@ -495,7 +504,10 @@ try {
     ]);
   }
   const conflictedOpenSessionId = conflictOpenLatest.runtime.openSessionId;
+  // FR-43: the copy is offered first; opening the latest version discards this tab's changes and asks first.
+  assert.deepEqual(await conflictActions.getByRole('button').allTextContents(), ['Salvar meu trabalho como cópia', 'Abrir versão mais recente']);
   await conflictActions.getByRole('button', { name: 'Abrir versão mais recente', exact: true }).click();
+  await conflictActions.getByRole('button', { name: 'Sim, descartar minhas alterações', exact: true }).click();
   await pageB.waitForFunction((previous) => {
     const current = window.__W3I_PROOF__.state().runtime;
     return current?.openSessionId !== previous
@@ -568,7 +580,9 @@ try {
   assert.equal((await catalog(pageB, conflictCopyId)).title, 'Fechamento Pai W3.I');
   await pageB.getByRole('button', { name: 'Voltar aos catálogos', exact: true }).click();
   await waitForLibrary(pageB);
-  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('button', { name: 'Arquivar', exact: true }).click();
+  // FR-04: Arquivar lives in the row's "Mais" menu.
+  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('button', { name: /^Mais ações de / }).click();
+  await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).getByRole('menuitem', { name: 'Arquivar', exact: true }).click();
   await pageB.getByRole('dialog', { name: /Arquivar/ }).getByRole('button', { name: 'Arquivar catálogo', exact: true }).click();
   await pageB.getByRole('tab', { name: 'Arquivados', exact: true }).click();
   await pageB.locator(`[data-library-catalog-id="${conflictCopyId}"]`).waitFor();
@@ -593,11 +607,12 @@ try {
   for (const width of [320, 360, 390]) {
     await assertNoHorizontalOverflow(pageB, width, ['Novo catálogo']);
     const activeRow = pageB.locator(`[data-library-catalog-id="${sourceCatalogId}"]`);
-    for (const action of ['Abrir', 'Duplicar', 'Renomear', 'Arquivar']) {
+    for (const action of ['Abrir', 'Duplicar', 'Renomear']) {
       assert.equal(await activeRow.getByRole('button', { name: action, exact: true }).isVisible(), true);
     }
+    assert.equal(await activeRow.getByRole('button', { name: /^Mais ações de / }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Novo catálogo', exact: true }).click();
-    assert.equal(await pageB.getByRole('button', { name: /Ficha técnica essencial/ }).isVisible(), true);
+    assert.equal(await pageB.getByRole('button', { name: 'Ficha técnica essencial', exact: true }).isVisible(), true);
     await pageB.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
   await assertNoFatherJargon(pageB, 'Library');

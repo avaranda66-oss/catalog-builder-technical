@@ -1,8 +1,9 @@
 import type { DocumentSession, ImageExpectedState } from '../application';
 import type { CellContent, CellContentPresentation } from '../domain/editorial-model';
 import type { AssetLineageContext, AssetPersistenceBridge } from '../asset';
+import { HEIC_PHOTO_MESSAGE } from '../asset/normalize-image';
 import type { VNextPersistenceRuntime } from '../persistence';
-import { createInsertSpec } from './editor-defaults';
+import { createImageInsertSpec } from './editor-defaults';
 
 export type ImageUploadIntent = {
   readonly session: DocumentSession;
@@ -36,6 +37,7 @@ export function imageUploadLineage(runtime: VNextPersistenceRuntime): AssetLinea
 
 export function imageUploadErrorMessage(code: string): string {
   switch (code) {
+    case 'UNSUPPORTED_HEIC': return HEIC_PHOTO_MESSAGE;
     case 'UNSUPPORTED_MEDIA': return 'Formato não suportado. Escolha uma imagem PNG, JPEG ou WebP.';
     case 'INVALID_DIMENSIONS': return 'Não foi possível ler as dimensões da imagem. Escolha outra imagem.';
     case 'OFFLINE': return 'Sem conexão. Tente enviar a imagem novamente quando estiver conectado.';
@@ -78,8 +80,9 @@ export async function uploadWorkspaceImage(input: {
     const page = intent.type === 'insert'
       ? intent.session.getSnapshot().document.pages.find((candidate) => candidate.id === intent.pageId)
       : undefined;
-    const spec = page ? createInsertSpec('image', page) : undefined;
-    const result = intent.type === 'insert' && spec?.type === 'image'
+    // C-01: the new frame follows the photo's proportion (the stored size, already turned upright).
+    const spec = page ? createImageInsertSpec(page, upload.asset) : undefined;
+    const result = intent.type === 'insert' && spec
       ? intent.session.execute({ type: 'object.insert', pageId: intent.pageId, object: { ...spec, assetId: upload.asset.id, asset: upload.asset } })
       : intent.type === 'replace'
         ? intent.session.execute({

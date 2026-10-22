@@ -398,10 +398,10 @@ export function prepareTablePresetAction(
 
 export function inheritedLabel(scope: TableStyleScope): string {
   switch (scope.kind) {
-    case 'table': return 'Herdado do documento';
+    case 'table': return 'Herdado do catálogo';
     case 'role': return 'Herdado da tabela';
-    case 'columns': return 'Herdado do tipo de linha/tabela';
-    case 'rows': return 'Herdado da coluna/tipo de linha';
-    case 'cells': return 'Herdado da linha/coluna/tipo';
+    case 'columns': return 'Herdado da tabela';
+    case 'rows': return 'Herdado da tabela ou da coluna';
+    case 'cells': return 'Herdado da linha ou da coluna';
   }
 }

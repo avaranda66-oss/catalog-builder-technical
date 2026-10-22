@@ -1,0 +1,174 @@
+{
+  "journey": "j00-smoke",
+  "title": "Fumaça: biblioteca → novo catálogo → editor salvo → voltar à biblioteca",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:56:40.378Z",
+  "steps": [
+    {
+      "name": "biblioteca abre com o título \"Meus catálogos\"",
+      "ok": true,
+      "detail": null,
+      "atMs": 4896
+    },
+    {
+      "name": "textos da biblioteca em português, sem jargão",
+      "ok": true,
+      "detail": "jargão: - · inglês: -",
+      "atMs": 4898
+    },
+    {
+      "name": "\"Novo catálogo\" abre o diálogo \"Novo catálogo\"",
+      "ok": true,
+      "detail": null,
+      "atMs": 4993
+    },
+    {
+      "name": "campo \"Nome do catálogo\" aceita o nome",
+      "ok": true,
+      "detail": null,
+      "atMs": 5011
+    },
+    {
+      "name": "opção \"Ficha técnica essencial\" está no diálogo",
+      "ok": true,
+      "detail": null,
+      "atMs": 5056
+    },
+    {
+      "name": "editor abre ([data-vnext-shell]) com o catálogo persistido",
+      "ok": true,
+      "detail": "em 448 ms",
+      "atMs": 5511
+    },
+    {
+      "name": "o catálogo recebeu o nome digitado",
+      "ok": true,
+      "detail": "título: Catálogo de teste",
+      "atMs": 5512
+    },
+    {
+      "name": "aparece \"Salvo\" no editor",
+      "ok": true,
+      "detail": "texto: \"Salvo\" · saveLabel: Saved",
+      "atMs": 5515
+    },
+    {
+      "name": "textos do editor em português, sem jargão",
+      "ok": true,
+      "detail": "jargão: - · inglês: -",
+      "atMs": 5517
+    },
+    {
+      "name": "botão para voltar (\"Meus catálogos\") está visível",
+      "ok": true,
+      "detail": null,
+      "atMs": 5567
+    },
+    {
+      "name": "\"Meus catálogos\" volta à lista com o catálogo criado",
+      "ok": true,
+      "detail": "catálogos: Catálogo de teste",
+      "atMs": 5945
+    },
+    {
+      "name": "zero erros de console e de página",
+      "ok": true,
+      "detail": "console: - · página: -",
+      "atMs": 5976
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j00-01-biblioteca@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j00-02-novo-catalogo@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j00-03-editor-salvo@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j00-04-biblioteca-com-catalogo@1280.png"
+  ],
+  "findings": [],
+  "durationMs": 5977,
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "accessibleNames": {
+    "library": {
+      "buttons": [
+        "Novo catálogo",
+        "Criar novo catálogo"
+      ],
+      "headings": [
+        "Meus catálogos",
+        "Seus catálogos técnicos",
+        "Comece seu primeiro catálogo"
+      ],
+      "dialog": "- dialog \"Novo catálogo\":\n  - button \"Fechar\":\n    - img\n  - heading \"Novo catálogo\" [level=2]\n  - text: Nome do catálogo\n  - textbox \"Nome do catálogo\":\n    - /placeholder: \"Ex.: TA-25N — Ficha técnica 2026\"\n  - paragraph: Depois escolha como começar. Sem nome, o catálogo fica com o nome do modelo escolhido. O nome muda depois clicando no título.\n  - button \"Criar com IA a partir de arquivos\":\n    - strong: Criar com IA a partir de arquivos\n    - text: Abre o catálogo com o assistente, para você soltar PDFs, planilhas e fotos do produto.\n  - button \"Em branco\":\n    - strong: Em branco\n    - text: Comece com uma página vazia.\n  - button \"Ficha técnica essencial\":\n    - strong: Ficha técnica essencial\n    - text: Recomendado para começar Título e tabela básica para começar uma ficha de produto.\n  - button \"Ficha técnica (4 a 6 páginas)\":\n    - strong: Ficha técnica (4 a 6 páginas)\n    - text: \"Seis páginas A4 no padrão PRESYS: capa, visão geral, especificações, faixas, código de pedido e fornecimento. Apague as que não usar. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\"\n  - button \"Folder (8 a 12 páginas)\":\n    - strong: Folder (8 a 12 páginas)\n    - text: Dez páginas A4 no padrão PRESYS, da capa à contracapa, com espaços para fotos, tabelas, código de pedido e acessórios. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.\n  - button \"PRESYS · TA-25N — produto e especificações\":\n    - strong: PRESYS · TA-25N — produto e especificações\n    - text: Duas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.\n  - status"
+    },
+    "editor": {
+      "buttons": [
+        "Catálogo de teste",
+        "Abrir assistente de edição",
+        "Voltar aos catálogos",
+        "Salvo",
+        "Desfazer última alteração",
+        "Refazer última alteração",
+        "Traduzir",
+        "Publicar / PDF",
+        "Página 1",
+        "Opções da Página 1",
+        "Adicionar nova página após a página atual",
+        "Usar modelo…",
+        "Diminuir o zoom",
+        "Aumentar o zoom",
+        "Texto",
+        "Imagem",
+        "Tabela",
+        "Tamanho da nova tabela",
+        "Colar tabela do Excel",
+        "Mais opções"
+      ],
+      "headings": [
+        "Catálogo de teste",
+        "Selecione um objeto"
+      ],
+      "backButton": {
+        "ariaLabel": "Voltar aos catálogos",
+        "text": "Meus catálogos"
+      }
+    }
+  },
+  "server": "http://127.0.0.1:5190",
+  "status": "pass",
+  "findingSummary": [],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "774c2bf7-b23f-4077-83db-c076480bbf36",
+    "startedAt": "2026-10-20T15:56:33.898Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

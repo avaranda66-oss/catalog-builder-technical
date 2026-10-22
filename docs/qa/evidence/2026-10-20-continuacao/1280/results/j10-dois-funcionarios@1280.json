@@ -1,0 +1,374 @@
+{
+  "journey": "j10-dois-funcionarios",
+  "title": "J10 — Dois funcionários (duas abas, A e B) editam o mesmo catálogo: aviso de conflito, cópia sem perder nada, abrir a versão mais recente com confirmação",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T15:59:46.242Z",
+  "steps": [
+    {
+      "name": "0 aba 1 (Funcionário A) cria \"PCON-Y18 — Catálogo 2026\" e vê \"Salvo\"",
+      "ok": true,
+      "detail": "revisão 1",
+      "atMs": 952
+    },
+    {
+      "name": "1 aba 2 (Funcionário B) abre o MESMO catálogo, na mesma versão, e vê \"Salvo\"",
+      "ok": true,
+      "detail": "usuário B · revisão 1 · em 556 ms",
+      "atMs": 1561
+    },
+    {
+      "name": "2 ao abrir, a aba 2 é avisada de que outra pessoa está no catálogo",
+      "ok": null,
+      "pending": true,
+      "detail": "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar",
+      "atMs": null
+    },
+    {
+      "name": "3 aba 1 edita o título da capa (dois cliques) e volta a \"Salvo\" sozinha",
+      "ok": true,
+      "detail": "caminho: dois cliques · revisão 1 → 2 · 1219 ms · status: Salvo às 12:59",
+      "atMs": 3554
+    },
+    {
+      "name": "4 a aba 2 vê o aviso de conflito logo depois de concluir a edição (sem rolar a tela)",
+      "ok": true,
+      "detail": "em 1258 ms · {\"text\":\"Este catálogo foi salvo em outro lugar enquanto você editavaOutra pessoa, ou voc\",\"fontPx\":16,\"heightPx\":446,\"widthPx\":600,\"top\":137,\"inViewport\":true,\"fullyVisible\":true} · status: \"Conflito\"",
+      "atMs": 5611
+    },
+    {
+      "name": "5 \"Salvar meu trabalho como cópia\" vem primeiro e é o botão principal; \"Abrir versão mais recente\" avisa que descarta (FR-43 texto seguro)",
+      "ok": true,
+      "detail": "ordem: Salvar meu trabalho como cópia › Abrir versão mais recente · principal: \"Salvar meu trabalho como cópia\"",
+      "atMs": 5611
+    },
+    {
+      "name": "6 o texto da aba 2 continua na tela enquanto o aviso está aberto (nada sumiu)",
+      "ok": true,
+      "detail": "Ficha técnica — texto da aba 2 (B)",
+      "atMs": 5611
+    },
+    {
+      "name": "7 o aviso está em português, sem jargão (nada de \"revision\", \"CAS\", \"conflito de versão\")",
+      "ok": true,
+      "detail": "Este catálogo foi salvo em outro lugar enquanto você editava Outra pessoa, ou você em outra aba ou outro computador, salvou “PCON-Y18 — Catálogo 2026” antes. As alterações que estão nesta tela continu",
+      "atMs": 5612
+    },
+    {
+      "name": "8 a aba 1 não é incomodada (continua \"Salvo\", sem aviso)",
+      "ok": true,
+      "detail": "{\"status\":\"Salvo às 12:59\",\"aviso\":false}",
+      "atMs": 5614
+    },
+    {
+      "name": "9 letras ≥ 13 px e botões ≥ 24 px no diálogo de conflito",
+      "ok": true,
+      "detail": "letras pequenas: - · alvos pequenos: -",
+      "atMs": 5615
+    },
+    {
+      "name": "10 o aviso explica que foi outra pessoa",
+      "ok": true,
+      "detail": null,
+      "atMs": 5615
+    },
+    {
+      "name": "11 Tab 1 mantém o foco dentro da janela",
+      "ok": true,
+      "detail": null,
+      "atMs": 5628
+    },
+    {
+      "name": "11 Tab 2 mantém o foco dentro da janela",
+      "ok": true,
+      "detail": null,
+      "atMs": 5635
+    },
+    {
+      "name": "11 Tab 3 mantém o foco dentro da janela",
+      "ok": true,
+      "detail": null,
+      "atMs": 5642
+    },
+    {
+      "name": "11 Tab 4 mantém o foco dentro da janela",
+      "ok": true,
+      "detail": null,
+      "atMs": 5648
+    },
+    {
+      "name": "11 a janela bloqueia o editor; começa na cópia recomendada; Ctrl+Z e Esc não alteram o trabalho",
+      "ok": true,
+      "detail": "{\"modal\":true,\"focusInside\":true,\"focused\":\"Salvar meu trabalho como cópia\",\"editorInert\":true}",
+      "atMs": 5653
+    },
+    {
+      "name": "12 um clique em \"Salvar meu trabalho como cópia\" cria e abre \"Cópia de PCON-Y18 — Catálogo 2026\", salva, e o aviso some",
+      "ok": true,
+      "detail": "em 7 ms · {\"titulo\":\"Cópia de PCON-Y18 — Catálogo 2026\",\"catalogoAberto\":\"1902c95d-4972-40f1-97ca-b79be58e699b\",\"originalId\":\"9f714098-dd84-41fa-998b-b409c28a693e\",\"status\":\"Salvo\",\"avisoSumiu\":true,\"catalogos\":[\"Cópia de PCON-Y18 — Catálogo 2026\",\"PCON-Y18 — Catálogo 2026\"],\"mensagem\":\"\"}",
+      "atMs": 5807
+    },
+    {
+      "name": "13 NADA se perde: a cópia tem o texto da aba 2 e o original guarda o texto da aba 1",
+      "ok": true,
+      "detail": "cópia: Ficha técnica — texto da aba 2 (B) · original: Ficha técnica — texto da aba 1 (A)",
+      "atMs": 5807
+    },
+    {
+      "name": "14 a biblioteca passa a ter os dois catálogos (original e cópia)",
+      "ok": true,
+      "detail": "Cópia de PCON-Y18 — Catálogo 2026 · PCON-Y18 — Catálogo 2026",
+      "atMs": 5807
+    },
+    {
+      "name": "15 depois da cópia, o endereço já aponta para ela e preserva o usuário e o banco do harness",
+      "ok": true,
+      "detail": "http://127.0.0.1:5190/tests/vnext/proof/father-journeys/fixtures/father-harness.html?db=j10_13452_1792511975017&user=B&catalog=1902c95d-4972-40f1-97ca-b79be58e699b",
+      "atMs": 5807
+    },
+    {
+      "name": "16 F5 reabre a cópia, com o trabalho da aba 2 salvo e o original preservado",
+      "ok": true,
+      "detail": "{\"catalogoAberto\":\"cópia\",\"titulo\":\"Cópia de PCON-Y18 — Catálogo 2026\"}",
+      "atMs": 6219
+    },
+    {
+      "name": "17 a aba 2 pode reabrir o original sem modificar a cópia",
+      "ok": true,
+      "detail": null,
+      "atMs": 6580
+    },
+    {
+      "name": "17 segundo conflito aparece do mesmo jeito",
+      "ok": true,
+      "detail": "em 1266 ms",
+      "atMs": 10529
+    },
+    {
+      "name": "18 \"Abrir versão mais recente\" NÃO descarta na hora: pergunta \"Tem certeza?\" com \"Sim, descartar minhas alterações\" / \"Não, voltar\"",
+      "ok": true,
+      "detail": "botões: Não, voltar › Sim, descartar minhas alterações",
+      "atMs": 10771
+    },
+    {
+      "name": "18b no \"Tem certeza?\", o botão destacado é o seguro (\"Não, voltar\")",
+      "ok": true,
+      "detail": "destacado: Não, voltar",
+      "atMs": 10775
+    },
+    {
+      "name": "19 \"Não, voltar\" volta às duas opções e o texto da aba 2 continua lá",
+      "ok": true,
+      "detail": null,
+      "atMs": 11061
+    },
+    {
+      "name": "20 depois de confirmar, a aba 2 mostra a versão da aba 1 (com a 2ª alteração da aba 1) e volta a \"Salvo\"",
+      "ok": true,
+      "detail": "em 7 ms · Ficha técnica — texto da aba 1 (A) — 2ª alteração da aba 1",
+      "atMs": 11182
+    },
+    {
+      "name": "21 zero erros de console e de página nas duas abas",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do servidor de desenvolvimento: 0",
+      "atMs": 11224
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-01-aviso-de-conflito@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-02-copia-aberta@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-03-confirmar-descartar@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j10-04-versao-mais-recente@1280.png"
+  ],
+  "findings": [],
+  "pendingReason": "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar",
+  "pendingSteps": [
+    "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar"
+  ],
+  "findingSteps": [],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "clicks": {
+    "salvar como cópia": 1,
+    "abrir versão mais recente": 2,
+    "não, voltar": 1,
+    "sim, descartar": 1
+  },
+  "timings": {
+    "aba2AbreMs": 556,
+    "aba1SalvaMs": 1219,
+    "conflitoApareceMs": 1258,
+    "copiaMs": 7,
+    "conflito2Ms": 1266,
+    "abrirMaisRecenteMs": 7
+  },
+  "measures": {
+    "conflito": {
+      "faixa": {
+        "text": "Este catálogo foi salvo em outro lugar enquanto você editavaOutra pessoa, ou voc",
+        "fontPx": 16,
+        "heightPx": 446,
+        "widthPx": 600,
+        "top": 137,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "titulo": {
+        "text": "Este catálogo foi salvo em outro lugar enquanto você editava",
+        "fontPx": 20,
+        "heightPx": 52,
+        "widthPx": 550,
+        "top": 162,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "explicacao": {
+        "text": "Outra pessoa, ou você em outra aba ou outro computador, salvou “PCON-Y18 — Catál",
+        "fontPx": 15,
+        "heightPx": 70,
+        "widthPx": 550,
+        "top": 224,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "item1": {
+        "text": "Salvar meu trabalho como cópia (recomendado): cria um catálogo novo, “Cópia de P",
+        "fontPx": 15,
+        "heightPx": 93,
+        "widthPx": 530,
+        "top": 304,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "copia": {
+        "text": "Salvar meu trabalho como cópia",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 265,
+        "top": 514,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "maisRecente": {
+        "text": "Abrir versão mais recente",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 218,
+        "top": 514,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ordemDosBotoes": [
+        "Salvar meu trabalho como cópia",
+        "Abrir versão mais recente"
+      ],
+      "botaoPrimario": "Salvar meu trabalho como cópia",
+      "role": "alertdialog",
+      "tone": null
+    },
+    "confirmacao": {
+      "sim": {
+        "text": "Sim, descartar minhas alterações",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 272,
+        "top": 489,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "nao": {
+        "text": "Não, voltar",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 111,
+        "top": 489,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    }
+  },
+  "texts": {
+    "faixaConflito": "Este catálogo foi salvo em outro lugar enquanto você editava Outra pessoa, ou você em outra aba ou outro computador, salvou “PCON-Y18 — Catálogo 2026” antes. As alterações que estão nesta tela continuam aqui, mas ainda não foram salvas. Escolha o que fazer: Salvar meu trabalho como cópia (recomendado): cria um catálogo novo, “Cópia de PCON-Y18 — Catálogo 2026”, com tudo o que está nesta tela, e ele abre aqui. O catálogo “PCON-Y18 — Catálogo 2026” fica com a versão salva no outro lugar; nada dele é apagado. Abrir versão mais recente: mostra aqui a versão salva no outro lugar. As alterações desta tela não entram no catálogo. Uma cópia de segurança delas fica guardada neste computador e é oferecida da próxima vez que você abrir este catálogo. Salvar meu trabalho como cópia Abrir versão mais recente",
+    "statusSalvarAba2": "Conflito",
+    "confirmacaoDescartar": "Este catálogo foi salvo em outro lugar enquanto você editava Outra pessoa, ou você em outra aba ou outro computador, salvou “PCON-Y18 — Catálogo 2026” antes. As alterações que estão nesta tela continuam aqui, mas ainda não foram salvas. Escolha o que fazer: Tem certeza? O catálogo “PCON-Y18 — Catálogo 2026” vai mostrar a versão salva no outro lugar. As alterações desta tela não entram no catálogo. Uma cópia de segurança delas fica guardada neste computador e é oferecida da próxima vez que você abrir este catálogo. Não, voltar Sim, descartar minhas alterações"
+  },
+  "observations": {
+    "avisoAoAbrirComOutroEditando": false,
+    "aba1DuranteConflito": {
+      "status": "Salvo às 12:59",
+      "aviso": false
+    },
+    "dialogoBloqueante": {
+      "modal": true,
+      "focusInside": true,
+      "focused": "Salvar meu trabalho como cópia",
+      "editorInert": true
+    },
+    "aposCopia": {
+      "titulo": "Cópia de PCON-Y18 — Catálogo 2026",
+      "catalogoAberto": "1902c95d-4972-40f1-97ca-b79be58e699b",
+      "originalId": "9f714098-dd84-41fa-998b-b409c28a693e",
+      "status": "Salvo",
+      "avisoSumiu": true,
+      "url": "http://127.0.0.1:5190/tests/vnext/proof/father-journeys/fixtures/father-harness.html?db=j10_13452_1792511975017&user=B&catalog=1902c95d-4972-40f1-97ca-b79be58e699b",
+      "catalogos": [
+        "Cópia de PCON-Y18 — Catálogo 2026",
+        "PCON-Y18 — Catálogo 2026"
+      ],
+      "mensagem": ""
+    },
+    "aposF5": {
+      "catalogoAberto": "cópia",
+      "titulo": "Cópia de PCON-Y18 — Catálogo 2026"
+    },
+    "confirmacaoBotaoDestacado": "Não, voltar",
+    "copiaDeSegurancaAposDescartar": [
+      {
+        "status": "VALID",
+        "catalogId": "9f714098-dd84-41fa-998b-b409c28a693e"
+      }
+    ],
+    "mensagemAposAbrirMaisRecente": "",
+    "cliquesParaResolverComCopia": 1,
+    "cliquesParaAbrirMaisRecente": 2
+  },
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "status": "pending",
+  "findingSummary": [],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "b9027027-c321-4ac7-846f-756fbb1b8978",
+    "startedAt": "2026-10-20T15:59:34.645Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

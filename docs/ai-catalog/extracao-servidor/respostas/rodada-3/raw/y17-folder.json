@@ -1,0 +1,368 @@
+{
+ "promptVersion": "fr66-2026-10-17.3",
+ "model": "gemini-3.8-flash",
+ "modelVersion": "gemini-3.8-flash",
+ "cached": false,
+ "sheet": {
+  "title": "PCON-Y17",
+  "models": [
+   "PCON-Y17"
+  ],
+  "sections": [
+   {
+    "title": "Technical Specifications",
+    "rows": [
+     {
+      "key": "pneumatic-connection",
+      "label": "Pneumatic Connections (Pressure Control Module - C1)",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "1/8\" Female BSPP (Supply (+) / Supply (-) / Output / Reference)",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Pneumatic Connections (Pressure Control Module - C1): 1/8\" Female BSPP (Supply (+) / Supply (-) / Output / Reference)."
+        }
+       }
+      ]
+     },
+     {
+      "key": "power-supply",
+      "label": "Power Supply",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "100 to 240 Vac 50/60 Hz",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Power Supply: 100 to 240 Vac 50/60 Hz."
+        }
+       }
+      ]
+     },
+     {
+      "key": "ambient-temperature",
+      "label": "Operating Ambient",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "0 to 50",
+        "unit": "°C",
+        "condition": "90 % maximum relative humidity",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity."
+        }
+       }
+      ]
+     },
+     {
+      "key": "operating-humidity",
+      "label": "Operating Ambient",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "90",
+        "unit": "%",
+        "condition": "maximum relative humidity",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity."
+        }
+       }
+      ]
+     },
+     {
+      "key": "dimensions",
+      "label": "Dimensions",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD)",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD)."
+        }
+       }
+      ]
+     },
+     {
+      "key": "weight",
+      "label": "Weight",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "6.2 kg (DT Version) / 8.5 kg (RM Version)",
+        "unit": "",
+        "condition": "nominal",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal."
+        }
+       }
+      ]
+     },
+     {
+      "key": "warranty",
+      "label": "Warranty",
+      "values": [
+       {
+        "model": "PCON-Y17",
+        "literal": "1",
+        "unit": "year",
+        "condition": "",
+        "sourceRef": {
+         "page": 11,
+         "quote": "Warranty: 1 year"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "sharedTables": [
+   {
+    "title": "Pressure Controller Range (C1)",
+    "columns": [
+     "bar",
+     "psi",
+     "SI-Pascal",
+     "Control*",
+     "Accuracy"
+    ],
+    "rows": [
+     {
+      "label": "(3)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "1 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-15 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "100 kPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(4)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "2 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-30 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "200 kPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(5)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "7 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-100 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "700 kPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(6)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(6) 20 bar 0-250 psi 2.5 MPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "20 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-250 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "2.5 MPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(7)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(7) 35 bar 0-500 psi 3.5 MPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "35 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-500 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "3.5 MPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(8)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(8) 70 bar 0-1000 psi 7 MPa ± 0.002 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "70 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-1000 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "7 MPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.002 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     },
+     {
+      "label": "(9)",
+      "sourceRef": {
+       "page": 11,
+       "quote": "(9) 210 bar 0-3000 psi 21 MPa ± 0.003 % FS ± 0.012 % FS"
+      },
+      "values": [
+       {
+        "column": "bar",
+        "literal": "210 bar"
+       },
+       {
+        "column": "psi",
+        "literal": "0-3000 psi"
+       },
+       {
+        "column": "SI-Pascal",
+        "literal": "21 MPa"
+       },
+       {
+        "column": "Control*",
+        "literal": "± 0.003 % FS",
+        "condition": "using 2 σ method"
+       },
+       {
+        "column": "Accuracy",
+        "literal": "± 0.012 % FS"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "pages": [
+   {
+    "page": 11,
+    "content": "specifications"
+   }
+  ]
+ },
+ "trimmed": 0,
+ "usage": {
+  "inputTokens": 7579,
+  "outputTokens": 2784,
+  "estimatedUsd": 0.032249
+ },
+ "ms": 28117
+}

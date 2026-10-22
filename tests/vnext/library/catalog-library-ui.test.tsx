@@ -145,7 +145,8 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     expect(getByRole('button', { name: 'Abrir' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Duplicar' })).toBeInTheDocument();
     expect(getByRole('button', { name: 'Renomear' })).toBeInTheDocument();
-    expect(getByRole('button', { name: 'Arquivar' })).toBeInTheDocument();
+    // FR-04: Arquivar lives one step away, in the row's "Mais" menu.
+    expect(getByRole('button', { name: 'Mais ações de Ativo mais novo' })).toBeInTheDocument();
   });
 
   it('W6.A makes translated copies recognizable without mislabeling other origins', async () => {
@@ -228,9 +229,10 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     await waitFor(() => expect(document.activeElement).toBe(renameTrigger));
     expect(renameDialog).not.toBeInTheDocument();
 
-    const archiveTrigger = getByRole('button', { name: 'Arquivar' });
+    const archiveTrigger = getByRole('button', { name: 'Mais ações de Catálogo foco' });
     archiveTrigger.focus();
     fireEvent.click(archiveTrigger);
+    fireEvent.click(getByRole('menuitem', { name: 'Arquivar' }));
 
     const archiveDialog = getByRole('dialog', { name: 'Arquivar “Catálogo foco”?' });
     const cancel = getByRole('button', { name: 'Cancelar' });
@@ -250,14 +252,18 @@ describe('W3.E CatalogLibrary UI coordination', () => {
   it('CREATE-AMB-07 presents unresolved create as verification and retries the same service attempt without refresh guidance', async () => {
     let pending = false;
     const list = vi.fn().mockResolvedValue({ ok: true, value: [] });
-    const createBlank = vi.fn(async (): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> => {
+    const createBlank = vi.fn(async (_title?: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> => {
       pending = true;
       return { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } };
     });
+    const verifyPendingCreate = vi.fn(async (): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope | null>> => (
+      { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } }
+    ));
     const service = {
       list,
       listStarters: () => [],
       createBlank,
+      verifyPendingCreate,
       getCreateState: () => pending ? 'pending-verification' : 'idle',
     } as unknown as CatalogLibraryService;
     const { getByRole, getAllByRole, queryByText } = render(
@@ -274,8 +280,10 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     const retry = alert.querySelector('button');
     expect(retry).not.toBeNull();
     fireEvent.click(retry!);
-    await waitFor(() => expect(createBlank).toHaveBeenCalledTimes(2));
-    expect(createBlank.mock.calls).toEqual([[], []]);
+    // FR-08: the retry verifies the same attempt and never creates a second catalog.
+    await waitFor(() => expect(verifyPendingCreate).toHaveBeenCalledTimes(1));
+    expect(createBlank).toHaveBeenCalledTimes(1);
+    expect(createBlank.mock.calls).toEqual([[undefined]]);
   });
 
   it('W3.F exposes compact Duplicate and Starter flows below React authority', async () => {
@@ -366,7 +374,7 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
     const openBtn = getByRole('button', { name: 'Abrir' });
     const duplicateBtn = getByRole('button', { name: 'Duplicar' });
     const renameBtn = getByRole('button', { name: 'Renomear' });
-    const archiveBtn = getByRole('button', { name: 'Arquivar' });
+    const archiveBtn = getByRole('button', { name: 'Mais ações de Catálogo Alpha' });
 
     expect(openBtn).toBeDisabled();
     expect(duplicateBtn).toBeDisabled();
@@ -395,6 +403,7 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
       list,
       createFromStarter,
       createBlank: vi.fn().mockResolvedValue({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } }),
+      verifyPendingCreate: vi.fn().mockResolvedValue({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } }),
       listStarters: () => [{
         starterId: 'essential',
         revision: 1,
@@ -423,7 +432,7 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
     expect(getByRole('button', { name: 'Abrir' })).toBeDisabled();
     expect(getByRole('button', { name: 'Duplicar' })).toBeDisabled();
     expect(getByRole('button', { name: 'Renomear' })).toBeDisabled();
-    expect(getByRole('button', { name: 'Arquivar' })).toBeDisabled();
+    expect(getByRole('button', { name: 'Mais ações de Catálogo Beta' })).toBeDisabled();
 
     const headerVerify = getAllByRole('button', { name: 'Verificar criação' })[0];
     await act(async () => {
@@ -519,7 +528,8 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
     let createState: 'idle' | 'pending-verification' = 'pending-verification';
     const rowItem = item('Catálogo Gama', '103');
     const list = vi.fn().mockResolvedValue({ ok: true, value: [rowItem] });
-    const createBlank = vi.fn(async () => {
+    const createBlank = vi.fn();
+    const verifyPendingCreate = vi.fn(async () => {
       createState = 'idle';
       return {
         ok: true,
@@ -534,6 +544,7 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
     const service = {
       list,
       createBlank,
+      verifyPendingCreate,
       listStarters: () => [],
       getCreateState: () => createState,
     } as unknown as CatalogLibraryService;
@@ -551,7 +562,9 @@ describe('Pending-create navigation amendment (PENDING-NAV-01..06)', () => {
     await waitFor(() => expect(getByRole('button', { name: 'Abrir' })).toBeEnabled());
     expect(getByRole('button', { name: 'Duplicar' })).toBeEnabled();
     expect(getByRole('button', { name: 'Renomear' })).toBeEnabled();
-    expect(getByRole('button', { name: 'Arquivar' })).toBeEnabled();
+    expect(getByRole('button', { name: 'Mais ações de Catálogo Gama' })).toBeEnabled();
+    expect(verifyPendingCreate).toHaveBeenCalledTimes(1);
+    expect(createBlank).not.toHaveBeenCalled();
 
     fireEvent.click(getByRole('button', { name: 'Abrir' }));
     expect(onOpen).toHaveBeenCalledWith(rowItem.catalogId);

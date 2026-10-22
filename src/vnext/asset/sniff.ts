@@ -2,6 +2,7 @@
  * Pure byte analysis for canonical image formats (PNG, JPEG, WebP).
  * Zero DOM, React, or Supabase dependencies.
  */
+import { exifOrientationSwapsAxes, readJpegExifOrientation } from './exif-orientation';
 
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
@@ -45,7 +46,25 @@ export function sniffImageMime(input: Uint8Array | ArrayBuffer): SupportedImageM
   return null;
 }
 
+/**
+ * Displayed pixel size, as the browser shows the image (`image-orientation: from-image`).
+ * A phone JPEG with EXIF Orientation 5-8 is stored sideways; its displayed width is the
+ * encoded height, so editor, measurement and PDF checks agree with `naturalWidth/Height`.
+ */
 export function sniffImageDimensions(
+  input: Uint8Array | ArrayBuffer
+): { widthPx: number; heightPx: number } | null {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const encoded = sniffEncodedImageDimensions(bytes);
+  if (!encoded) return null;
+  if (sniffImageMime(bytes) === 'image/jpeg' && exifOrientationSwapsAxes(readJpegExifOrientation(bytes))) {
+    return { widthPx: encoded.heightPx, heightPx: encoded.widthPx };
+  }
+  return encoded;
+}
+
+/** Pixel size exactly as encoded in the header, before any EXIF orientation. */
+export function sniffEncodedImageDimensions(
   input: Uint8Array | ArrayBuffer
 ): { widthPx: number; heightPx: number } | null {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);

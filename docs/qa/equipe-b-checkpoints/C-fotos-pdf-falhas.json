@@ -1,0 +1,205 @@
+{
+  "group": "C-fotos-pdf-falhas",
+  "at": "2026-10-17T15:40:00-03:00",
+  "base": "33cd5df (equipe-b/usabilidade) · servidor vite compartilhado http://127.0.0.1:5190 (reutilizado, nenhum servidor novo) · harness fixtures/father-harness.html (persistência local, composer falso, sem Supabase)",
+  "viewports": ["1366x768", "1280x720 (VP=1280)"],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2) com o critério de pronto cumprido no que é testável; pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos nos steps (findingSteps) sem mudar o estado — ver fixtures/father-eyes.mjs finishJourneyGraded.",
+  "journeys": [
+    {
+      "id": "J6",
+      "status": "pass",
+      "proofFile": "tests/vnext/proof/father-journeys/j06-foto-celular.mjs",
+      "results": ["scratch/father-journeys/results/j06-foto-celular.json", "scratch/father-journeys/results/j06-foto-celular@1280.json"],
+      "steps": { "ok": 16, "fail": 0, "findings": 3, "pending": 0 },
+      "reason": "Critério cumprido nas duas janelas (3 execuções em 1366 — a parcial da rodada cortada e duas de confirmação — e 1 em 1280). Pela interface: 'Em branco' → botão 'Imagem' (65×32 px, letra 11 px, visível sem rolar) → seletor do sistema (aceita png/jpeg/webp/heic/heif) → JPEG paisagem 3000×2000 com EXIF Orientation=6 entra DE PÉ: guardado como 2000×3000 (re-codificado, 40 KB), pixels conferidos na página e na prévia de impressão (vermelho em cima, azul embaixo, image-orientation from-image); 'Imagem adicionada.' (verde, 14 px, y=72, visível sem rolar) em ~320 ms do arquivo escolhido; 'Salvo' volta sozinho em ~0,9 s; 0 jargão. HEIC falso (ftypheic, 40 bytes) → em 15 ms: 'Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.' (14 px, visível sem rolar), nada inserido nem enviado. 'Publicar / PDF' com a foto → 'Pronto para imprimir ou salvar PDF.' em ~130 ms, 0 itens, Imprimir ativo; a prévia mostra a foto de pé; 'Voltar ao editor' devolve um editor que responde. 6 cliques no total (foto 2, HEIC 2, publicar 1, voltar 1). Achados: C-01 P3 (moldura quadrada 58×58 mm → 33 % de faixas vazias), C-03 P2 (aviso HEIC some sozinho em ~4 s), C-02 P3 (não diz onde fica 'Mais compatível')."
+    },
+    {
+      "id": "J8",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j08-publicar-pdf.mjs",
+      "results": ["scratch/father-journeys/results/j08-publicar-pdf.json", "scratch/father-journeys/results/j08-publicar-pdf@1280.json"],
+      "steps": { "ok": 28, "fail": 0, "findings": 1, "pending": 1 },
+      "reason": "Critério de pronto CUMPRIDO (1366 e 1280): (a) digita 'Termômetro TA-25N' num 'Texto' novo e clica 'Publicar / PDF' NA HORA, sem Concluir nem esperar: o botão vira 'Salvando…' em ~60 ms, a revisão abre em ~125–160 ms já 'Verificando…' e chega a 'Pronto para imprimir ou salvar PDF.' em ~130–170 ms; o texto não se perdeu (está no documento e no 'servidor'); nenhum 'Salve o catálogo…' preso. Com servidor lento (holdSaves) o pai vê 'Salvando…' no botão e no status e, ao terminar o salvamento, a revisão segue SOZINHA até Pronto (29–92 ms depois). (b) 'Exatidão: A COMPLETAR' na página 2, publicar a partir da página 1 → 'Publicação bloqueada…' em ~80 ms, 1 item 'Página 2 · texto 1 · Correção necessária · Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.', Imprimir desligado, 'Detalhes técnicos' fechado; 'Verificar novamente' roda de novo sem travar; 'Corrigir este item' (141×40 px, 13 px) fecha a revisão, vai à página 2, seleciona o texto e dá FOCO nele em ~80 ms, com aviso visível sem rolar; corrige, 'Publicar / PDF' → Pronto em ~86 ms. PDF por page.pdf (A4, preferCSSPageSize) conferido com pdfjs: (a) 1 página 595×842 pt, texto pesquisável 'Termômetro TA-25N', sem textos do diálogo, título do PDF = nome do catálogo e restaurado depois; (b) 2 páginas A4 pesquisáveis, sem 'A COMPLETAR'. Cliques até o PDF dentro do app: 2 (Publicar / PDF → Imprimir / salvar PDF) depois de digitar; o resto é a janela do navegador (checklist humano do Gabriel, FR-52). O diálogo pede UMA linha do pai: 'Na janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.' (13 px, visível sem rolar). 0 jargão no diálogo. PENDENTE Onda 2 (2B, FR-14/15): uma frase real de uma linha ('Termômetro TA-25N: faixa de -25 °C a 140 °C') num 'Texto' novo (16 pt negrito, quadro 82×22 mm) NÃO CABE e bloqueia a publicação ('O texto não cabe no espaço reservado. Aumente o quadro de texto ou reduza o conteúdo.'); o caminho 'Corrigir este item' desse bloqueio também foi exercitado (leva ao texto, foco, encurtar → Pronto). Achado C-04 P3 (aviso manda 'Verificar novamente' mas Corrigir fecha a revisão)."
+    },
+    {
+      "id": "J13",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j13-falhas.mjs",
+      "results": ["scratch/father-journeys/results/j13-falhas.json", "scratch/father-journeys/results/j13-falhas@1280.json"],
+      "steps": { "ok": 21, "fail": 0, "findings": 3, "pending": 2 },
+      "reason": "Parte testável CUMPRIDA (1366 e 1280). Foto grande: JPEG 6000×4000 de 2,05 MB (gerado em canvas, guardado em scratch/father-journeys/photos/, não em fixtures/) → 'Enviando imagem…' (tom progresso) em 4–8 ms, 'Imagem adicionada.' em 0,5–0,7 s, maior pausa da tela 230–370 ms (não trava), foto reduzida SOZINHA para 3000×2000 (446 KB) sem perguntar nada, aparece na página, 'Salvo' volta em ~1 s, 0 jargão; 'Publicar / PDF' → Pronto em ~190 ms; PDF A4 1 página com a imagem embutida (447 KB) em ~30 ms. IA com limite (?ia=limite): o painel JÁ avisa ao abrir (72–119 ms) 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.', sem pedir chave; ao enviar, a mesma frase + 'O catálogo não foi alterado.' aparece em ~70 ms como aviso vermelho visível sem rolar (base y=693/768 e y=693/720 — em 1280×720 fica a 27 px da borda), o pedido volta para a caixa como 'não enviado', 0 páginas novas, continua 'Salvo'. Servidor sem IA (?ia=off): ao abrir 'A IA do servidor ainda não foi configurada. Fale com o administrador. Se você tiver uma chave própria do Gemini, use “Avançado (chave própria)”.' sem campos de chave; ao enviar, a mesma explicação como aviso, pedido preservado. PENDENTES Onda 2 (2G): rede desligada por 30 s (FR-44 novas tentativas 5/15/60 s, FR-45 isOffline) e sessão expirada (FR-44 rótulo) — o harness salva em localStorage e não tem login; não dá para emular aqui sem fingir. Achados: C-07 P2 (letra 12 px do aviso; duplica D-06), C-06 P2 (mensagem cita botão inexistente; duplica D-07), C-05 P3 (Enviar continua ativo com o limite já avisado), C-08 P3 ('Avançado (chave própria)' aparece no limite e não aparece no 'sem IA')."
+    }
+  ],
+  "findings": [
+    {
+      "id": "C-01",
+      "journey": "J6",
+      "severity": "P3",
+      "title": "A moldura da foto nova é sempre quadrada (58×58 mm): uma foto retrato de celular aparece com faixas vazias dos lados (33 % da moldura), e a seleção fica maior que a foto.",
+      "steps": ["Meus catálogos → Novo catálogo → nome → 'Em branco'", "Clicar 'Imagem' e escolher um JPEG retrato de celular (EXIF Orientation=6, 3000×2000 → 2000×3000)", "Olhar a foto na página: moldura 221×221 px, foto desenhada com 147 px de largura (Ajuste = Conter); as alças de seleção envolvem o vazio"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j06-foto-celular-1366-01-foto-inserida.png",
+      "impact": "O pai acha que a foto 'ficou pequena' ou 'com borda', tenta esticar pelas alças e distorce ou não entende por que o espaço em volta não some; na impressão o espaço reservado não corresponde à foto.",
+      "proposedFix": "Ao inserir a foto, adaptar a moldura à proporção da imagem (manter 58 mm no lado maior; o outro lado = 58 × menor/maior) em vez do quadrado fixo de createInsertSpec('image') — src/vnext/app/editor-defaults.ts (PROIBIDO, Onda 2) e/ou no resultado de uploadWorkspaceImage (src/vnext/app/image-upload.ts, fora da lista, mas src/ não é editável por esta equipe) → registrar em _state/PROPOSTAS.md; cabe na Onda 5 (FR-21, imagens sem atrito).",
+      "knownFR": "FR-21",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j06-foto-celular.mjs"
+    },
+    {
+      "id": "C-02",
+      "journey": "J6",
+      "severity": "P3",
+      "title": "A mensagem do HEIC cita “Mais compatível” sem dizer onde isso fica no iPhone (Ajustes › Câmera › Formatos) nem que a alternativa é pedir a foto em JPEG a quem a tirou.",
+      "steps": ["No editor, clicar 'Imagem' e escolher um arquivo .heic", "Ler a mensagem: 'Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.'"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j06-foto-celular-1366-03-heic-mensagem.png",
+      "impact": "O pai (Android ou PC) não sabe o que é 'Mais compatível' nem que é um ajuste do iPhone de quem tirou a foto; fica sem saída prática e desiste da foto.",
+      "proposedFix": "Trocar HEIC_PHOTO_MESSAGE (src/vnext/asset/normalize-image.ts:22 — fora de PROIBIDOS, mas src/ não é editável por esta equipe → PROPOSTAS.md) por algo como: 'Esta foto veio em HEIC (formato do iPhone) e não pode ser usada aqui. Peça a foto em JPEG, ou no iPhone de quem tirou abra Ajustes › Câmera › Formatos e escolha “Mais compatível”.'",
+      "knownFR": "FR-41",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j06-foto-celular.mjs"
+    },
+    {
+      "id": "C-03",
+      "journey": "J6",
+      "severity": "P2",
+      "title": "O aviso do HEIC some sozinho depois de ~4 s (tom 'info'), antes de o pai terminar de ler a instrução de como converter.",
+      "steps": ["No editor, clicar 'Imagem' e escolher um arquivo .heic", "Não clicar em nada e cronometrar: o aviso desaparece sozinho em 3,96 s (medido nas duas janelas) sem ninguém clicar em 'Fechar'"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j06-foto-celular-1366-03-heic-mensagem.png",
+      "impact": "Um aviso que exige ação do pai (converter a foto) desaparece enquanto ele ainda procura os óculos; ele vê 'nada aconteceu', tenta de novo e recebe de novo um aviso que some.",
+      "proposedFix": "Devolver a falha do envio com tom 'error' (fica até fechar, como os outros erros do editor — FR-12) em vez do texto solto que vira 'info' com tempo: src/vnext/app/image-upload.ts (resultado de uploadWorkspaceImage) + EditorNotices (src/vnext/app/editor/EditorNotices.tsx, PROIBIDO) → PROPOSTAS.md.",
+      "knownFR": "FR-12",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j06-foto-celular.mjs"
+    },
+    {
+      "id": "C-04",
+      "journey": "J8",
+      "severity": "P3",
+      "title": "O aviso de bloqueio manda 'clicar em Verificar novamente', mas 'Corrigir este item' fecha a revisão: depois de corrigir não existe 'Verificar novamente' na tela e o pai precisa descobrir que é 'Publicar / PDF' de novo.",
+      "steps": ["Catálogo com um texto 'A COMPLETAR' → 'Publicar / PDF'", "Ler: 'Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.'", "Clicar 'Corrigir este item' → a revisão fecha, o editor vai ao texto", "Corrigir o texto e procurar 'Verificar novamente': não existe; só 'Publicar / PDF' na barra"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-03-bloqueado.png",
+      "impact": "Pequena perda de rumo depois de cada correção; o pai procura um botão que o aviso prometeu.",
+      "proposedFix": "Em PublicationReview.tsx (PROIBIDO, Onda 2) trocar o texto por 'Corrija os itens abaixo e clique em Publicar / PDF de novo' ou, melhor, depois de 'Corrigir este item' deixar a barra mostrar 'Voltar à revisão' até a próxima publicação → PROPOSTAS.md.",
+      "knownFR": "FR-13",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j08-publicar-pdf.mjs"
+    },
+    {
+      "id": "C-05",
+      "journey": "J13",
+      "severity": "P3",
+      "title": "Com o limite diário da IA já avisado no topo do painel, 'Enviar ao Gemini' continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão).",
+      "steps": ["Abrir o editor com ?ia=limite (servidor responde 429 AGENT_DAILY_BUDGET_EXCEEDED)", "Clicar 'Assistente IA': o painel diz 'O limite diário de uso da IA foi atingido…' em cinza, no meio da descrição", "Digitar um pedido: 'Enviar ao Gemini' fica azul e ativo; clicar → o mesmo aviso em vermelho embaixo e o pedido volta como 'não enviado'"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1366-03-ia-limite-diario.png",
+      "impact": "O pai gasta tempo escrevendo e leva um 'não' que já era conhecido; o aviso do topo passa despercebido porque tem a mesma cor e tamanho da descrição.",
+      "proposedFix": "Em CatalogNativeComposer.tsx (PROIBIDO, Onda 2): quando readiness.kind === 'blocked', desligar 'Enviar ao Gemini' e mostrar a prontidão como faixa de aviso (fundo amarelo/vermelho) em vez de texto cinza; manter a caixa editável para o pai guardar a ideia → PROPOSTAS.md.",
+      "knownFR": "FR-61",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j13-falhas.mjs"
+    },
+    {
+      "id": "C-06",
+      "journey": "J13",
+      "severity": "P2",
+      "title": "Com o servidor sem IA, a mensagem manda usar 'Avançado (chave própria)', mas esse botão não existe na tela (mesmo achado D-07 do grupo D, J-IA1 — consolidar).",
+      "steps": ["Abrir o editor com ?ia=off (status do servidor: serverKey=false, byok=false)", "Clicar 'Assistente IA' e ler: '…Se você tiver uma chave própria do Gemini, use “Avançado (chave própria)”.'", "Procurar o botão 'Avançado (chave própria)' ao lado de 'Enviar ao Gemini': não existe"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1280-04-servidor-sem-ia.png",
+      "impact": "O pai procura um botão que não está lá; mesmo se estivesse, 'chave própria' é jargão que ele não tem como resolver.",
+      "proposedFix": "Causa raiz: ownKeyOffered = client && (ownKey || readiness?.kind !== 'ready' || readiness.byok) (src/vnext/ai-catalog/CatalogNativeComposer.tsx:76, PROIBIDO) esconde o botão justamente quando byok=false. Em composer-messages.ts (src/vnext/ai-catalog/composer-messages.ts:19, fora da lista, mas src/) tirar a segunda frase de PROVIDER_NOT_CONFIGURED quando o servidor não oferece chave própria, deixando só 'A IA do servidor ainda não foi configurada. Fale com o administrador e continue editando manualmente.' → PROPOSTAS.md.",
+      "knownFR": "FR-60",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j13-falhas.mjs"
+    },
+    {
+      "id": "C-07",
+      "journey": "J13",
+      "severity": "P2",
+      "title": "A mensagem de erro/limite do assistente (a que diz ao pai o que fazer) tem letra de 12 px, igual à linha de prontidão no topo (mesmo achado D-06 do grupo D — consolidar).",
+      "steps": ["Abrir o editor com ?ia=limite (ou ?ia=off), clicar 'Assistente IA', digitar um pedido e 'Enviar ao Gemini'", "Medir com getComputedStyle o <p role=alert> embaixo da caixa: font-size 12 px; a linha .ai-readiness do topo: 12 px"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1366-03-ia-limite-diario.png",
+      "impact": "A única explicação do que aconteceu e do que fazer exige óculos de leitura; em 1280×720 ela fica a 27 px da borda inferior da janela.",
+      "proposedFix": "Subir para ≥ 14 px .ai-workbench-chat [role=alert] e .ai-readiness — src/vnext/app/styles.css (PROIBIDO, Onda 2C escala 60+) → PROPOSTAS.md.",
+      "knownFR": "FR-16b",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j13-falhas.mjs"
+    },
+    {
+      "id": "C-08",
+      "journey": "J13",
+      "severity": "P3",
+      "title": "O botão 'Avançado (chave própria)' aparece quando o limite diário foi atingido (onde a mensagem manda continuar manualmente) e NÃO aparece quando o servidor não tem IA (onde a mensagem manda usá-lo): o inverso do que o texto diz.",
+      "steps": ["Abrir o editor com ?ia=limite, clicar 'Assistente IA': ao lado de 'Enviar ao Gemini' há 'Avançado (chave própria)'", "Abrir o editor com ?ia=off, clicar 'Assistente IA': o botão não aparece, embora a mensagem o cite"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1366-03-ia-limite-diario.png",
+      "impact": "No dia em que o limite acaba, um pai que 'só quer continuar' vê um botão com jargão ('chave própria') convidando a um fluxo de chave/senha; quem precisaria dele (servidor sem IA) não o tem.",
+      "proposedFix": "Mesma raiz da C-06: ownKeyOffered usa readiness?.kind !== 'ready' (true quando 'blocked' pelo limite). Em CatalogNativeComposer.tsx:76 (PROIBIDO) oferecer chave própria só quando o servidor declara byok=true (ou quando já há chave), nunca por 'bloqueado' → PROPOSTAS.md. Verificado nas capturas de 1366 (limite, botão presente) e 1280 (sem IA, botão ausente); a contagem no JSON da prova registra 0 botões no modo sem IA.",
+      "knownFR": "FR-60",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j13-falhas.mjs"
+    }
+  ],
+  "pending": [
+    { "journey": "J8", "slice": "Onda 2 (2B)", "fr": "FR-14/FR-15", "what": "Frase real de uma linha num 'Texto' novo (16 pt negrito, 82×22 mm) não cabe e bloqueia a publicação com 'O texto não cabe no espaço reservado…'. Esperado: texto novo em 10 pt e 'Ajustar altura ao texto'. A prova mede e segue pelo 'Corrigir este item'." },
+    { "journey": "J13", "slice": "Onda 2 (2G)", "fr": "FR-44/FR-45", "what": "Rede desligada por 30 s durante a edição ('Sem conexão', novas tentativas 5/15/60 s, retomada sozinha) — o harness não emula rede e salva em localStorage." },
+    { "journey": "J13", "slice": "Onda 2 (2G)", "fr": "FR-44", "what": "Sessão expirada (rótulo 'Sessão expirada' e o que fazer) — o harness não tem login." }
+  ],
+  "observations": [
+    "J6/J13: 'Imagem adicionada.' e os avisos do editor aparecem numa faixa no topo da página (y=72, 14 px, botão 'Fechar'), visíveis sem rolar nas duas janelas — o retorno está onde o pai olha.",
+    "J6: o botão 'Imagem' tem 65×32 px e letra 11 px (como 'Texto'/'Tabela'); está na lista da Onda 2C (FR-16b, escala 60+) — não registrado como achado novo. Depois de inserir, o painel 'Propriedades › Imagem' mostra 'Ajuste: Conter', 'Posição da imagem', 'Horizontal/Vertical 50%' e o aviso amarelo 'A posição é usada no modo Preencher e será preservada.' — conceitos (Conter/Preencher) que o pai não pediu; FR-20/2D.",
+    "J8: o diálogo 'Revisar e publicar' usa 13 px no status, na instrução e nos itens; botões de 40 px. Legível, mas abaixo dos 15 px prometidos pela 2C. O local do item é 'Página 2 · texto 1' ('texto N' é uma numeração interna por ordem; FR-20 pede 'linha N, coluna M' só para tabelas) — aceitável porque 'Corrigir este item' resolve.",
+    "J8: com servidor lento, 'Publicar / PDF' vira 'Salvando…' e o status sob o título também; a revisão só abre quando o salvamento termina (FR-50). Nada trava; o botão mantém o foco.",
+    "J8: 'Verificar novamente' aparece sempre (até com Pronto) — ocupa a posição mais nobre do diálogo, acima da instrução e do botão azul; o pai pode clicar nele achando que é o passo seguinte. P3 de polimento (não registrado como achado por ser decisão de layout da Onda 1D).",
+    "J13: a foto grande é reduzida sem aviso. Para A4 a 300 dpi, 3000 px de lado maior bastam (~254 mm). Nenhuma mensagem de 'foto reduzida' é necessária para o pai; registrado para quem for cuidar da nitidez (FR-21 'aviso de baixa resolução').",
+    "J13: no modo limite, o aviso de prontidão fica em cinza no meio da descrição do painel ('Descreva o que deseja… O limite diário…'); não parece aviso. Coberto por C-05/C-07.",
+    "J13: em 1280×720 o aviso vermelho do assistente termina em y=693 e o rodapé explicativo ('A IA propõe a estrutura…') já fica cortado pela janela — tudo o que importa ainda está visível sem rolar.",
+    "Sobreposição com o grupo D (J-IA1): ?ia=limite e ?ia=off também são cobertos por jia1-assistente.mjs (achados D-06 e D-07). Nesta base os dois continuam reproduzindo; C-06/C-07 estão marcados como duplicatas para a síntese consolidar, e C-05/C-08 são novos."
+  ],
+  "files": [
+    "tests/vnext/proof/father-journeys/j06-foto-celular.mjs (parcial da rodada cortada, relido e re-executado 2× em 1366 e 1× em 1280 — sem mudanças)",
+    "tests/vnext/proof/father-journeys/j08-publicar-pdf.mjs (parcial da rodada cortada, nunca executado antes; corrigido: seletor do innerText com 2 elementos, texto curto na (a), novo bloco (a3) com a frase real → pendente 2B + 'Corrigir este item' do overflow)",
+    "tests/vnext/proof/father-journeys/j13-falhas.mjs (novo)",
+    "tests/vnext/proof/father-journeys/fixtures/photos/make-photos.mjs (parcial da rodada cortada; reutilizado sem mudanças)",
+    "tests/vnext/proof/father-journeys/fixtures/photos/celular-retrato-exif6.jpg (40 KB, EXIF Orientation=6, 3000×2000)",
+    "tests/vnext/proof/father-journeys/fixtures/photos/foto-iphone.heic (40 bytes, ftypheic)",
+    "scratch/father-journeys/photos/foto-grande-6000x4000.jpg (2,05 MB, gerado pela j13; fora do git)",
+    "scratch/father-journeys/pdf/j08-a-pronto.pdf, j08-b-2-paginas.pdf, j13-foto-grande.pdf (+ variantes @1280)",
+    "scratch/father-journeys/results/j06-foto-celular.json, j06-foto-celular@1280.json, j08-publicar-pdf.json, j08-publicar-pdf@1280.json, j13-falhas.json, j13-falhas@1280.json",
+    "C:/Users/Usuario/Desktop/CONFIGURATOR PCON/wt-equipe-b/_state/5-jornadas/C-fotos-pdf-falhas.json"
+  ],
+  "evidence": [
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j06-foto-celular-1366-01-foto-inserida.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j06-foto-celular-1366-03-heic-mensagem.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-01-pronto.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-02-salvando.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-02b-bloqueado-texto-nao-cabe.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-03-bloqueado.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j08-publicar-pdf-1366-04-corrigir-leva-ao-texto.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1366-01-foto-grande-inserida.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1366-03-ia-limite-diario.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j13-falhas-1280-04-servidor-sem-ia.png"
+  ],
+  "consoleErrors": [],
+  "consoleNote": "Rodadas finais (6 execuções: 3 provas × 2 janelas, mais 3 execuções anteriores da j06/j08/j13 enquanto as provas eram ajustadas): 0 erros de console do aplicativo, 0 avisos, 0 pageerror, 0 diálogos. Nenhum ruído do servidor de desenvolvimento (nenhuma recarga do vite durante as provas; cada prova marca a janela e confere no fim).",
+  "timings": {
+    "J6": { "arquivoAteAvisoMs": { "1366": 319, "1280": 318 }, "fotoNaTelaMs": { "1366": 53, "1280": 40 }, "salvoDepoisDaFotoMs": { "1366": 852, "1280": 923 }, "avisoHeicMs": { "1366": 15, "1280": 15 }, "avisoHeicVisivelMs": { "1366": 3958, "1280": 3957 }, "publicarProntoMs": { "1366": 133, "1280": 132 }, "clicks": { "inserir foto": 2, "tentar HEIC": 2, "publicar": 1, "voltar ao editor": 1, "total": 6 } },
+    "J8": { "a_salvandoNoBotaoMs": { "1366": 59, "1280": 74 }, "a_revisaoAbreMs": { "1366": 124, "1280": 161 }, "a_prontoMs": { "1366": 130, "1280": 170 }, "a2_prontoDepoisDeLiberarMs": { "1366": 29, "1280": 92 }, "a3_bloqueadoOverflowMs": { "1366": 68, "1280": 86 }, "a3_corrigirLevaAoTextoMs": { "1366": 49, "1280": 52 }, "b_bloqueadoMs": { "1366": 78, "1280": 79 }, "b_verificarNovamenteMs": { "1366": 50, "1280": 94 }, "b_corrigirLevaAoTextoMs": { "1366": 81, "1280": 76 }, "b_prontoDepoisDaCorrecaoMs": { "1366": 86, "1280": 86 }, "pdf": { "a": "1 página A4 595×842 pt, 4,2 KB, texto pesquisável", "b": "2 páginas A4, 6,2 KB, texto pesquisável nas duas, sem 'A COMPLETAR'" }, "clicks": { "digitar texto (Texto + 2 cliques)": 3, "publicar": 1, "imprimir / salvar PDF": 1, "ateOPdfNoApp": 2, "corrigir um item (Corrigir + 2 cliques + Concluir + Publicar)": 5 } },
+    "J13": { "fotoGrande": { "primeiroAvisoMs": { "1366": 4, "1280": 8 }, "imagemAdicionadaMs": { "1366": 709, "1280": 663, "primeiraRodada1366": 494 }, "maiorPausaDaTelaMs": { "1366": 372, "1280": 329 }, "salvoMs": { "1366": 1035, "1280": 1019 }, "publicarProntoMs": { "1366": 199, "1280": 185 }, "pdfMs": { "1366": 26, "1280": 32 }, "reducao": "2 149 256 → 445 800 bytes (6000×4000 → 3000×2000 JPEG)", "pdfBytes": 447525 }, "iaLimite": { "abrirPainelMs": { "1366": 94, "1280": 119 }, "avisoAoEnviarMs": { "1366": 69, "1280": 71 } }, "servidorSemIA": { "abrirPainelMs": { "1366": 76, "1280": 75 }, "avisoAoEnviarMs": { "1366": 52, "1280": 91 } }, "clicks": { "foto grande": 2, "publicar": 1, "imprimir / salvar PDF": 1, "abrir assistente + enviar (cada modo)": 2 } }
+  },
+  "notes": {
+    "verificado": [
+      "As 3 provas rodaram em Chromium headless (Playwright) contra o servidor compartilhado http://127.0.0.1:5190 (nenhum servidor novo; portas 5185/5186 não tocadas), em 1366×768 e 1280×720, uma de cada vez, com o navegador fechado ao fim de cada prova; node.exe = 56 antes e depois (igual ao do grupo A), nenhum chrome/headless_shell pendurado.",
+      "Cada passo foi conferido na tela (capturas lidas: j06-01/03, j08-01/02/02b/03/04, j13-01/03 e j13-04@1280) e pela API window.__FATHER__ (state: documento, stored, finalized, uploads, saveLabel/dirty/savePhase; holdSaves/releaseHeld).",
+      "Orientação da foto: pixels amostrados na <img> da página e na prévia de impressão (topo vermelho, base azul; natural 2000×3000; image-orientation from-image); bytes guardados conferidos (finalized 2000×3000 image/jpeg).",
+      "PDFs gerados por page.pdf({format:'A4', preferCSSPageSize:true, printBackground:true}) na visualização de impressão, como w5c-publication-review-proof.mjs (emulateMedia print → pdf → afterprint), e inspecionados com pdfjs-dist 4.10.38: dimensões em pt, getTextContent (texto pesquisável), getOperatorList (imagem embutida).",
+      "Zero jargão/inglês (varredura estendida de father-eyes: TSV, JSON, CAS, revision, IndexedDB, eixo, inspector, placeholder, overflow, assets, upload, undo, commit, dock, preset, siglas, 'mm' sem contexto) no editor com foto, no diálogo 'Revisar e publicar' (cabeçalho + controles) e no painel do assistente nos dois modos; permitidos: 'Zoom', 'PDF', 'A4', 'JPEG', 'HEIC', 'Gemini', 'Catalog Builder' (marca).",
+      "Mensagens lidas e julgadas como o pai: 'Imagem adicionada.', 'Enviando imagem…', aviso HEIC, 'Pronto para imprimir ou salvar PDF.', 'Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.', 'Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.', 'O texto não cabe no espaço reservado. Aumente o quadro de texto ou reduza o conteúdo.', 'Na janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.', mensagens de limite e de servidor sem IA."
+    ],
+    "suposicao": [
+      "A impressão em si (janela nativa do Chrome/Edge, 'Salvar como PDF', diálogo Salvar como) não é automatizável: continua o checklist humano do Gabriel no PC do pai (Chrome e Edge, 100 % e 125 %) — FR-52/plano §2 J8.",
+      "O HEIC de teste é só a assinatura 'ftypheic' (40 bytes), não uma foto decodificável; vale para a mensagem, não para a hipótese de um navegador que soubesse abrir HEIC.",
+      "A foto grande é sintética (gradiente + ruído, 2,05 MB); uma foto real de 12 MP pode pesar 3–5 MB e demorar um pouco mais na re-codificação, mas o caminho (progresso → reduzido → Pronto) é o mesmo.",
+      "Os 11–13 px medidos valem para o Chromium headless a 100 % (deviceScaleFactor 1); no PC do pai com Windows a 125 % ficam ~14–16 px físicos.",
+      "O achado C-08 (botão 'Avançado (chave própria)' presente no modo limite) foi visto na captura de 1366 e explicado pelo código (ownKeyOffered com readiness.kind !== 'ready'); a prova gravou a contagem do botão só no modo sem IA (0). Não foi possível re-executar para gravar a contagem no modo limite por causa do disco (ver abaixo)."
+    ],
+    "retomada": "Trabalho parcial reaproveitado: j06-foto-celular.mjs e fixtures/photos/ (make-photos.mjs + 2 arquivos pequenos) estavam completos e foram re-executados para confirmar; j08-publicar-pdf.mjs existia mas nunca tinha rodado — corrigido e executado. jia1-assistente.mjs (grupo D), j01/j04/j05/j07/j11 e fixtures/tsv (grupos A/B) não foram tocados. Nada apagado, nenhum git commit/stash/push, nenhum arquivo de src/ ou de PROIBIDOS.txt editado; fixtures/father-eyes.mjs reutilizado sem mudanças.",
+    "disco": "ALERTA: C: tinha 7,4 GB livres ao começar (15:05), 6,0 GB depois das primeiras rodadas (15:30) e 3,4 GB ao gravar este checkpoint (15:40) — abaixo dos 5 GB da regra 5. Não é da Equipe B (scratch/father-journeys inteiro: ~3 MB de fotos/PDF + ~7 MB de capturas; evidência copiada: 2,6 MB). Por isso PAREI as execuções de Chromium depois das 6 rodadas gravadas; nenhuma prova ficou por rodar. Quem retomar deve liberar espaço antes de rodar run-all.mjs."
+  }
+}

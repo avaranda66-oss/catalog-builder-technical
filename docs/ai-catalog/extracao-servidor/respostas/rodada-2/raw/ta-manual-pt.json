@@ -1,0 +1,1299 @@
+{
+ "promptVersion": "fr66-2026-10-17.3",
+ "model": "gemini-3.8-flash",
+ "modelVersion": "gemini-3.8-flash",
+ "cached": false,
+ "sheet": {
+  "title": "Calibradores de Temperatura Avançados",
+  "models": [
+   "TA-25N",
+   "TA-35N",
+   "TA-50N"
+  ],
+  "sections": [
+   {
+    "title": "1.1 - Especificações Técnicas",
+    "rows": [
+     {
+      "key": "operating-range",
+      "label": "Faixa de Operação",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "-25 a 140",
+        "unit": "°C",
+        "condition": "Temperatura Ambiente: 20ºC.",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Faixa de Operação -25 a 140 °C* -35 a 140 °C* -50 a 140 °C*"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "-35 a 140",
+        "unit": "°C",
+        "condition": "Temperatura Ambiente: 20ºC.",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Faixa de Operação -25 a 140 °C* -35 a 140 °C* -50 a 140 °C*"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "-50 a 140",
+        "unit": "°C",
+        "condition": "Temperatura Ambiente: 20ºC.",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Faixa de Operação -25 a 140 °C* -35 a 140 °C* -50 a 140 °C*"
+        }
+       }
+      ]
+     },
+     {
+      "key": "display-accuracy",
+      "label": "Exatidão do Display",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0,1",
+        "unit": "ºC",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Exatidão do Display  0,1 ºC"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0,1",
+        "unit": "ºC",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Exatidão do Display  0,1 ºC"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0,1",
+        "unit": "ºC",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Exatidão do Display  0,1 ºC"
+        }
+       }
+      ]
+     },
+     {
+      "key": "resolution",
+      "label": "Resolução",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0,01 ºC (0,01 ºF)",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Resolução 0,01 ºC (0,01 ºF)"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0,01 ºC (0,01 ºF)",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Resolução 0,01 ºC (0,01 ºF)"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0,01 ºC (0,01 ºF)",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Resolução 0,01 ºC (0,01 ºF)"
+        }
+       }
+      ]
+     },
+     {
+      "key": "stability",
+      "label": "Estabilidade",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0,02 ºC ou 0,04 ºF",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Estabilidade 0,02 ºC ou 0,04 ºF"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0,02 ºC ou 0,04 ºF",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Estabilidade 0,02 ºC ou 0,04 ºF"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0,02 ºC ou 0,04 ºF",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Estabilidade 0,02 ºC ou 0,04 ºF"
+        }
+       }
+      ]
+     },
+     {
+      "key": "axial-uniformity",
+      "label": "Uniformidade Axial (40mm) Bloco Seco",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0,05",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Axial \n(40mm) Bloco Seco\n 0,05 ºC em \ntoda a faixa\n 0,06 ºC em \ntoda a faixa\n 0,07 ºC em \ntoda a faixa"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0,06",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Axial \n(40mm) Bloco Seco\n 0,05 ºC em \ntoda a faixa\n 0,06 ºC em \ntoda a faixa\n 0,07 ºC em \ntoda a faixa"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0,07",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Axial \n(40mm) Bloco Seco\n 0,05 ºC em \ntoda a faixa\n 0,06 ºC em \ntoda a faixa\n 0,07 ºC em \ntoda a faixa"
+        }
+       }
+      ]
+     },
+     {
+      "key": "radial-uniformity",
+      "label": "Uniformidade Radial Bloco Seco",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0,01",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Radial \nBloco Seco\n 0,01 ºC em \ntoda a faixa\n 0,01 ºC em \ntoda a faixa\n 0,02 ºC em \ntoda a faixa"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0,01",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Radial \nBloco Seco\n 0,01 ºC em \ntoda a faixa\n 0,01 ºC em \ntoda a faixa\n 0,02 ºC em \ntoda a faixa"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0,02",
+        "unit": "ºC",
+        "condition": "em toda a faixa",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Uniformidade Radial \nBloco Seco\n 0,01 ºC em \ntoda a faixa\n 0,01 ºC em \ntoda a faixa\n 0,02 ºC em \ntoda a faixa"
+        }
+       }
+      ]
+     },
+     {
+      "key": "heating-time",
+      "label": "Tempo de Aquecimento",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "10",
+        "unit": "min",
+        "condition": "25 a 140 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nAquecimento\n10 min\n(25 a 140 °C)\n16 min\n(25 a 140 °C)\n11 min\n(25 a 140 °C)"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "16",
+        "unit": "min",
+        "condition": "25 a 140 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nAquecimento\n10 min\n(25 a 140 °C)\n16 min\n(25 a 140 °C)\n11 min\n(25 a 140 °C)"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "11",
+        "unit": "min",
+        "condition": "25 a 140 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nAquecimento\n10 min\n(25 a 140 °C)\n16 min\n(25 a 140 °C)\n11 min\n(25 a 140 °C)"
+        }
+       }
+      ]
+     },
+     {
+      "key": "cooling-time",
+      "label": "Tempo de Resfriamento",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "11",
+        "unit": "min",
+        "condition": "25 a -25 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nResfriamento\n11 min\n(25 a -25 °C)\n16 min\n(25 a -35 °C)\n25 min\n(25 a -50 °C)"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "16",
+        "unit": "min",
+        "condition": "25 a -35 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nResfriamento\n11 min\n(25 a -25 °C)\n16 min\n(25 a -35 °C)\n25 min\n(25 a -50 °C)"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "25",
+        "unit": "min",
+        "condition": "25 a -50 °C",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Tempo de \nResfriamento\n11 min\n(25 a -25 °C)\n16 min\n(25 a -35 °C)\n25 min\n(25 a -50 °C)"
+        }
+       }
+      ]
+     },
+     {
+      "key": "electric-power",
+      "label": "Potência Elétrica",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "200",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Potência Elétrica 200 W 300 W 400 W"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "300",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Potência Elétrica 200 W 300 W 400 W"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "400",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Potência Elétrica 200 W 300 W 400 W"
+        }
+       }
+      ]
+     },
+     {
+      "key": "well-dimensions",
+      "label": "Diâmetro Profundidade do Poço",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": " 25,4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Diâmetro\nProfundidade do Poço\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": " 25,4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Diâmetro\nProfundidade do Poço\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": " 25,4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Diâmetro\nProfundidade do Poço\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm\n 25,4 mm (1”) \nx 124 mm"
+        }
+       }
+      ]
+     },
+     {
+      "key": "weight",
+      "label": "Peso",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "10,5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Peso 10,5 kg 10,5 kg 12,5 kg"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "10,5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Peso 10,5 kg 10,5 kg 12,5 kg"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "12,5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Peso 10,5 kg 10,5 kg 12,5 kg"
+        }
+       }
+      ]
+     },
+     {
+      "key": "dimensions",
+      "label": "Dimensões (AxLxP)",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "354,5x206x318mm",
+        "unit": "mm",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Dimensões (AxLxP) 354,5x206x318mm 354,5x206x318mm 354,5x206x318mm"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "354,5x206x318mm",
+        "unit": "mm",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Dimensões (AxLxP) 354,5x206x318mm 354,5x206x318mm 354,5x206x318mm"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "354,5x206x318mm",
+        "unit": "mm",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Dimensões (AxLxP) 354,5x206x318mm 354,5x206x318mm 354,5x206x318mm"
+        }
+       }
+      ]
+     },
+     {
+      "key": "warranty",
+      "label": "Garantia",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "1 ano, exceto para elementos de efeito Peltier",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Garantia 1 ano, exceto para elementos de efeito Peltier"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "1 ano, exceto para elementos de efeito Peltier",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Garantia 1 ano, exceto para elementos de efeito Peltier"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "1 ano, exceto para elementos de efeito Peltier",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 5,
+         "quote": "Garantia 1 ano, exceto para elementos de efeito Peltier"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "sharedTables": [
+   {
+    "title": "1.1.1 - Especificações Técnicas da Entrada",
+    "columns": [
+     "Entradas",
+     "Resolução",
+     "Exatidão",
+     "Remarks"
+    ],
+    "rows": [
+     {
+      "label": "milivolt",
+      "sourceRef": {
+       "page": 6,
+       "quote": "milivolt -150 mV a 150 mV 0,001 mV  0,01 % FS* Rentrada > 10 M"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-150 mV a 150 mV"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,001 mV"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,01 % FS*"
+       },
+       {
+        "column": "Remarks",
+        "literal": "Rentrada > 10 M"
+       }
+      ]
+     },
+     {
+      "label": "milivolt",
+      "sourceRef": {
+       "page": 6,
+       "quote": "150 mV a 2450 mV 0,01 mV  0,02 % FS auto-range"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "150 mV a 2450 mV"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,01 mV"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,02 % FS"
+       },
+       {
+        "column": "Remarks",
+        "literal": "auto-range"
+       }
+      ]
+     },
+     {
+      "label": "mA",
+      "sourceRef": {
+       "page": 6,
+       "quote": "mA -1 mA a 24,5 mA 0,0001 mA  0,02 % FS Rentrada < 120 "
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-1 mA a 24,5 mA"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,0001 mA"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,02 % FS"
+       },
+       {
+        "column": "Remarks",
+        "literal": "Rentrada < 120 "
+       }
+      ]
+     },
+     {
+      "label": "resistência",
+      "sourceRef": {
+       "page": 6,
+       "quote": "resistência 0 a 400 \n400 a 2500 \n0,01 \n0,01 \n 0,01 % FS\n 0,03 % FS\nCorrente de \nexcitação 0,85 mA\nauto-range"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "0 a 400 "
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,01 "
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,01 % FS"
+       },
+       {
+        "column": "Remarks",
+        "literal": "Corrente de excitação 0,85 mA"
+       }
+      ]
+     },
+     {
+      "label": "resistência",
+      "sourceRef": {
+       "page": 6,
+       "quote": "resistência 0 a 400 \n400 a 2500 \n0,01 \n0,01 \n 0,01 % FS\n 0,03 % FS\nCorrente de \nexcitação 0,85 mA\nauto-range"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "400 a 2500 "
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,01 "
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,03 % FS"
+       },
+       {
+        "column": "Remarks",
+        "literal": "auto-range"
+       }
+      ]
+     },
+     {
+      "label": "Pt-100",
+      "sourceRef": {
+       "page": 6,
+       "quote": "Pt-100 -200 a 850 C / -328 a 1562 F 0,01 C / 0,01 F  0,1 C /  0,2 F IEC 60751"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a 850 C / -328 a 1562 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,01 C / 0,01 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,1 C /  0,2 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60751"
+       }
+      ]
+     },
+     {
+      "label": "Pt-1000",
+      "sourceRef": {
+       "page": 6,
+       "quote": "Pt-1000 -200 a 400 C / -328 a 752 F 0,1 C / 0,1 F  0,1 C /  0,2 F IEC 60751"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a 400 C / -328 a 752 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,1 C /  0,2 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60751"
+       }
+      ]
+     },
+     {
+      "label": "Cu-10",
+      "sourceRef": {
+       "page": 6,
+       "quote": "Cu-10 -200 a 260 C / -328 a 500 F 0,1 C / 0,1 F  2,0 C /  4,0 F Minco 16-9"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a 260 C / -328 a 500 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 2,0 C /  4,0 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "Minco 16-9"
+       }
+      ]
+     },
+     {
+      "label": "Ni-100",
+      "sourceRef": {
+       "page": 6,
+       "quote": "Ni-100 -60 a 250 C / -76 a 482 F 0,1 C / 0,1 F  0,2 C /  0,4 F DIN-43760"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-60 a 250 C / -76 a 482 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "DIN-43760"
+       }
+      ]
+     },
+     {
+      "label": "TC-J",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-J -210 a 1200 C / -346 a 2192 F 0,1 C / 0,1 F  0,2 C /  0,4 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-210 a 1200 C / -346 a 2192 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-K",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-K -270 a -150 C / -454 a -238 F 0,1 C / 0,1 F  0,5 C /  1,0 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-270 a -150 C / -454 a -238 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,5 C /  1,0 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-K",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-K -150 a 1370 C / -238 a 2498 F 0,1 C / 0,1 F  0,2 C /  0,4 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-150 a 1370 C / -238 a 2498 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-T",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-T -260 a -200 C / -436 a -328 F 0,1 C / 0,1 F  0,6 C /  1,2 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-260 a -200 C / -436 a -328 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,6 C /  1,2 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-T",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-T -200 a -75 C / -328 a -103 F 0,1 C / 0,1 F  0,4 C /  0,8 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a -75 C / -328 a -103 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,4 C /  0,8 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-T",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-T -75 a 400 C / -103 a 752 F 0,1 C / 0,1 F  0,2 C /  0,4 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-75 a 400 C / -103 a 752 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-E",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-E -270 a -150 C / -454 a -238 F 0,1 C / 0,1 F  0,3 C /  0,6 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-270 a -150 C / -454 a -238 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,3 C /  0,6 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-E",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-E -150 a 1000 C / -238 a 1832 F 0,1 C / 0,1 F  0,1 C /  0,2 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-150 a 1000 C / -238 a 1832 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,1 C /  0,2 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-N",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-N -260 a -200 C / -436 a -328 F 0,1 C / 0,1 F  1,0 C /  2,0 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-260 a -200 C / -436 a -328 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 1,0 C /  2,0 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-N",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-N -200 a -20 C / -328 a -4 F 0,1 C / 0,1 F  0,4 C /  0,8 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a -20 C / -328 a -4 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,4 C /  0,8 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-N",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-N -20 a 1300 C / -4 a 2372 F 0,1 C / 0,1 F  0,2 C /  0,4 F IEC 60584"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-20 a 1300 C / -4 a 2372 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "IEC 60584"
+       }
+      ]
+     },
+     {
+      "label": "TC-L",
+      "sourceRef": {
+       "page": 6,
+       "quote": "TC-L -200 a 900 C / -328 a 1652 F 0,1 C / 0,1 F  0,2 C /  0,4 F DIN-43710"
+      },
+      "values": [
+       {
+        "column": "Entradas",
+        "literal": "-200 a 900 C / -328 a 1652 F"
+       },
+       {
+        "column": "Resolução",
+        "literal": "0,1 C / 0,1 F"
+       },
+       {
+        "column": "Exatidão",
+        "literal": " 0,2 C /  0,4 F"
+       },
+       {
+        "column": "Remarks",
+        "literal": "DIN-43710"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Blocos de Prova (Insert)",
+    "columns": [
+     "Orifícios",
+     "Código de Encomenda"
+    ],
+    "rows": [
+     {
+      "label": "BP1P",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP1P 1 x 3,0mm, 1 x 6,0mm, 1 x 1/4\" e 1 x \n8,0mm\n06.04.0121-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 3,0mm, 1 x 6,0mm, 1 x 1/4\" e 1 x 8,0mm"
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0121-00"
+       }
+      ]
+     },
+     {
+      "label": "BP1A",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP1A 1 x 1/8\", 1 x 3/16\", 2 x 1/4\" e 1 x 3/8\" 06.04.0122-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 1/8\", 1 x 3/16\", 2 x 1/4\" e 1 x 3/8\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0122-00"
+       }
+      ]
+     },
+     {
+      "label": "BP1E",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP1E 1 x 4,0mm, 1 x 6,0mm, 1 x 1/4\", 1 x \n8,0mm, 1 x 10,0mm\n06.04.0123-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 4,0mm, 1 x 6,0mm, 1 x 1/4\", 1 x 8,0mm, 1 x 10,0mm"
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0123-00"
+       }
+      ]
+     },
+     {
+      "label": "BP01",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP01 1 x 3/4\" 06.04.0011-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 3/4\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0011-00"
+       }
+      ]
+     },
+     {
+      "label": "BP02",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP02 1 x 1/2\" 06.04.0012-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 1/2\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0012-00"
+       }
+      ]
+     },
+     {
+      "label": "BP03",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP03 1 x 6,0mm e 3 x 1/4\" 06.04.0013-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 6,0mm e 3 x 1/4\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0013-00"
+       }
+      ]
+     },
+     {
+      "label": "BP04",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP04 3 x 6,0mm e 1 x 1/4\" 06.04.0014-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "3 x 6,0mm e 1 x 1/4\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0014-00"
+       }
+      ]
+     },
+     {
+      "label": "BP05",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP05 4 x 6,0mm 06.04.0015-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "4 x 6,0mm"
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0015-00"
+       }
+      ]
+     },
+     {
+      "label": "BP06",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP06 2 x 6,0mm e 2 x 1/4\" 06.04.0016-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "2 x 6,0mm e 2 x 1/4\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0016-00"
+       }
+      ]
+     },
+     {
+      "label": "BP07",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP07 1 x 6,0mm, 1 x 8,0mm e 1 x 3/8\" 06.04.0017-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 6,0mm, 1 x 8,0mm e 1 x 3/8\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0017-00"
+       }
+      ]
+     },
+     {
+      "label": "BP08",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP08 1 x 6,0mm, 1 x 3,0mm e 2 x 1/4\" 06.04.0018-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "1 x 6,0mm, 1 x 3,0mm e 2 x 1/4\""
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0018-00"
+       }
+      ]
+     },
+     {
+      "label": "BP09",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP09 Sem orifício, a ser usinado pelo cliente. 06.04.0019-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "Sem orifício, a ser usinado pelo cliente."
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0019-00"
+       }
+      ]
+     },
+     {
+      "label": "BP10",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BP10 Outros, sob encomenda. 06.04.0020-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "Outros, sob encomenda."
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0020-00"
+       }
+      ]
+     },
+     {
+      "label": "BPCL",
+      "sourceRef": {
+       "page": 8,
+       "quote": "BPCL Insert Caneca (para usar com as esferas \nmetálicas)\n06.04.0086-00"
+      },
+      "values": [
+       {
+        "column": "Orifícios",
+        "literal": "Insert Caneca (para usar com as esferas metálicas)"
+       },
+       {
+        "column": "Código de Encomenda",
+        "literal": "06.04.0086-00"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "pages": [
+   {
+    "page": 5,
+    "content": "specifications"
+   },
+   {
+    "page": 6,
+    "content": "shared-table"
+   },
+   {
+    "page": 7,
+    "content": "no-specifications"
+   },
+   {
+    "page": 8,
+    "content": "shared-table"
+   }
+  ]
+ },
+ "trimmed": 0,
+ "usage": {
+  "inputTokens": 21985,
+  "outputTokens": 12943,
+  "estimatedUsd": 0.13005
+ },
+ "ms": 62057
+}

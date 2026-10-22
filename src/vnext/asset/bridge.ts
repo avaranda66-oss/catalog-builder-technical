@@ -11,7 +11,9 @@ import type {
   AssetUploadResult,
 } from './contracts';
 import { sha256, verifyAssetBytes, type AssetIntegrityResult } from './integrity';
-import { sniffImageDimensions, sniffImageMime, type SupportedImageMime } from './sniff';
+import { createBrowserImageReencoder, normalizeImageForUpload, type ImageReencoder } from './normalize-image';
+import { referencedAssetIds } from './referenced-assets';
+import type { SupportedImageMime } from './sniff';
 
 const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -23,9 +25,26 @@ interface CachedUrlEntry {
 }
 
 export interface DefaultAssetPersistenceBridgeOptions {
-  readonly fetchBytes?: (url: string) => Promise<ArrayBuffer>;
+  /** Downloads the photo bytes; `signal` aborts the download when it takes too long. */
+  readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<ArrayBuffer>;
+  /** FR-45: true when the browser says there is no connection (`navigator.onLine === false`). */
   readonly isOffline?: () => boolean;
   readonly getActiveLineage?: () => AssetLineageContext;
+  /** FR-41: photos downloaded and checked at the same time. Default 4. */
+  readonly maxConcurrentDownloads?: number;
+  /**
+   * FR-41: a photo whose download takes longer than this (ms) is reported as not loaded and its
+   * download slot is handed on, so one stuck request never blocks the other photos or "Tentar
+   * novamente". Default 30 s.
+   */
+  readonly downloadTimeoutMs?: number;
+  /** FR-45: receives a short, sanitized code when a photo could not be loaded (never a URL or message). */
+  readonly logFailure?: (code: string) => void;
+  /**
+   * Re-encodes rotated (EXIF) or oversized photos before hashing. Omit to use the browser
+   * re-encoder when available; pass null to keep every upload's original bytes.
+   */
+  readonly imageReencoder?: ImageReencoder | null;
 }
 
 interface PendingFinalizationAttempt {
@@ -39,6 +58,77 @@ interface PendingFinalizationAttempt {
   readonly alt: string;
   readonly fileSize: number;
   readonly storagePath: string;
+}
+
+export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 4;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/** A photo download that took longer than `downloadTimeoutMs`. Its code is what the log keeps. */
+class AssetDownloadTimeout extends Error {
+  readonly code = 'TIMEOUT';
+  constructor() {
+    super('Photo download timed out');
+    this.name = 'AssetDownloadTimeout';
+  }
+}
+
+/**
+ * Runs `task` with an abort signal and rejects with AssetDownloadTimeout after `timeoutMs`.
+ * The task may still finish later; its result is then ignored.
+ */
+async function withDownloadTimeout<T>(timeoutMs: number, task: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+  const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abort?.abort();
+      reject(new AssetDownloadTimeout());
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([task(abort?.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** At most `max` tasks run at once; the others wait in order. A finished task hands its slot on. */
+class ConcurrencyLimit {
+  private active = 0;
+  private readonly waiting: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active >= this.max) await new Promise<void>((resolve) => this.waiting.push(resolve));
+    else this.active += 1;
+    try {
+      return await task();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.active -= 1;
+    }
+  }
+}
+
+const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * FR-45: a code that is safe to log. Error messages can carry signed URLs, tokens or file names,
+ * so only an explicit `code` or the error class name ("TypeError") is kept.
+ */
+export function sanitizedAssetErrorCode(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string' && SAFE_ERROR_CODE.test(code)) return code;
+  }
+  if (error instanceof Error && SAFE_ERROR_CODE.test(error.name)) return error.name;
+  return 'UNKNOWN';
+}
+
+function defaultLogFailure(code: string): void {
+  console.warn('[vnext asset] photo could not be loaded', { code });
 }
 
 export function isTransportAmbiguousCode(code?: string | null): boolean {
@@ -79,7 +169,12 @@ export function isTransportAmbiguousError(err: unknown): boolean {
 
 function isLineageStale(before?: AssetLineageContext, current?: AssetLineageContext): boolean {
   if (!before || !current) return false;
-  if (before.authLineage && current.authLineage && before.authLineage !== current.authLineage) {
+  // FR-45: an empty lineage after a real one means the authority was lost; it is never "unknown".
+  if (
+    before.authLineage !== undefined
+    && current.authLineage !== undefined
+    && before.authLineage !== current.authLineage
+  ) {
     return true;
   }
   if (
@@ -109,11 +204,18 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   private readonly inFlight = new Map<string, Promise<AssetResolutionResult>>();
   private readonly activeBlobUrls = new Set<string>();
   private currentAuthLineage?: string;
+  private resolutionGeneration = 0;
   private pendingFinalization?: PendingFinalizationAttempt;
+  private readonly imageReencoder?: ImageReencoder;
+  private readonly downloads: ConcurrencyLimit;
 
   constructor(repository: AssetRepository, options: DefaultAssetPersistenceBridgeOptions = {}) {
     this.repository = repository;
     this.options = options;
+    this.downloads = new ConcurrencyLimit(Math.max(1, options.maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS));
+    this.imageReencoder = options.imageReencoder === undefined
+      ? createBrowserImageReencoder()
+      : options.imageReencoder ?? undefined;
   }
 
   async finalizeUpload(
@@ -124,27 +226,29 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       return { ok: false, error: { code: 'OFFLINE', message: 'Offline' } };
     }
 
-    const bytes = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
+    const originalBytes = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
+    const lineageBefore = context ?? this.options.getActiveLineage?.();
 
-    // 1. Sniff MIME type
-    const mime = sniffImageMime(bytes);
-    if (!mime) {
+    // 1-2. Sniff MIME, normalize rotated/oversized photos, and measure the final bytes.
+    // HEIC gets its own code so the editor can explain how to send a JPEG instead.
+    const normalized = await normalizeImageForUpload(originalBytes, {
+      reencoder: this.imageReencoder,
+      fileName: input.name,
+    });
+    if (!normalized.ok) {
+      return { ok: false, error: { code: normalized.code, message: normalized.message } };
+    }
+    if (isLineageStale(lineageBefore, this.options.getActiveLineage?.())) {
       return {
         ok: false,
-        error: { code: 'UNSUPPORTED_MEDIA', message: 'Byte sniffing rejected non-supported media format' },
+        error: { code: 'STALE_RESULT', message: 'Lineage or authority changed while preparing the image' },
       };
     }
+    const bytes = normalized.bytes;
+    const mime = normalized.mime;
+    const dimensions = { widthPx: normalized.widthPx, heightPx: normalized.heightPx };
 
-    // 2. Derive dimensions from bytes
-    const dimensions = sniffImageDimensions(bytes);
-    if (!dimensions) {
-      return {
-        ok: false,
-        error: { code: 'INVALID_DIMENSIONS', message: 'Could not extract intrinsic dimensions from image bytes' },
-      };
-    }
-
-    // 3. Compute SHA-256
+    // 3. Compute SHA-256 of the final bytes
     const hash = await sha256(bytes);
 
     if (input.version !== undefined && input.version !== '1') {
@@ -212,8 +316,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpeg';
     const storagePath = `vnext/${assetId}/1.${extension}`;
 
-    // 5. Check lineage before upload dispatch (Point 10)
-    const lineageBefore = context ?? this.options.getActiveLineage?.();
+    // 5. Lineage was captured before normalization (Point 10)
 
     // 6. Upload binary bytes to immutable storage path
     const uploadResult = await this.repository.uploadBytes(storagePath, bytes, mime);
@@ -403,7 +506,23 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
       };
     }
 
-    const cacheKey = `${asset.id}:${asset.version}`;
+    const lineageBefore = context ?? this.options.getActiveLineage?.();
+    const generation = this.resolutionGeneration;
+    const isCurrent = () => generation === this.resolutionGeneration
+      && !isLineageStale(lineageBefore, this.options.getActiveLineage?.());
+    const staleResult = (): AssetResolutionResult => ({
+      ok: false,
+      state: { status: 'unavailable', error: 'A sessão mudou. Abra o catálogo novamente.', asset },
+    });
+    if (!isCurrent()) return staleResult();
+
+    // Cached bytes and in-flight work are valid only for the exact reference and authority.
+    const cacheKey = JSON.stringify([
+      generation, lineageBefore?.authLineage, lineageBefore?.authorityScopeId,
+      lineageBefore?.openSessionId, lineageBefore?.catalogId,
+      asset.id, asset.version, asset.sha256, asset.mime, asset.widthPx, asset.heightPx,
+      asset.name, asset.alt,
+    ]);
     const now = Date.now();
 
     // 1. Return cached entry if still valid (TTL > 60s remaining)
@@ -427,12 +546,10 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
     const activeFlight = this.inFlight.get(cacheKey);
     if (activeFlight) return await activeFlight;
 
-    const lineageBefore = context ?? this.options.getActiveLineage?.();
-
-    const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
-      try {
+    const download = async (signal?: AbortSignal): Promise<AssetResolutionResult> => {
         // Fetch durable asset record
         const recordResult = await this.repository.getAsset(asset.id, asset.version);
+        if (!isCurrent()) return staleResult();
         if (!recordResult.ok) {
           return {
             ok: false,
@@ -488,6 +605,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
         // Request ephemeral signed URL (1 hour validity)
         const signedUrlResult = await this.repository.createSignedUrl(record.storagePath, 3600);
+        if (!isCurrent()) return staleResult();
         if (!signedUrlResult.ok || !signedUrlResult.signedUrl) {
           return {
             ok: false,
@@ -504,9 +622,9 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
         // Fetch bytes to verify byte integrity
         let bytes: ArrayBuffer;
         if (this.options.fetchBytes) {
-          bytes = await this.options.fetchBytes(signedUrl);
+          bytes = await this.options.fetchBytes(signedUrl, signal);
         } else if (typeof fetch !== 'undefined') {
-          const res = await fetch(signedUrl, { cache: 'no-store' });
+          const res = await fetch(signedUrl, { cache: 'no-store', ...(signal ? { signal } : {}) });
           if (!res.ok) {
             return {
               ok: false,
@@ -544,21 +662,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
         }
 
         // Check for stale completion across lineage
-        const currentLineage = this.options.getActiveLineage?.();
-        if (
-          lineageBefore?.openSessionId &&
-          currentLineage?.openSessionId &&
-          lineageBefore.openSessionId !== currentLineage.openSessionId
-        ) {
-          return {
-            ok: false,
-            state: {
-              status: 'unavailable',
-              error: 'Resolution discarded: editing session changed',
-              asset,
-            },
-          };
-        }
+        if (!isCurrent()) return staleResult();
 
         let blobUrl: string | undefined;
         if (typeof URL !== 'undefined' && typeof Blob !== 'undefined') {
@@ -588,6 +692,26 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
             asset,
           },
         };
+    };
+
+    const resolutionPromise = (async (): Promise<AssetResolutionResult> => {
+      try {
+        // FR-41: at most 4 photos are downloaded and checked at the same time, and a stuck
+        // download gives its slot back after the time limit (it then counts as not loaded).
+        return await this.downloads.run(async () => (isCurrent()
+          ? withDownloadTimeout(this.options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS, download)
+          : staleResult()));
+      } catch (error) {
+        // A failed photo transport must not prevent the catalog from reopening.
+        // Keep the canonical reference so the user can retry without uploading again.
+        // FR-45: say why in the console, with a sanitized code only.
+        (this.options.logFailure ?? defaultLogFailure)(sanitizedAssetErrorCode(error));
+        return {
+          ok: false,
+          state: this.options.isOffline?.()
+            ? { status: 'offline', asset }
+            : { status: 'unavailable', error: 'Não foi possível carregar esta imagem. Tente novamente.', asset },
+        };
       } finally {
         this.inFlight.delete(cacheKey);
       }
@@ -603,18 +727,28 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
 
   async resolveDocumentAssets(
     doc: CatalogDocument,
-    context?: AssetLineageContext
+    context?: AssetLineageContext,
+    options: { readonly onlyUsed?: boolean } = {}
   ): Promise<{ urls: Map<string, string>; states: Map<string, AssetRuntimeState> }> {
     const urls = new Map<string, string>();
     const states = new Map<string, AssetRuntimeState>();
+    // Photos placed on pages or in table cells come first. Unless `onlyUsed`, the others are
+    // resolved too, because "Imagem do catálogo" can reuse them; their failures never block the PDF.
+    // FR-41: they are requested together; the download limit keeps at most 4 running.
+    const used = referencedAssetIds(doc);
+    const ordered = [
+      ...doc.assets.filter((asset) => used.has(asset.id)),
+      ...(options.onlyUsed ? [] : doc.assets.filter((asset) => !used.has(asset.id))),
+    ];
 
-    for (const asset of doc.assets) {
-      const result = await this.resolve(asset, context);
+    const results = await Promise.all(ordered.map((asset) => this.resolve(asset, context)));
+    ordered.forEach((asset, index) => {
+      const result = results[index]!;
       states.set(asset.id, result.state);
       if (result.ok && result.state.status === 'resolved') {
         urls.set(asset.id, result.state.url);
       }
-    }
+    });
 
     return { urls, states };
   }
@@ -662,6 +796,7 @@ export class DefaultAssetPersistenceBridge implements AssetPersistenceBridge {
   }
 
   revokeObjectURLs(): void {
+    this.resolutionGeneration += 1;
     if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
       for (const url of this.activeBlobUrls) {
         try {

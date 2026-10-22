@@ -97,6 +97,8 @@ describe('W3.E Library Open preserves the W3.D startup gate', () => {
     expect(container.querySelector('[data-vnext-shell]')).toBeNull();
     expect(container.querySelector('[data-editor-action="save"]')).toBeNull();
 
+    // J7: the saved version is one of the "Mais opções" when the work can be recovered.
+    fireEvent.click(getByRole('button', { name: 'Mais opções' }));
     fireEvent.click(getByRole('button', { name: 'Abrir versão salva na nuvem' }));
     await waitFor(() => expect(container.querySelector('[data-vnext-shell]')).not.toBeNull());
     expect(container.querySelector('[data-editor-action="save"]')).not.toBeNull();
@@ -105,7 +107,7 @@ describe('W3.E Library Open preserves the W3.D startup gate', () => {
     expect(preserved?.status).toBe('VALID');
   });
 
-  it('W3.F does not copy source Recovery state and still presents the ordinary W3.D scope gate', async () => {
+  it('W3.F/FR-42 does not copy source Recovery state and never gates the copy with the source backup', async () => {
     const source = recoveryDocument('Cloud base');
     const recoveryRepository = new InMemoryRecoveryRepository();
     const sourceRecord = await recoveryRecord({
@@ -148,11 +150,12 @@ describe('W3.E Library Open preserves the W3.D startup gate', () => {
       binding: clonedEnvelope,
     });
 
-    const { container, getByRole } = render(<VNextApp runtime={runtime} />);
+    const { container, queryByRole } = render(<VNextApp runtime={runtime} />);
 
-    await waitFor(() => expect(getByRole('dialog', { name: 'Recuperação local' })).toBeInTheDocument());
-    expect(container.querySelector('[data-vnext-shell]')).toBeNull();
-    expect(getByRole('heading', { name: 'Protected source work' })).toBeInTheDocument();
+    // FR-42: a backup of another catalog stays stored but does not hold the opened copy.
+    await waitFor(() => expect(container.querySelector('[data-vnext-shell]')).not.toBeNull());
+    expect(queryByRole('dialog', { name: 'Recuperação local' })).toBeNull();
+    expect(queryByRole('heading', { name: 'Protected source work' })).toBeNull();
     const inspections = await recoveryRepository.listByScope('deployment:workspace:user-a');
     expect(inspections).toHaveLength(1);
     expect(inspections[0]?.key.catalogId).toBe(CATALOG_ID);

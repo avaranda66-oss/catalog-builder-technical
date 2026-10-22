@@ -78,6 +78,11 @@ const series = samplesMs => {
 const frames = page => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
 const saved = page => page.waitForFunction(() => { const value = window.__ADVANCED_TABLE__.state(); return !value.dirty && !['PREPARING', 'SAVING', 'VERIFYING'].includes(value.phase); });
 const changed = (page, sequence) => page.waitForFunction(before => window.__ADVANCED_TABLE__.state().sequence > before, sequence);
+// FR-31: a new table is fitted to its measured height inside the same undo step; wait until that settles.
+const tableFitSettled = async page => {
+  await page.waitForFunction(() => !document.querySelector('[data-table-auto-fit="pending"]'), undefined, { timeout: 5000 }).catch(() => undefined);
+  await frames(page);
+};
 const action = (page, name) => page.locator(`[data-editor-action="${name}"]`);
 const watch = page => { page.on('pageerror', error => results.errors.push(error.message)); page.on('console', event => { if (event.type() === 'error') results.errors.push(event.text()); }); };
 async function enterTable(page) {
@@ -93,8 +98,13 @@ async function paste(page, matrix) {
   await page.locator('[data-table-paste-textarea]').fill(tsvOf(matrix));
   const sequence = (await state(page)).sequence;
   const start = performance.now(); await action(page, 'apply-native-table-paste').click(); await changed(page, sequence); await frames(page);
-  assert.equal((await state(page)).sequence, sequence + 1, 'Entire rectangle must be one history action');
-  return performance.now() - start;
+  const elapsed = performance.now() - start;
+  // B-01: the measured growOnly "Ajustar altura" of the pasted table lands after the paste (one more sequence step) but joins
+  // the paste's own undo transaction. The sequence counts every applied action; the undo stack is what the father experiences.
+  await tableFitSettled(page);
+  const steps = (await state(page)).sequence - sequence;
+  assert(steps === 1 || steps === 2, `Paste is one action plus at most the growOnly frame fit of the same transaction: ${steps}`);
+  return elapsed;
 }
 async function selectionBenchmark(page, rows, columns) {
   return page.evaluate(async ({ rows, columns }) => {
@@ -203,8 +213,20 @@ async function matrixCase(browserName, rows, columns, pages = 1) {
     const initial = await state(page); const source = await page.evaluate(() => window.__ADVANCED_TABLE__.source());
     await enterTable(page); record.pasteMs = await paste(page, source);
     let pasted = tableOf((await state(page)).document); assert.deepEqual(matrixOf(pasted), source);
-    await action(page, 'undo').click(); await frames(page); assert.deepEqual(tableOf((await state(page)).document), tableOf(initial.document));
-    await action(page, 'redo').click(); await frames(page); assert.deepEqual(tableOf((await state(page)).document), pasted);
+    // One user Ctrl+Z reverts the paste AND the frame growth: the whole document (frame included) returns to the start and
+    // nothing is left to undo; one redo brings both back and nothing is left to redo.
+    const afterPaste = (await state(page)).document;
+    assert((await state(page)).canUndo, 'Paste must be undoable');
+    await action(page, 'undo').click(); await frames(page);
+    const undone = await state(page);
+    assert.deepEqual(tableOf(undone.document), tableOf(initial.document));
+    assert.deepEqual(undone.document, initial.document, 'One undo step must revert paste and growth together');
+    assert.equal(undone.canUndo, false, 'Paste and growth must be a single undo step');
+    await action(page, 'redo').click(); await frames(page);
+    const redone = await state(page);
+    assert.deepEqual(tableOf(redone.document), pasted);
+    assert.deepEqual(redone.document, afterPaste, 'One redo step must restore paste and growth together');
+    assert.equal(redone.canRedo, false, 'Paste and growth must be a single redo step');
     record.rectanglePasteExact = true; record.atomicPasteUndoRedo = true;
     if (columns === 1) {
       await page.locator('[data-table-cell="0:0"]').click();
@@ -265,6 +287,10 @@ async function densityCase(browserName, width, height) {
     await page.goto(url(15, 5, run++), { waitUntil: 'networkidle' }); await page.locator('[data-vnext-shell]').waitFor();
     await enterTable(page); const source = await page.evaluate(() => window.__ADVANCED_TABLE__.source()); await paste(page, source);
     assert.deepEqual(matrixOf(tableOf((await state(page)).document)), source);
+    // After the paste every row is selected and the bar writes "A tabela precisa de pelo menos uma linha." (FR-33); a click on one
+    // cell removes that line and the page moves up 30 px. Select the cell first and let the page settle, as a person would
+    // before double-clicking, so the two clicks of the double click land on the same cell.
+    await page.locator('[data-table-cell="1:0"]').click(); await frames(page);
     await page.locator('[data-table-cell="1:0"]').dblclick(); await page.locator('[data-cell-edit-session]').waitFor();
     const before = (await state(page)).document; await action(page, 'cancel-cell-content').click(); await frames(page); assert.deepEqual((await state(page)).document, before);
     const geometry = await page.evaluate(() => ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth,
@@ -286,11 +312,14 @@ async function creationCase(browserName) {
     await action(page, 'new-table-size').click();
     await page.getByRole('spinbutton', { name: 'Linhas da nova tabela', exact: true }).fill('10');
     await page.getByRole('spinbutton', { name: 'Colunas da nova tabela', exact: true }).fill('5');
-    await action(page, 'add-table').click(); await changed(page, initial.sequence); await frames(page);
+    await action(page, 'add-table').click(); await changed(page, initial.sequence); await tableFitSettled(page);
     const durationMs = performance.now() - start;
     const inserted = (await state(page)).document; const table = tableOf(inserted);
     assert.equal(table.rows.length, 10); assert.equal(table.columns.length, 5); assert.equal(table.cells.length, 50);
-    assert(table.cells.every(cell => cell.content.type === 'empty')); assert.equal((await state(page)).sequence, initial.sequence + 1);
+    assert.equal(table.rows[0].role, 'header'); assert(table.rows.slice(1).every(row => row.role === 'body'));
+    // Insert, the "Especificações" first column (FR-33: cells and width) and the optional measured fit share one
+    // transaction: at most four sequence steps, one Undo.
+    assert(table.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - initial.sequence <= 4);
     await action(page, 'undo').click(); await frames(page); assert.deepEqual((await state(page)).document, initial.document);
     await action(page, 'redo').click(); await frames(page); assert.deepEqual((await state(page)).document, inserted);
     await action(page, 'save').click(); await saved(page); await page.evaluate(() => window.__ADVANCED_TABLE__.reopen()); await frames(page);
@@ -308,17 +337,19 @@ async function creationCase(browserName) {
       await page.getByRole('spinbutton', { name: 'Colunas da nova tabela', exact: true }).fill(columns);
       await action(page, 'new-table-size').click();
       assert.equal(await page.getByRole('region', { name: 'Tamanho da nova tabela', exact: true }).count(), 0);
-      await action(page, 'add-table').click(); await changed(page, before.sequence); await frames(page);
+      await action(page, 'add-table').click(); await changed(page, before.sequence); await tableFitSettled(page);
       const insertedDefault = (await state(page)).document; const defaultTable = tableOf(insertedDefault);
-      assert.equal(defaultTable.rows.length, 1); assert.equal(defaultTable.columns.length, 1); assert.equal(defaultTable.cells.length, 1);
-      assert.equal(defaultTable.cells[0].content.type, 'empty'); assert.equal((await state(page)).sequence, before.sequence + 1);
+      // FR-31: the closed size panel creates the useful 6 × 3 default with a header row.
+      assert.equal(defaultTable.rows.length, 6); assert.equal(defaultTable.columns.length, 3); assert.equal(defaultTable.cells.length, 18);
+      assert.equal(defaultTable.rows[0].role, 'header');
+      assert(defaultTable.cells.every(cell => cell.content.type === 'empty')); assert((await state(page)).sequence - before.sequence <= 4);
       await action(page, 'undo').click(); await frames(page); assert.deepEqual((await state(page)).document, before.document);
       await action(page, 'redo').click(); await frames(page); assert.deepEqual((await state(page)).document, insertedDefault);
       await action(page, 'save').click(); await saved(page); await page.evaluate(() => window.__ADVANCED_TABLE__.reopen()); await frames(page);
       assert.deepEqual((await state(page)).document, insertedDefault);
       await page.screenshot({ path: resolve(output, `new-table-closed-panel-${label}-${browserName}.png`), fullPage: true });
       results.creation.push({ id: `TABLE-CLOSED-SIZE-${String(results.creation.length + 1).padStart(3, '0')}`, browser: browserName,
-        hiddenInputs: { rows, columns }, panelClosed: true, rows: 1, columns: 1, blankCells: 1,
+        hiddenInputs: { rows, columns }, panelClosed: true, rows: 6, columns: 3, headerRows: 1, blankCells: 18,
         atomicUndoRedo: true, savedReopenedExact: true, status: 'PASS' });
     }
   } finally { await page.close(); }
@@ -336,6 +367,17 @@ async function layoutRepairCase(browserName) {
     const expected = structuredClone(source); expected[1][0] += ' revisado';
     await page.locator('[data-cell-rich-text]').fill(expected[1][0]);
     let sequence = (await state(page)).sequence; await action(page, 'commit-cell-content').click(); await changed(page, sequence);
+    await tableFitSettled(page);
+    // B-01: pasting and typing already grew the frame to the measured table, so the father no longer meets the overflow by
+    // default. The overflow this repair is about is made through the real UI: the person shrinks the frame by hand.
+    const grownFrame = () => state(page).then(value => value.document.pages[0].objects.find(object => object.type === 'table').frame);
+    const autoGrown = await grownFrame(); record.frameGrownAutomatically = autoGrown;
+    assert(autoGrown.yMm + autoGrown.heightMm <= 269, 'Automatic growth must stay above footer');
+    await page.locator('[data-table-grid-overlay]').press('Escape').catch(() => undefined);
+    const details = action(page, 'toggle-inspector-details'); if (await details.getAttribute('aria-expanded') === 'false') await details.click();
+    const heightField = page.locator('[data-inspector-field="height"]'); await heightField.waitFor();
+    sequence = (await state(page)).sequence; await heightField.fill('100'); await heightField.press('Enter'); await changed(page, sequence); await frames(page);
+    assert.equal((await grownFrame()).heightMm, 100, 'The father shrank the frame by hand');
     await action(page, 'save').click(); await saved(page);
     const before = (await state(page)).document; assert.deepEqual(matrixOf(tableOf(before)), expected);
     record.before = await publish(page, `${name}-before`, before, 20); assert.equal(record.before.status, 'BLOCKED');

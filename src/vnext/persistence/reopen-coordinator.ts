@@ -10,6 +10,7 @@ import type {
   PersistenceErrorCode,
 } from './contracts';
 import { parsePersistenceEnvelope } from './snapshot';
+import { canonicalDocumentEquivalence } from './equivalence';
 import {
   persistedBindingFromEnvelope,
   type PersistenceWorkspace,
@@ -90,6 +91,15 @@ export class CanonicalReopenCoordinator {
 
     const authLineage = before.binding.authLineage;
     const authorityScopeId = before.activeAuthorityScopeId;
+    const sourceSequence = before.session.getSnapshot().localSequence;
+    const sourceEquivalence = canonicalDocumentEquivalence(before.session.getSnapshot().document);
+    const sourceOverlay = JSON.stringify(this.options.workspace.captureRecoveryOverlay());
+    const hasNewLocalWork = () => {
+      const current = before.session.getSnapshot();
+      return current.localSequence !== sourceSequence
+        || canonicalDocumentEquivalence(current.document) !== sourceEquivalence
+        || JSON.stringify(this.options.workspace.captureRecoveryOverlay()) !== sourceOverlay;
+    };
     const result = await this.options.repository.getCatalog(catalogId);
     const afterRead = this.options.workspace.getSnapshot();
     if (
@@ -102,8 +112,9 @@ export class CanonicalReopenCoordinator {
       return { ok: false, error: { code: 'STALE_RESULT' } };
     }
     if (
-      !openOptions.allowDiscardUnsaved
-      && (afterRead.dirty || (this.options.canLeave && !this.options.canLeave()))
+      hasNewLocalWork()
+      || (!openOptions.allowDiscardUnsaved
+        && (afterRead.dirty || (this.options.canLeave && !this.options.canLeave())))
     ) {
       return {
         ok: false,
@@ -167,6 +178,21 @@ export class CanonicalReopenCoordinator {
       afterResolve.session !== before.session
     ) {
       return { ok: false, error: { code: 'STALE_RESULT' } };
+    }
+    // Discard consent applies to work present when opening began, never to edits
+    // typed while the server or photos were loading.
+    if (
+      hasNewLocalWork()
+      || (!openOptions.allowDiscardUnsaved
+        && (afterResolve.dirty || (this.options.canLeave && !this.options.canLeave())))
+    ) {
+      return {
+        ok: false,
+        error: {
+          code: 'UNSAVED_CHANGES',
+          message: 'Você editou o catálogo durante o carregamento. Suas alterações foram mantidas.',
+        },
+      };
     }
 
     let assetUrls: ReadonlyMap<string, string>;

@@ -1,5 +1,6 @@
 /* global window, document, getComputedStyle, structuredClone, CSS */
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import { resolve,dirname } from 'node:path';
 import { fileURLToPath,URL } from 'node:url';
@@ -49,7 +50,7 @@ function projectedSpanQ(heightsU,row,span) {
 const runStarted=performance.now();
 const evidence={startedAt:new Date().toISOString(),machine:{platform:os.platform(),release:os.release(),arch:os.arch(),cpus:os.cpus()[0]?.model,logicalCPUs:os.cpus().length,totalMemoryBytes:os.totalmem()},matrix:[],adversarial:[],pdf:undefined};
 const port=Number(process.env.PROOF_PORT??5197);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 let browser;
 const url=`http://127.0.0.1:${port}/src/labs/presys-editorial-proof/index.html`;
 async function openPage(context,fixture='all') {
@@ -197,7 +198,59 @@ async function inspectPdf(path) {
   };
   return {path,bytes:byteLength,sha256,pageCount:pages.length,summary,pages};
 }
-try {
+// FR-16a — opt-in device-pixel-ratio measurement (NOT part of CI; the default run is unchanged).
+//   PROOF_DPR_MEASURE=1.25,1.5 node tests/vnext/proof/export-proof.mjs
+// Renders the G01–G04 fixture at DPR 1 (baseline) and at each listed DPR, at 900/1500 px and
+// screen/print, and records READY/BLOCKED, geometry mismatches (measurement.ts compares Q with !==)
+// and U/Q fact parity in scratch/presys-editorial-proof/matrix/dpr-measurement.json without
+// failing on a block. Its verdict decides FR-53 (PDF on the server); see the father-ready plan.
+const dprMeasurement=parseDprMeasurement(process.env.PROOF_DPR_MEASURE);
+function parseDprMeasurement(value) {
+  if(value===undefined||value.trim()==='')return undefined;
+  const dprs=value.split(',').map(entry=>Number(entry.trim()));
+  if(dprs.some(dpr=>!Number.isFinite(dpr)||dpr<=0||dpr>4))throw new Error('PROOF_DPR_MEASURE must be a comma-separated list of device pixel ratios, e.g. 1.25,1.5');
+  return [...new Set(dprs)];
+}
+async function measureDevicePixelRatios(dprs) {
+  const rows=[];let baseline;
+  for(const dpr of [1,...dprs.filter(value=>value!==1)])for(const width of [900,1500])for(const media of ['screen','print']) {
+    const context=await browser.newContext({viewport:{width,height:1200},deviceScaleFactor:dpr});
+    try {
+      const page=await context.newPage();await page.emulateMedia({media});
+      page.on('pageerror',error=>console.error('Browser error:',error.message));
+      await page.goto(url+'?fixture=all',{waitUntil:'domcontentloaded'});
+      await page.waitForFunction(()=>window.proof?.result!==undefined,{timeout:30000});
+      const report=await result(page);
+      const geometry=report.snapshot?.geometryDiagnostics??[];
+      if(dpr===1&&!baseline&&report.status==='READY'&&!geometry.length)baseline=report.snapshot.facts;
+      const row={dpr,devicePixelRatio:await page.evaluate(()=>window.devicePixelRatio),width,media,status:report.status,
+        diagnosticCodes:[...new Set((report.diagnostics??[]).map(item=>item.code))].sort(),
+        geometryMismatchCount:geometry.length,geometryMismatchSamples:geometry.slice(0,5).map(item=>item.message),
+        factsMatchDpr1Baseline:baseline&&report.snapshot?.facts?JSON.stringify(report.snapshot.facts)===JSON.stringify(baseline):null};
+      rows.push(row);
+      console.log('DPR measurement',dpr,width,media,row.status,row.geometryMismatchCount,'geometry mismatch(es)');
+    }finally {await context.close();}
+  }
+  const baselineRows=rows.filter(row=>row.dpr===1);
+  const blockedRows=rows.filter(row=>row.dpr!==1&&(row.status!=='READY'||row.geometryMismatchCount>0||row.factsMatchDpr1Baseline===false));
+  const verdict=baselineRows.some(row=>row.status!=='READY'||row.geometryMismatchCount>0)?'INCONCLUSIVE_DPR1_BASELINE_NOT_READY'
+    :blockedRows.length?'FALSE_GEOMETRY_BLOCK_AT_FRACTIONAL_DPR':'NO_FALSE_BLOCK';
+  const measurement={feature:'FR-16a',question:'Does a fractional DPR (Windows 125%/150%) falsely block READY? Decides FR-53.',
+    startedAt:evidence.startedAt,finishedAt:new Date().toISOString(),chromiumVersion:browser.version(),machine:evidence.machine,
+    measuredDprs:dprs,verdict,blockedRows:blockedRows.map(({dpr,width,media,status,geometryMismatchCount})=>({dpr,width,media,status,geometryMismatchCount})),rows};
+  await write('matrix/dpr-measurement.json',measurement);
+  console.log('DPR measurement verdict:',verdict,'->',resolve(output,'matrix','dpr-measurement.json'));
+}
+if(dprMeasurement) {
+  try {
+    await server.listen();browser=await chromium.launch({headless:true,args:['--font-render-hinting=none']});
+    await measureDevicePixelRatios(dprMeasurement);
+  }catch(error) {
+    console.error(error);process.exitCode=1;
+  }finally {
+    if(browser)await browser.close();await server.close();
+  }
+}else try {
   await server.listen();browser=await chromium.launch({headless:true,args:['--font-render-hinting=none']});
   evidence.chromiumVersion=browser.version();evidence.port=port;evidence.serverLifecycle='Runner creates Vite programmatically; finally closes only this server and its Chromium.';
   let baseline,finalPage,finalContext;

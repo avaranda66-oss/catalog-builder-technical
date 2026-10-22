@@ -1,0 +1,356 @@
+{
+  "journey": "j07-salvar-reabrir",
+  "title": "J7 — Salvar e reabrir: fechar a aba no meio da edição, reabrir outro catálogo e depois o mesmo",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T15:53:05.197Z",
+  "steps": [
+    {
+      "name": "dois catálogos criados pela interface (PCON-Y18 e TA-25N)",
+      "ok": true,
+      "detail": null,
+      "atMs": 5143
+    },
+    {
+      "name": "dois cliques no título abrem a caixa de edição do texto (sem precisar do painel)",
+      "ok": true,
+      "detail": "caminho que funcionou: dois cliques",
+      "atMs": 7288
+    },
+    {
+      "name": "depois de editar, o status sai de \"Salvo\" e volta a \"Salvo\" sozinho em menos de 5 s (a alteração está gravada)",
+      "ok": true,
+      "detail": "antes: \"Salvo\" · logo depois de \"Concluir\": \"Alterações não salvas\" · \"Salvo\" após 1261 ms",
+      "atMs": 8584
+    },
+    {
+      "name": "o status \"Salvo\" fica na barra de cima, visível sem rolar",
+      "ok": true,
+      "detail": "{\"text\":\"Salvo às 12:52\",\"fontPx\":13,\"heightPx\":18,\"widthPx\":103,\"top\":49,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 8584
+    },
+    {
+      "name": "o status mostra a hora confirmada depois da edição (\"Salvo às HH:MM\", FR-44)",
+      "ok": true,
+      "detail": "status: \"Salvo às 12:52\"",
+      "atMs": 8588
+    },
+    {
+      "name": "o status \"Salvo\" tem letra legível (≥ 13 px, FR-16b)",
+      "ok": true,
+      "detail": "{\"text\":\"Salvo às 12:52\",\"fontPx\":13,\"heightPx\":18,\"widthPx\":103,\"top\":49,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 8588
+    },
+    {
+      "name": "editor com o catálogo aberto: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 8591
+    },
+    {
+      "name": "fechar a aba depois de \"Salvo\" e reabrir o mesmo catálogo: a alteração está lá e nenhuma tela de recuperação aparece",
+      "ok": true,
+      "detail": "tela de recuperação: false · status: \"Salvo\"",
+      "atMs": 12393
+    },
+    {
+      "name": "com o servidor lento o status NÃO diz \"Salvo\" (diz que está salvando) e uma cópia local do PCON-Y18 fica guardada",
+      "ok": true,
+      "detail": "status: \"Salvando…\" · cópias locais: [{\"status\":\"VALID\",\"catalogId\":\"a98e68d0-329c-441f-8b9b-431883e20f40\"}]",
+      "atMs": 14961
+    },
+    {
+      "name": "fechar a aba com trabalho ainda não salvo: o navegador pergunta antes de fechar",
+      "ok": true,
+      "detail": "[{\"type\":\"beforeunload\",\"message\":\"\"}]",
+      "atMs": 15137
+    },
+    {
+      "name": "reabrir OUTRO catálogo (TA-25N): nenhuma tela bloqueante vinda do PCON-Y18; abre salvo",
+      "ok": true,
+      "detail": "tela de recuperação: false · título: TA-25N — Ficha técnica 2026 · menção ao outro catálogo na tela: false",
+      "atMs": 18658
+    },
+    {
+      "name": "o TA-25N aceita edição e salva normalmente",
+      "ok": true,
+      "detail": "1215 ms",
+      "atMs": 20802
+    },
+    {
+      "name": "reabrir o MESMO catálogo mostra \"Recuperação local\" (cópia de segurança neste computador) com o nome do catálogo, quando foi guardada e quantas páginas",
+      "ok": true,
+      "detail": "2 ms · \"CÓPIA DE SEGURANÇA NESTE COMPUTADOR Encontramos alterações deste catálogo que não foram salvas. Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar. PCON-Y18 — Folder 2026 Guardada em 20/10/2026 às 12:52 · 1 página O último salvamento destas alterações não chegou a ser confirmado. Verifique antes de continuar. Conferir se foi salvo Abrir versão salva na nuvem Ver al\"",
+      "atMs": 21630
+    },
+    {
+      "name": "tela \"Recuperação local\": tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 21630
+    },
+    {
+      "name": "uma opção vem destacada como recomendada (\"Conferir se foi salvo\") e as outras ficam discretas",
+      "ok": true,
+      "detail": "destacada: Conferir se foi salvo · botões: Conferir se foi salvo · Abrir versão salva na nuvem · Ver alterações recuperadas · Apagar a cópia deste computador",
+      "atMs": 21631
+    },
+    {
+      "name": "a tela de recuperação tem textos ≥ 13 px e botões ≥ 24 px",
+      "ok": true,
+      "detail": "titulo: 24 px / 66 px · texto: 16 px / 44 px · resumo: 16 px / 22 px · decisao: 16 px / 44 px · botaoRecomendado: 15 px / 44 px · botaoSecundario: 15 px / 44 px",
+      "atMs": 21631
+    },
+    {
+      "name": "\"Conferir se foi salvo\" confirma o salvamento preso e abre o catálogo com a alteração (\"rev. 2\"), sem diálogo e sem perder nada",
+      "ok": true,
+      "detail": "diálogo fechou em 66 ms · status: \"Salvo\" · cópias locais restantes: []",
+      "atMs": 21797
+    },
+    {
+      "name": "recuperar = 1 clique na opção recomendada",
+      "ok": true,
+      "detail": "{\"voltar\":3,\"abrir\":1,\"reabrir mesmo (salvo)\":1,\"reabrir outro\":1,\"reabrir mesmo (pendente)\":1,\"recuperar\":1}",
+      "atMs": 21797
+    },
+    {
+      "name": "abrir o PCON-Y18 mais uma vez: sem tela de recuperação (a cópia local foi limpa) e com a rev. 2",
+      "ok": true,
+      "detail": null,
+      "atMs": 24536
+    },
+    {
+      "name": "texto que estava sendo digitado (sem \"Concluir\") ao fechar a aba: o navegador avisou e a recuperação oferece esse texto de volta (\"inclui: texto que estava sendo digitado\")",
+      "ok": true,
+      "detail": "aviso do navegador: true · sujo: true · \"CÓPIA DE SEGURANÇA NESTE COMPUTADOR Encontramos alterações deste catálogo que não foram salvas. Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar. PCON-Y18 — Folder 2026 Guardada em 20/10/2026 às 12:53 · 1 página · inclui: texto que estava sendo \"",
+      "atMs": 27402
+    },
+    {
+      "name": "\"Ver alterações recuperadas\" mostra uma prévia da página e o texto digitado (\"rev. 3 digitando\") numa caixa \"Texto que estava sendo digitado\", sem dados técnicos",
+      "ok": true,
+      "detail": "caixa: \"Ficha técnica — rev. 1 — rev. 2 — rev. 3 digitando\" · jargão: - · tela: CÓPIA DE SEGURANÇA NESTE COMPUTADOR Encontramos alterações deste catálogo que não foram salvas. Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar. PCON-Y18 — Folder 2026 Guardada em 20/10/2026 às 12:53 · 1 página · inclui: texto que estava sendo ",
+      "atMs": 27960
+    },
+    {
+      "name": "\"Recuperar minhas alterações\" devolve o texto que estava sendo digitado (na caixa de edição ou na página)",
+      "ok": true,
+      "detail": "caixa de edição: \"Ficha técnica — rev. 1 — rev. 2 — rev. 3 digitando\" · na página: false",
+      "atMs": 28747
+    },
+    {
+      "name": "\"Concluir\" grava o texto recuperado (\"Salvo\")",
+      "ok": true,
+      "detail": "1262 ms",
+      "atMs": 30054
+    },
+    {
+      "name": "zero erros de console e de página (do aplicativo)",
+      "ok": true,
+      "detail": "console: - · página: -",
+      "atMs": 30054
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-01-editado-salvo.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-02-salvando-servidor-lento.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-03-outro-catalogo-sem-bloqueio.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-04-recuperacao-local.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-05-recuperado.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j07-06-texto-digitando-recuperado.png"
+  ],
+  "findings": [
+    {
+      "text": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar.",
+      "severity": "low",
+      "where": "Recuperação local"
+    }
+  ],
+  "pendingSteps": [],
+  "findingSteps": [],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "openAMs": 1001,
+    "editToSavedMs": 1261,
+    "reopenSavedMs": 999,
+    "openBMs": 441,
+    "openAPendingMs": 347,
+    "recoveryDialogMs": 2
+  },
+  "clicks": {
+    "voltar": 4,
+    "abrir": 1,
+    "reabrir mesmo (salvo)": 1,
+    "reabrir outro": 1,
+    "reabrir mesmo (pendente)": 1,
+    "recuperar": 1,
+    "reabrir mesmo (limpo)": 1,
+    "reabrir mesmo (digitando)": 1,
+    "recuperar texto digitando": 1
+  },
+  "editPaths": [
+    "dois cliques",
+    "dois cliques",
+    "dois cliques",
+    "dois cliques"
+  ],
+  "measures": {
+    "status": {
+      "status": {
+        "text": "Salvo às 12:52",
+        "fontPx": 13,
+        "heightPx": 18,
+        "widthPx": 103,
+        "top": 49,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "salvar": {
+        "text": "Salvo",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 92,
+        "top": 12,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "statusHeld": {
+      "status": {
+        "text": "Salvando…",
+        "fontPx": 13,
+        "heightPx": 18,
+        "widthPx": 81,
+        "top": 49,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "recovery": {
+      "titulo": {
+        "text": "Encontramos alterações deste catálogo que não foram salvas.",
+        "fontPx": 24,
+        "heightPx": 66,
+        "widthPx": 710,
+        "top": 192,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "texto": {
+        "text": "Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que f",
+        "fontPx": 16,
+        "heightPx": 44,
+        "widthPx": 710,
+        "top": 274,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "resumo": {
+        "text": "Guardada em 20/10/2026 às 12:52 · 1 página",
+        "fontPx": 16,
+        "heightPx": 22,
+        "widthPx": 676,
+        "top": 392,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "decisao": {
+        "text": "O último salvamento destas alterações não chegou a ser confirmado. Verifique ant",
+        "fontPx": 16,
+        "heightPx": 44,
+        "widthPx": 676,
+        "top": 430,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "botaoRecomendado": {
+        "text": "Conferir se foi salvo",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 175,
+        "top": 490,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "botaoSecundario": {
+        "text": "Abrir versão salva na nuvem",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 238,
+        "top": 490,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    }
+  },
+  "texts": {
+    "editor": "P\nPRESYS · Catalog Builder\nPCON-Y18 — Folder 2026\nSalvo\nàs 12:52\n✦\nAssistente IA\nMeus catálogos\nSalvar\nDesfazer\nRefazer\nTraduzir\nPublicar / PDF\n\nTexto atualizado.\n\nFechar\nPÁGINAS\n1\nPágina 1\nAdicionar página\nUsar modelo…\nPágina 1 de 1\nZoom\n−\nPágina inteira\nAjustar à largura\n75%\n100%\n125%\n+\n98%\nTexto\nImagem\nTabela\nTamanho da nova tabela\nColar tabela do Excel\nDuplicar\nExcluir\nEditar texto\nMais opções\n\nFicha técnica — rev. 1\n\nModelo\n\nPreencha o modelo\n\nFaixa\n\nPreencha a faixa\n\nPropriedades\nAssistente\nPROPRIEDADES\nTexto\n\nUse Editar texto na barra acima da página ou dê dois cliques no texto.\n\nMais propriedades\nBásico\nTipo\nTítulo\n16 pt\nSubtítulo\n12 pt\nCorpo\n10 pt\nNota\n8 pt\n\nTamanho atual: 20 pt\n\nNegrito\nCor\nAlinhamento\nEsquerda\nCentro\nDireita\nAjustar altura ao texto\nDiagnósticos\nMostrar",
+    "editorB": "P\nPRESYS · Catalog Builder\nTA-25N — Ficha técnica 2026\nSalvo\n✦\nAssistente IA\nMeus catálogos\nSalvar\nDesfazer\nRefazer\nTraduzir\nPublicar / PDF\nPÁGINAS\n1\nPágina 1\nAdicionar página\nUsar modelo…\nPágina 1 de 1\nZoom\n−\nPágina inteira\nAjustar à largura\n75%\n100%\n125%\n+\n98%\nTexto\nImagem\nTabela\nTamanho da nova tabela\nColar tabela do Excel\nMais opções\n\nFicha técnica\n\nModelo\n\nPreencha o modelo\n\nFaixa\n\nPreencha a faixa\n\nPropriedades\nAssistente\nPROPRIEDADES\nSelecione um objeto\n\nClique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.",
+    "recovery": "CÓPIA DE SEGURANÇA NESTE COMPUTADOR Encontramos alterações deste catálogo que não foram salvas. Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar. PCON-Y18 — Folder 2026 Guardada em 20/10/2026 às 12:52 · 1 página O último salvamento destas alterações não chegou a ser confirmado. Verifique antes de continuar. Conferir se foi salvo Abrir versão salva na nuvem Ver alterações recuperadas Apagar a cópia deste computador",
+    "recoveryTyping": "CÓPIA DE SEGURANÇA NESTE COMPUTADOR Encontramos alterações deste catálogo que não foram salvas. Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar. PCON-Y18 — Folder 2026 Guardada em 20/10/2026 às 12:53 · 1 página · inclui: texto que estava sendo digitado Estas alterações foram feitas sobre a versão salva atual e podem ser recuperadas. Recuperar minhas alterações Abrir versão salva na nuvem Ver alterações recuperadas Apagar a cópia deste computador"
+  },
+  "dialogs": [
+    {
+      "type": "beforeunload",
+      "message": ""
+    },
+    {
+      "type": "beforeunload",
+      "message": ""
+    }
+  ],
+  "status": "pass",
+  "findingSummary": [
+    {
+      "text": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar.",
+      "severity": "P3",
+      "where": "Recuperação local",
+      "name": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar."
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "13fc0685-9e2c-463c-aae2-9b0cbdb9f5b9",
+    "startedAt": "2026-10-20T15:52:34.514Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": false
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": [
+      {
+        "type": "beforeunload",
+        "message": ""
+      },
+      {
+        "type": "beforeunload",
+        "message": ""
+      }
+    ]
+  }
+}

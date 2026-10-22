@@ -1,0 +1,560 @@
+{
+  "journey": "j08-publicar-pdf",
+  "title": "J8 — Publicar / PDF logo depois de editar: salva sozinho; Pronto ou \"Corrigir este item\" com foco; PDF A4 pesquisável",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T15:53:34.723Z",
+  "steps": [
+    {
+      "name": "0 catálogo \"Em branco\" aberto e salvo",
+      "ok": true,
+      "detail": null,
+      "atMs": 876
+    },
+    {
+      "name": "0 botão \"Publicar / PDF\" visível sem rolar, em destaque na barra de cima",
+      "ok": true,
+      "detail": "126×44 px · letra 15 px",
+      "atMs": 888
+    },
+    {
+      "name": "a o texto digitado NÃO se perdeu: Publicar concluiu a edição aberta e salvou o texto",
+      "ok": true,
+      "detail": "no documento: true · no servidor: true",
+      "atMs": 1467
+    },
+    {
+      "name": "a o app salvou sozinho e abriu a revisão sem travar (nenhum \"Salve o catálogo…\" preso)",
+      "ok": true,
+      "detail": "revisão aberta em 91 ms · estado final em 94 ms · \"Salvando…\" visível: true · sequência: 0ms Publicar / PDF / - → 57ms Salvando… / - → 79ms Publicar / PDF / CHECKING → 87ms Publicar / PDF / READY",
+      "atMs": 1467
+    },
+    {
+      "name": "a catálogo limpo → \"Pronto para imprimir ou salvar PDF.\" e a prévia mostra o texto",
+      "ok": true,
+      "detail": "estado: READY · \"Pronto para imprimir ou salvar PDF.\" · itens: 0 · prévia tem o texto: true",
+      "atMs": 1467
+    },
+    {
+      "name": "a instrução de impressão é UMA linha, visível sem rolar, e diz o que escolher na janela do navegador",
+      "ok": true,
+      "detail": "\"Na janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.\" · letra 15 px · y=324",
+      "atMs": 1490
+    },
+    {
+      "name": "a \"Imprimir / salvar PDF\" ativo, visível sem rolar, alvo ≥ 24 px",
+      "ok": true,
+      "detail": "185×44 px · letra 15 px · status letra 15 px",
+      "atMs": 1492
+    },
+    {
+      "name": "a diálogo \"Revisar e publicar\": tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 1497
+    },
+    {
+      "name": "a \"Imprimir / salvar PDF\" aprova a impressão (1 chamada a imprimir, título do PDF = nome do catálogo)",
+      "ok": true,
+      "detail": "print(): 1 · aprovado: true · título sugerido: \"TA-25N — Ficha para publicar\" · restaurado: true",
+      "atMs": 1670
+    },
+    {
+      "name": "a PDF: 1 página A4 (595×842 pt), texto pesquisável com o que foi digitado, sem textos do diálogo",
+      "ok": true,
+      "detail": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-a-pronto.pdf · 4199 bytes · páginas: 1 · [[594.96,841.92]] · texto: \"Termômetro TA-25N\"",
+      "atMs": 1671
+    },
+    {
+      "name": "a \"Voltar ao editor\" devolve o foco ao botão \"Publicar / PDF\" (o pai não se perde)",
+      "ok": true,
+      "detail": null,
+      "atMs": 1710
+    },
+    {
+      "name": "a2 com o servidor lento o pai vê \"Salvando…\" (no botão ou na revisão) e nada trava",
+      "ok": true,
+      "detail": "botão: \"\" · diálogo aberto: false · status: \"\" · salvamentos liberados: 1",
+      "atMs": 12357
+    },
+    {
+      "name": "a2 quando o salvamento termina a revisão segue SOZINHA até \"Pronto\" (sem clique extra)",
+      "ok": true,
+      "detail": "26 ms depois de liberar · \"Pronto para imprimir ou salvar PDF.\" · sequência: 0ms Publicar / PDF / - → 43ms Salvando… / - → 10525ms Publicar / PDF / CHECKING → 10529ms Publicar / PDF / READY",
+      "atMs": 12359
+    },
+    {
+      "name": "a2 depois da edição e da confirmação o status mostra \"Salvo às HH:MM\" (FR-44)",
+      "ok": true,
+      "detail": "Salvo às 12:53",
+      "atMs": 12392
+    },
+    {
+      "name": "a3 texto novo começa em Corpo, 10 pt, sem negrito (FR-14)",
+      "ok": true,
+      "detail": "{\"fontFamily\":\"Noto Sans\",\"fontSizePt\":10,\"lineHeight\":1.2,\"fontWeight\":400,\"color\":\"#172033\",\"textAlign\":\"left\"}",
+      "atMs": 14098
+    },
+    {
+      "name": "a3 uma frase real de uma linha (\"Termômetro TA-25N: faixa de -25 °C a 140 °C\") cabe no quadro padrão e publica",
+      "ok": true,
+      "detail": "53 ms",
+      "atMs": 14157
+    },
+    {
+      "name": "b página 2 adicionada",
+      "ok": true,
+      "detail": "Página 2 de 2",
+      "atMs": 14647
+    },
+    {
+      "name": "b de volta à página 1 antes de publicar (o problema está na página 2)",
+      "ok": true,
+      "detail": "Página 1 de 2",
+      "atMs": 16655
+    },
+    {
+      "name": "b \"A COMPLETAR\" bloqueia: \"Publicação bloqueada…\", 1 item com o local exato e \"Imprimir\" desligado",
+      "ok": true,
+      "detail": "29 ms · \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · local: \"Página 2 · texto 1\" · mensagem: \"Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.\" · imprimir desligado: true",
+      "atMs": 26719
+    },
+    {
+      "name": "b \"Corrigir este item\" visível sem rolar, alvo ≥ 24 px; \"Detalhes técnicos\" ausente ou fechado",
+      "ok": true,
+      "detail": "botão: {\"text\":\"Corrigir este item\",\"fontPx\":15,\"heightPx\":44,\"widthPx\":159,\"top\":432,\"inViewport\":true,\"fullyVisible\":true} · detalhes: 0 · abertos: null · local 15 px · mensagem 15 px",
+      "atMs": 26720
+    },
+    {
+      "name": "b diálogo bloqueado: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 26723
+    },
+    {
+      "name": "b \"Verificar novamente\" roda a verificação de novo sem travar (continua bloqueado, nada mudou)",
+      "ok": true,
+      "detail": "51 ms",
+      "atMs": 26829
+    },
+    {
+      "name": "b \"Corrigir este item\" fecha a revisão e leva à PÁGINA 2 com o texto selecionado",
+      "ok": true,
+      "detail": "96 ms · Página 2 de 2 · painel: \"Texto\"",
+      "atMs": 26936
+    },
+    {
+      "name": "b o FOCO vai para o texto com o problema (teclado continua dali)",
+      "ok": true,
+      "detail": "{\"activeTag\":\"DIV\",\"activeObjectId\":\"b641b2ca-e1d4-484f-904e-123f12c940f6\",\"activeLabel\":null,\"targetSelected\":\"true\",\"targetInViewport\":true,\"textB\":\"b641b2ca-e1d4-484f-904e-123f12c940f6\"}",
+      "atMs": 26936
+    },
+    {
+      "name": "b ao chegar, uma mensagem explica o problema, visível sem rolar",
+      "ok": true,
+      "detail": "\"Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de public\" · letra 15 px",
+      "atMs": 26936
+    },
+    {
+      "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+      "ok": false,
+      "finding": {
+        "id": "C-04",
+        "severity": "P3",
+        "knownFR": "FR-13"
+      },
+      "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")",
+      "atMs": null
+    },
+    {
+      "name": "b depois da correção, Publicar / PDF → \"Pronto para imprimir ou salvar PDF.\" (sem itens)",
+      "ok": true,
+      "detail": "61 ms · \"Pronto para imprimir ou salvar PDF.\"",
+      "atMs": 28409
+    },
+    {
+      "name": "b PDF: 2 páginas A4, texto pesquisável nas duas, sem \"A COMPLETAR\"",
+      "ok": true,
+      "detail": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-b-2-paginas.pdf · 6251 bytes · páginas: 2 · [[594.96,841.92],[594.96,841.92]] · p1: \"Termômetro TA-25N (2) Termômetro TA-25N: faixa de -25 °C a 140 °C\" · p2: \"Exatidão: ±0,1 °C\"",
+      "atMs": 28479
+    },
+    {
+      "name": "zero erros de console (do aplicativo) e de página em toda a jornada",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do vite ignorado: 0",
+      "atMs": 28571
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-01-pronto.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-02-salvando.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-03-bloqueado.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-04-corrigir-leva-ao-texto.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j08-publicar-pdf-05-pronto-2-paginas.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "findingSteps": [
+    {
+      "id": "C-04",
+      "severity": "P3",
+      "knownFR": "FR-13",
+      "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+      "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "a": {
+      "reviewOpenMs": 91,
+      "readyMs": 94
+    },
+    "a2": {
+      "readyAfterReleaseMs": 26,
+      "released": 1
+    },
+    "a3": {
+      "resultMs": 53
+    },
+    "b": {
+      "blockedMs": 29,
+      "recheckMs": 51,
+      "locateMs": 96,
+      "readyAfterFixMs": 61
+    }
+  },
+  "measures": {
+    "publishButton": {
+      "text": "Publicar / PDF",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 126,
+      "top": 12,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "beforePublishA": {
+      "dirty": true,
+      "savePhase": "idle",
+      "textInDocument": false
+    },
+    "traceA": [
+      {
+        "ms": 0,
+        "button": "Publicar / PDF",
+        "hostStatus": null,
+        "dialogStatus": null
+      },
+      {
+        "ms": 57,
+        "button": "Salvando…",
+        "hostStatus": null,
+        "dialogStatus": null
+      },
+      {
+        "ms": 79,
+        "button": "Publicar / PDF",
+        "hostStatus": "CHECKING",
+        "dialogStatus": "Verificando páginas, textos, fontes e imagens…"
+      },
+      {
+        "ms": 87,
+        "button": "Publicar / PDF",
+        "hostStatus": "READY",
+        "dialogStatus": "Pronto para imprimir ou salvar PDF."
+      }
+    ],
+    "reviewA": {
+      "hostStatus": "READY",
+      "statusText": "Pronto para imprimir ou salvar PDF.",
+      "items": [],
+      "previewHasText": true
+    },
+    "instruction": {
+      "count": 1,
+      "text": "Na janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.",
+      "fontPx": 15,
+      "heightPx": 24,
+      "widthPx": 1142,
+      "top": 324,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "printButton": {
+      "text": "Imprimir / salvar PDF",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 185,
+      "top": 368,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "reviewStatus": {
+      "text": "Pronto para imprimir ou salvar PDF.",
+      "fontPx": 15,
+      "heightPx": 50,
+      "widthPx": 1142,
+      "top": 158,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "recheckButton": {
+      "text": "Verificar novamente",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 178,
+      "top": 224,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "pdfA": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-a-pronto.pdf",
+      "bytes": 4199,
+      "printed": 1,
+      "approved": "true",
+      "suggestedTitle": "TA-25N — Ficha para publicar",
+      "titleBefore": "Catalog Builder — harness das jornadas do pai",
+      "titleAfter": "Catalog Builder — harness das jornadas do pai",
+      "numPages": 1,
+      "pages": [
+        {
+          "widthPt": 594.96,
+          "heightPt": 841.92,
+          "text": "Termômetro TA-25N"
+        }
+      ],
+      "allA4": true,
+      "text": "Termômetro TA-25N"
+    },
+    "whileHeld": {
+      "button": "",
+      "dialogOpen": false,
+      "dialogStatus": "",
+      "waitingMarker": 0
+    },
+    "traceA2": [
+      {
+        "ms": 0,
+        "button": "Publicar / PDF",
+        "hostStatus": null,
+        "dialogStatus": null
+      },
+      {
+        "ms": 43,
+        "button": "Salvando…",
+        "hostStatus": null,
+        "dialogStatus": null
+      },
+      {
+        "ms": 10525,
+        "button": "Publicar / PDF",
+        "hostStatus": "CHECKING",
+        "dialogStatus": "Verificando páginas, textos, fontes e imagens…"
+      },
+      {
+        "ms": 10529,
+        "button": "Publicar / PDF",
+        "hostStatus": "READY",
+        "dialogStatus": "Pronto para imprimir ou salvar PDF."
+      }
+    ],
+    "reviewA3": {
+      "hostStatus": "READY",
+      "statusText": "Pronto para imprimir ou salvar PDF.",
+      "items": [],
+      "overflowCount": 0,
+      "location": null,
+      "message": null
+    },
+    "reviewB": {
+      "hostStatus": "BLOCKED",
+      "statusText": "Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.",
+      "itemCount": 1,
+      "itemLocation": "Página 2 · texto 1",
+      "itemMessage": "Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar.",
+      "fixButton": {
+        "text": "Corrigir este item",
+        "fontPx": 15,
+        "heightPx": 44,
+        "widthPx": 159,
+        "top": 432,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "printDisabled": true,
+      "detailsCount": 0,
+      "detailsOpen": null,
+      "location": {
+        "text": "Página 2 · texto 1",
+        "fontPx": 15,
+        "heightPx": 24,
+        "widthPx": 1108,
+        "top": 350,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "message": {
+        "text": "Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de public",
+        "fontPx": 15,
+        "heightPx": 24,
+        "widthPx": 1108,
+        "top": 408,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "afterFix": {
+      "activeTag": "DIV",
+      "activeObjectId": "b641b2ca-e1d4-484f-904e-123f12c940f6",
+      "activeLabel": null,
+      "targetSelected": "true",
+      "targetInViewport": true,
+      "pageLabel": "Página 2 de 2",
+      "inspectorHeading": "Texto",
+      "arrival": {
+        "text": "Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de public",
+        "fontPx": 15,
+        "heightPx": 58,
+        "widthPx": 720,
+        "top": 280,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "pdfB": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/pdf/j08-b-2-paginas.pdf",
+      "bytes": 6251,
+      "printed": 1,
+      "approved": "true",
+      "suggestedTitle": "TA-25N — Ficha para publicar",
+      "titleBefore": "Catalog Builder — harness das jornadas do pai",
+      "titleAfter": "Catalog Builder — harness das jornadas do pai",
+      "numPages": 2,
+      "pages": [
+        {
+          "widthPt": 594.96,
+          "heightPt": 841.92,
+          "text": "Termômetro TA-25N (2) Termômetro TA-25N: faixa de -25 °C a 140 °C"
+        },
+        {
+          "widthPt": 594.96,
+          "heightPt": 841.92,
+          "text": "Exatidão: ±0,1 °C"
+        }
+      ],
+      "allA4": true,
+      "text": "Termômetro TA-25N (2) Termômetro TA-25N: faixa de -25 °C a 140 °C ¶ Exatidão: ±0,1 °C"
+    },
+    "devServerNoise": [],
+    "clicks": {
+      "a: escrever texto": 3,
+      "a: publicar": 1,
+      "a: imprimir / salvar PDF": 1,
+      "a: voltar ao editor": 1,
+      "a2: editar texto": 2,
+      "a2: publicar": 1,
+      "a2: voltar ao editor": 1,
+      "a3: escrever frase real": 4,
+      "a3: publicar": 1,
+      "a3: voltar ao editor": 1,
+      "b: adicionar página": 1,
+      "b: escrever texto": 4,
+      "b: voltar à página 1": 1,
+      "b: publicar": 1,
+      "b: verificar novamente": 1,
+      "b: corrigir este item": 1,
+      "b: corrigir o texto": 3,
+      "b: publicar de novo": 1,
+      "b: imprimir / salvar PDF": 1,
+      "b: voltar ao editor": 1
+    },
+    "clicksToPdfInApp": 2
+  },
+  "texts": {
+    "a diálogo \"Revisar e publicar\"": {
+      "hits": [],
+      "mm": [],
+      "sample": "Publicação Revisar e publicar Voltar ao editor Confira as páginas e a verificação do catálogo antes de gerar o PDF. Pronto para imprimir ou salvar PDF. Verificar novamente O PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas as páginas na prévia abaixo. Na janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar. Imprimir / salvar PDF"
+    },
+    "b diálogo bloqueado": {
+      "hits": [],
+      "mm": [],
+      "sample": "Confira as páginas e a verificação do catálogo antes de gerar o PDF. Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente. Verificar novamente Itens para corrigir Página 2 · texto 1 Correção necessária Ainda está escrito “A COMPLETAR”. Troque pela informação correta antes de publicar. Corrigir este item O PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas a"
+    }
+  },
+  "clicks": {
+    "a: escrever texto": 3,
+    "a: publicar": 1,
+    "a: imprimir / salvar PDF": 1,
+    "a: voltar ao editor": 1,
+    "a2: editar texto": 2,
+    "a2: publicar": 1,
+    "a2: voltar ao editor": 1,
+    "a3: escrever frase real": 4,
+    "a3: publicar": 1,
+    "a3: voltar ao editor": 1,
+    "b: adicionar página": 1,
+    "b: escrever texto": 4,
+    "b: voltar à página 1": 1,
+    "b: publicar": 1,
+    "b: verificar novamente": 1,
+    "b: corrigir este item": 1,
+    "b: corrigir o texto": 3,
+    "b: publicar de novo": 1,
+    "b: imprimir / salvar PDF": 1,
+    "b: voltar ao editor": 1
+  },
+  "viteEvents": [
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected."
+  ],
+  "status": "pass",
+  "findingSummary": [
+    {
+      "id": "C-04",
+      "severity": "P3",
+      "knownFR": "FR-13",
+      "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+      "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "efa3f7a6-b81a-4298-9e2b-cf335972e3a8",
+    "startedAt": "2026-10-20T15:53:05.844Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": false
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

@@ -35,6 +35,16 @@ it('real runtime without Bridge cannot insert or replace a demo asset', async ()
   runtime.dispose();
 });
 
+it('photo picker lets HEIC files through so the plain HEIC message can be shown (FR-40)', () => {
+  let n = 0;
+  const createId = () => `heic-${++n}`;
+  const session = createDocumentSession(createW2CDemoDocument(createId), { createId });
+  const view = render(<VNextApp session={session} />);
+  const picker = view.container.querySelector<HTMLInputElement>('input[data-editor-action="upload-image-input"]')!;
+  const accepted = picker.accept.split(',');
+  expect(accepted).toEqual(expect.arrayContaining(['image/png', 'image/jpeg', 'image/webp', '.heic', '.heif']));
+});
+
 describe('explicit in-memory demo', () => {
   it('retains fixture insertion separately from the production runtime', () => {
     let n = 0;

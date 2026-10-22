@@ -18,6 +18,8 @@ const server = await createServer({
     strictPort: true,
     fs: { allow: [root, realpathSync(resolve(root, 'node_modules'))] },
   },
+  // Junction-installed node_modules on another drive: keep /node_modules URLs inside root.
+  resolve: { preserveSymlinks: true },
   logLevel: 'error',
 });
 const url = `http://127.0.0.1:${port}/tests/vnext/proof/fixtures/pilot-a-authorship-browser.html`;
@@ -62,9 +64,11 @@ async function selectTable(page, id) {
 }
 async function saveAndWait(page) {
   await saveButton(page).click();
+  // B-01: a draft committed by Salvar may still grow its table once measured; that growth is saved right after,
+  // so "Saved" only counts once no automatic table fit is pending.
   await page.waitForFunction(() => {
     const current = window.__PILOT_A_PROOF__.state();
-    return current.saveLabel === 'Saved' && current.dirty === false;
+    return current.saveLabel === 'Saved' && current.dirty === false && !document.querySelector('[data-table-auto-fit]');
   }, { timeout: 15000 });
   assert.equal((await saveState(page).textContent())?.trim(), 'Salvo');
 }
@@ -100,14 +104,14 @@ try {
   // 1. Text -> page switch: draft becomes canonical before navigation.
   await selectText(page, ids.textObjectId);
   await page.locator('[data-text-edit-textarea]').fill('Texto canonicalizado antes da página');
-  await page.locator('[aria-label="Navegação de páginas"] button').nth(1).click();
+  await page.locator('[aria-label="Navegação de páginas"] [data-page-nav-id]').nth(1).click();
   await page.waitForFunction((pageId) =>
     document.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id') === pageId,
   ids.secondPageId);
   const textPageSwitch = await state(page);
   assert.equal(textPageSwitch.text, 'Texto canonicalizado antes da página');
   assert.equal(textPageSwitch.dirty, true);
-  await page.locator('[aria-label="Navegação de páginas"] button').nth(0).click();
+  await page.locator('[aria-label="Navegação de páginas"] [data-page-nav-id]').nth(0).click();
   await saveAndWait(page);
 
   // 2. Text -> Catálogos: pointerdown canonicalizes; dirty guard blocks route intent.
@@ -164,7 +168,7 @@ try {
   // 5. IME composition blocks title context transition and preserves the draft.
   await page.locator('[data-table-title-input]').fill('Título em composição');
   await page.locator('[data-table-title-input]').dispatchEvent('compositionstart');
-  await page.locator('[aria-label="Navegação de páginas"] button').nth(1).click();
+  await page.locator('[aria-label="Navegação de páginas"] [data-page-nav-id]').nth(1).click();
   const compositionBlocked = await state(page);
   assert.notEqual(await activePageId(page), ids.secondPageId);
   assert.equal(await page.locator('[data-table-title-input]').inputValue(), 'Título em composição');
@@ -173,20 +177,21 @@ try {
   await page.locator('[data-table-title-input]').dispatchEvent('compositionend');
   await page.locator('[data-editor-action="cancel-table-title-draft"]').click();
 
-  // 6. Invalid Inspector draft blocks context replacement and remains visible.
+  // 6. FR-10: an invalid position value goes back to the current one and never blocks a page change.
   const xInput = page.locator('[data-inspector-field="x"]');
-  const canonicalX = String((await state(page)).document.pages[0].objects
-    .find((entry) => entry.id === ids.tableObjectId).frame.xMm);
+  const frameBeforeInvalid = (await state(page)).document.pages[0].objects
+    .find((entry) => entry.id === ids.tableObjectId).frame;
   await xInput.fill('not-a-number');
-  await page.locator('[aria-label="Navegação de páginas"] button').nth(1).click();
+  await page.locator('[aria-label="Navegação de páginas"] [data-page-nav-id]').nth(1).click();
+  await page.waitForFunction((pageId) =>
+    document.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id') === pageId,
+  ids.secondPageId);
   const inspectorBlocked = await state(page);
-  assert.notEqual(await activePageId(page), ids.secondPageId);
-  assert.equal(await xInput.inputValue(), 'not-a-number');
-  assert.equal(inspectorBlocked.overlay?.kind, 'INSPECTOR_FRAME_DRAFT_V1');
-  assert.equal(inspectorBlocked.pendingDraft, true);
-
-  await xInput.fill(canonicalX);
-  await xInput.blur();
+  assert.equal(inspectorBlocked.overlay, null);
+  assert.equal(inspectorBlocked.pendingDraft, false);
+  assert.deepEqual(inspectorBlocked.document.pages[0].objects
+    .find((entry) => entry.id === ids.tableObjectId).frame, frameBeforeInvalid);
+  await page.locator('[aria-label="Navegação de páginas"] [data-page-nav-id]').nth(0).click();
   await page.screenshot({ path: resolve(output, 'pilot-a-authorship-trust.png'), fullPage: true });
 
   const evidence = {

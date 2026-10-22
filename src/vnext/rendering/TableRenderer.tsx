@@ -6,6 +6,12 @@ import { mmToU,qCss,uToQ } from '../domain/physical';
 import { resolveWrap } from './style';
 import { RichTextRenderer,typography } from './RichTextRenderer';
 
+/** Name read aloud by screen readers: the table title, or "Tabela" (never the internal id). */
+export function tableAccessibleName(table:TableModel):string {
+  const title=table.title?.paragraphs.map(p=>p.inlines.map(i=>i.kind==='text'?i.text:' ').join('')).join(' ').replace(/\s+/g,' ').trim();
+  return title||'Tabela';
+}
+
 export function TableRenderer({table,plan,assets,assetUrls}:{table:TableModel;plan:TablePlan|undefined;assets:readonly AssetRef[];assetUrls:ReadonlyMap<string,string>}) {
   if(!plan)return <div className="invalid-table" role="alert">Tabela bloqueada: geometria inviável.</div>;
   const annotations=referencedAnnotations(table),gap=qCss(uToQ(mmToU(table.style.annotationGapMm)));
@@ -19,7 +25,7 @@ export function TableRenderer({table,plan,assets,assetUrls}:{table:TableModel;pl
       <div data-flow-root=""><RichTextRenderer rich={table.title}/></div>
     </div>}
     {annotations.filter(a=>a.kind==='caption').map(renderAnnotation)}
-    <div data-table-id={table.id} role="table" aria-label={table.id} aria-rowcount={table.rows.length} aria-colcount={table.columns.length}
+    <div data-table-id={table.id} role="table" aria-label={tableAccessibleName(table)} aria-rowcount={table.rows.length} aria-colcount={table.columns.length}
       className="editorial-grid" style={{width:qCss(plan.frameQ),gridTemplateColumns:plan.trackQ.map(qCss).join(' '),
         gridTemplateRows:plan.rowQ?.map(qCss).join(' ')}}>
       {table.rows.map((row,r)=><div key={row.id} role="row" aria-rowindex={r+1} className="logical-row">

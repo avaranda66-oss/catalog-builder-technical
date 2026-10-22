@@ -1,0 +1,30 @@
+{
+  "llm": "gemini-3.5-flash-lite",
+  "sourceId": "y17-folder",
+  "run": 1,
+  "promptVersion": "fr66a-2026-10-15.2",
+  "transport": "files-api",
+  "ok": true,
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "modelVersion": "gemini-3.5-flash-lite",
+  "usage": {
+    "promptTokenCount": 7180,
+    "candidatesTokenCount": 366,
+    "totalTokenCount": 7546,
+    "promptTokensDetails": [
+      {
+        "modality": "IMAGE",
+        "tokenCount": 6384
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 796
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "ms": 7347,
+  "uploadMs": 14378,
+  "text": "{\n  \"title\": \"PCON-Y17 Pressure Controller / Calibrator\",\n  \"models\": [\n    \"PCON-Y17\"\n  ],\n  \"sections\": [\n    {\n      \"title\": \"Technical Specifications\",\n      \"rows\": [\n        {\n          \"key\": \"control-stability\",\n          \"label\": \"Control* Stability\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"± 0.002\",\n              \"unit\": \"% FS\",\n              \"condition\": \"using 2 σ method\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"accuracy\",\n          \"label\": \"Accuracy\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"± 0.012\",\n              \"unit\": \"% FS\",\n              \"condition\": \"using 2 σ method\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"\n              }\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+}

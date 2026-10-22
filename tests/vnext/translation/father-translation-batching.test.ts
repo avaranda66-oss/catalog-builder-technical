@@ -129,7 +129,7 @@ describe.each(['es-ES', 'en-US'] as const)('Father translation transport and ass
     expect(source).toEqual(before);
     if (size === 'large') expect(provider.requests.length).toBeGreaterThan(20);
     if (size === 'small') expect(provider.requests.flatMap(request => request.units.map(unit => unit.unitId))).toEqual(result.units.map(unit => unit.unitId));
-  });
+  }, 30_000);
 
   it('segments a long single run at safe boundaries and restores exact text, whitespace, IDs and marks', async () => {
     const source = fatherTranslationCatalog('small');

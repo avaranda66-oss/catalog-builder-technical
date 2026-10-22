@@ -23,13 +23,15 @@ const server = await createServer({
 let browser;
 
 const input = (page, field) => page.locator(`[data-inspector-field="${field}"]`);
-const readMm = async (page, field) => Number.parseFloat(await input(page, field).inputValue());
+// FR-10: the panel shows millimetres in pt-BR ("12,5").
+const parseMm = (value) => Number.parseFloat(String(value).replace(',', '.'));
+const readMm = async (page, field) => parseMm(await input(page, field).inputValue());
 const waitMm = async (page, field, expected, tolerance = 0.01) => {
   await page.waitForFunction(
     ({ selector, expectedValue, toleranceValue }) => {
       const element = document.querySelector(selector);
       return element instanceof HTMLInputElement
-        && Math.abs(Number.parseFloat(element.value) - expectedValue) <= toleranceValue;
+        && Math.abs(Number.parseFloat(element.value.replace(',', '.')) - expectedValue) <= toleranceValue;
     },
     { selector: `[data-inspector-field="${field}"]`, expectedValue: expected, toleranceValue: tolerance }
   );
@@ -54,11 +56,11 @@ try {
   await shell.waitFor();
   const initialPageId = await shell.getAttribute('data-active-page-id');
   assert(initialPageId);
-  assert.equal(await page.locator('.vnext-page-list button').count(), 1);
+  assert.equal(await page.locator('.vnext-page-list [data-page-nav-id]').count(), 1);
   assert.equal(requests.some((url) => url.includes('/src/legacy-main')), false, 'Legacy bootstrap must not load in VNext editor proof');
 
   await page.locator('[data-editor-action="insert-template"]').click();
-  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list button').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list [data-page-nav-id]').length === 2);
   const insertedPageId = await shell.getAttribute('data-active-page-id');
   assert(insertedPageId && insertedPageId !== initialPageId, 'Inserted template page must become active');
 
@@ -111,7 +113,7 @@ try {
   await page.waitForFunction(
     ({ selector, before }) => {
       const element = document.querySelector(selector);
-      return element instanceof HTMLInputElement && Number.parseFloat(element.value) > before + 4;
+      return element instanceof HTMLInputElement && Number.parseFloat(element.value.replace(',', '.')) > before + 4;
     },
     { selector: '[data-inspector-field="width"]', before: widthBeforeResize }
   );
@@ -128,12 +130,12 @@ try {
   await page.locator('[data-editor-action="undo"]').click();
   await waitMm(page, 'x', 132);
   await page.locator('[data-editor-action="undo"]').click();
-  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list button').length === 1);
+  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list [data-page-nav-id]').length === 1);
   assert.equal(await shell.getAttribute('data-active-page-id'), initialPageId);
 
   await page.locator('[data-editor-action="redo"]').click();
-  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list button').length === 2);
-  await page.getByRole('button', { name: 'Página 2' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.vnext-page-list [data-page-nav-id]').length === 2);
+  await page.getByRole('button', { name: 'Página 2', exact: true }).click();
   await page.waitForFunction((id) => document.querySelector('[data-vnext-shell]')?.getAttribute('data-active-page-id') === id, insertedPageId);
   const restoredObjectIds = await rootObjectIds(page);
   assert.equal(await shell.getAttribute('data-active-page-id'), insertedPageId);

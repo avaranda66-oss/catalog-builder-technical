@@ -22,7 +22,18 @@ const server = await createServer({
 });
 let browser;
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 const rowTitles = (page) => page.locator('[data-library-catalog-id] h2').allTextContents();
+// FR-08: search filters the already loaded list after a 300 ms pause, so wait for the rows to settle.
+const waitForRowTitles = (page, expected) => page.waitForFunction(
+  (titles) => JSON.stringify([...document.querySelectorAll('[data-library-catalog-id] h2')].map((node) => node.textContent)) === JSON.stringify(titles),
+  expected
+);
 
 try {
   await server.listen();
@@ -58,8 +69,10 @@ try {
   assert.equal(await page.getByText('Restaurar', { exact: true }).count(), 0);
 
   await page.getByPlaceholder('Buscar catálogos').fill('alpha');
+  await waitForRowTitles(page, ['Álpha Calibradores']);
   assert.deepEqual(await rowTitles(page), ['Álpha Calibradores']);
   await page.getByPlaceholder('Buscar catálogos').fill('');
+  await waitForRowTitles(page, ['Beta Pressão', 'Álpha Calibradores', 'Zeta Temperatura']);
   await page.locator('.vnext-library-sort select').selectOption('title-asc');
   assert.deepEqual(await rowTitles(page), ['Álpha Calibradores', 'Beta Pressão', 'Zeta Temperatura']);
 
@@ -93,7 +106,9 @@ try {
   await page.getByText('Álpha Industrial', { exact: true }).waitFor();
 
   const betaRow = page.locator('[data-library-catalog-id]').filter({ hasText: 'Beta Pressão' });
-  await betaRow.getByRole('button', { name: 'Arquivar' }).click();
+  // FR-04: Arquivar lives in the row's "Mais" menu.
+  await betaRow.getByRole('button', { name: 'Mais ações de Beta Pressão' }).click();
+  await betaRow.getByRole('menuitem', { name: 'Arquivar' }).click();
   const archiveDialog = page.getByRole('dialog', { name: /Arquivar “Beta Pressão”/ });
   assert.match(await archiveDialog.textContent(), /não será excluído permanentemente/i);
   await archiveDialog.getByRole('button', { name: 'Arquivar catálogo' }).click();
@@ -146,6 +161,8 @@ try {
   await recoveryDialog.waitFor();
   assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'W3.D gate must keep editor absent before recovery decision');
   assert.equal(await page.locator('[data-editor-action="save"]').count(), 0, 'Save must be structurally unavailable before recovery decision');
+  // J7: with recoverable work, the saved version is one of the "Mais opções".
+  await openMoreRecoveryOptions(recoveryDialog);
   await recoveryDialog.getByRole('button', { name: 'Abrir versão salva na nuvem' }).click();
   await page.locator('[data-vnext-shell]').waitFor();
   assert.equal(await page.evaluate(() => window.__W3E_LIBRARY_PROOF__.recoveryCount()), 1, 'Cloud-open choice preserves recoverable local record under W3.D retention semantics');
@@ -175,6 +192,7 @@ try {
     assert(facts.createHeight >= 42);
     assert(facts.searchWidth > 0 && facts.searchWidth <= facts.innerWidth - 20);
     await page.getByPlaceholder('Buscar catálogos').fill('alpha');
+    await waitForRowTitles(page, ['Álpha Calibradores']);
     assert.deepEqual(await rowTitles(page), ['Álpha Calibradores']);
     await page.getByPlaceholder('Buscar catálogos').fill('');
     await page.getByRole('tab', { name: 'Arquivados' }).click();
@@ -189,7 +207,8 @@ try {
       const renameDialogBox = await mobileRenameDialog.boundingBox();
       assert(renameDialogBox && renameDialogBox.width <= 340 && renameDialogBox.x >= 0);
       await mobileRenameDialog.getByRole('button', { name: 'Cancelar' }).click();
-      await firstRow.getByRole('button', { name: 'Arquivar' }).click();
+      await firstRow.getByRole('button', { name: /^Mais ações de / }).click();
+      await firstRow.getByRole('menuitem', { name: 'Arquivar' }).click();
       const mobileDialog = page.getByRole('dialog');
       const dialogBox = await mobileDialog.boundingBox();
       assert(dialogBox && dialogBox.width <= 340 && dialogBox.x >= 0);

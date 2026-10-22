@@ -26,6 +26,8 @@ export interface TranslationReviewSnapshot {
   readonly correctedRunKeys: readonly string[];
   readonly invalidRunKeys: readonly string[];
   readonly correctionCount: number;
+  /** Leituras de números ambíguos já confirmadas pela pessoa, por chave de trecho (ex.: "1,500" para "1.500"). */
+  readonly confirmedReadings: Readonly<Record<string, readonly string[]>>;
   readonly batchProgress?: TranslationBatchProgress;
 }
 
@@ -58,7 +60,7 @@ function message(error: unknown): string {
 /** Ephemeral review composition over W5.A, canonical clone and the existing W3 verified CREATE. */
 export class TranslationReviewCoordinator {
   private snapshot: TranslationReviewSnapshot = { phase: 'idle', runs: [], pending: false, targetLocale: 'es-ES',
-    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0 };
+    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0, confirmedReadings: {} };
   private readonly listeners = new Set<() => void>();
   private readonly create: PreparedCatalogCreateCoordinator;
   private readonly clone: CatalogCloneService;
@@ -70,6 +72,7 @@ export class TranslationReviewCoordinator {
   private readonly corrections = new Map<string, string>();
   private readonly invalidCorrections = new Set<string>();
   private readonly reviewed = new Set<string>();
+  private readonly readings = new Map<string, readonly string[]>();
 
   constructor(private readonly options: TranslationReviewOptions) {
     this.create = new PreparedCatalogCreateCoordinator(options);
@@ -83,7 +86,8 @@ export class TranslationReviewCoordinator {
   }
   private progress() {
     return { targetLocale: this.snapshot.targetLocale, reviewedRunKeys: [...this.reviewed],
-      correctedRunKeys: [...this.corrections.keys()], invalidRunKeys: [...this.invalidCorrections], correctionCount: this.corrections.size };
+      correctedRunKeys: [...this.corrections.keys()], invalidRunKeys: [...this.invalidCorrections], correctionCount: this.corrections.size,
+      confirmedReadings: Object.fromEntries(this.readings) };
   }
   private current(): boolean {
     const source = this.source;
@@ -98,7 +102,7 @@ export class TranslationReviewCoordinator {
   cancel(): boolean {
     if (this.accepting || this.create.getState() === 'pending-verification') return false;
     this.abort?.abort(); this.generation += 1;
-    this.source = undefined; this.result = undefined; this.corrections.clear(); this.invalidCorrections.clear(); this.reviewed.clear();
+    this.source = undefined; this.result = undefined; this.corrections.clear(); this.invalidCorrections.clear(); this.reviewed.clear(); this.readings.clear();
     this.publish({ ...this.progress(), phase: 'idle', runs: [], pending: false });
     return true;
   }
@@ -137,7 +141,7 @@ export class TranslationReviewCoordinator {
     const run = this.snapshot.runs.find(item => item.unitId === unitId && item.runId === runId);
     if (!run) return false;
     const key = translationReviewKey(unitId, runId);
-    try { this.requireCurrent(); requireReviewText(run.sourceText, text); }
+    try { this.requireCurrent(); requireReviewText(run.sourceText, text, this.snapshot.targetLocale); }
     catch (error) {
       this.invalidCorrections.add(key);
       this.reviewed.delete(key);
@@ -151,6 +155,20 @@ export class TranslationReviewCoordinator {
     this.publish({ ...this.progress(), phase: 'review', pending: false, reviewInvalid,
       ...(reviewInvalid ? { message: 'Corrija todos os textos sinalizados antes de salvar a cópia.' } : {}),
       runs: this.snapshot.runs.map(item => item === run ? { ...item, translatedText: text } : item) });
+    return true;
+  }
+  /**
+   * Guarda a leitura que a pessoa escolheu para um número ambíguo do trecho ("1,500" ou "1.500" para
+   * "1.500"). A tela lê daqui, então a decisão sobrevive a remontagens e não vira pergunta de novo.
+   */
+  confirmReading(unitId: string, runId: string, value: string): boolean {
+    if (this.snapshot.phase !== 'review' && !(this.snapshot.phase === 'error' && !this.snapshot.pending)) return false;
+    if (!this.snapshot.runs.some(run => run.unitId === unitId && run.runId === runId)) return false;
+    const key = translationReviewKey(unitId, runId);
+    const current = this.readings.get(key) ?? [];
+    if (current.includes(value)) return true;
+    this.readings.set(key, [...current, value]);
+    this.publish({ ...this.snapshot, ...this.progress() });
     return true;
   }
   markReviewed(unitId: string, runId: string): boolean {

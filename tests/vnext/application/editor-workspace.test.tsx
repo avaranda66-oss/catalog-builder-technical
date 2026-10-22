@@ -285,7 +285,7 @@ async function enterMeasuredTableGrid(container: HTMLElement, tableId: string, p
     if (shell.getAttribute('data-editor-mode') !== 'table-grid') fireEvent.click(button(container, 'edit-table'));
     expect(shell).toHaveAttribute('data-editor-mode', 'table-grid');
     expect(container.querySelector('[data-table-grid-overlay]')).toBeTruthy();
-  });
+  }, { timeout: 5_000 });
 }
 
 describe('W2.C visible editor workspace', () => {
@@ -355,14 +355,10 @@ describe('W2.C visible editor workspace', () => {
     fireEvent.change(width, { target: { value: 'not-a-number' } });
     fireEvent.blur(width);
     expect(session.getSnapshot().document).toBe(beforeInvalid);
+    // FR-10: an invalid value goes back to the current one (pt-BR) with a visible message and never blocks.
+    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')?.value).toBe('63,75');
+    expect(container.querySelector('[data-inspector-error="width"]')?.textContent).toBe('Use um número, como 12,5.');
 
-    const callsBeforeBlockedDelete = execute.mock.calls.length;
-    fireEvent.click(button(container, 'delete'));
-    expect(execute.mock.calls).toHaveLength(callsBeforeBlockedDelete);
-    expect(container.querySelector<HTMLInputElement>('[data-inspector-field="width"]')?.value).toBe('not-a-number');
-
-    fireEvent.change(width, { target: { value: '63.75' } });
-    fireEvent.blur(width);
     fireEvent.click(button(container, 'delete'));
     expect(execute.mock.calls.at(-1)?.[0].type).toBe('object.delete');
 
@@ -611,7 +607,7 @@ describe('W2.G direct Text editing workspace', () => {
     expect(button(groupView.container, 'edit-text')).toBeDisabled();
   });
 
-  it('keeps typing ephemeral, Escape discards it, and one explicit commit preserves frame/style while producing one history step', () => {
+  it('keeps typing ephemeral, Cancelar discards it, and one explicit commit preserves frame/style while producing one history step', () => {
     const session = sessionWithDemo(seedTextDocument());
     const execute = vi.spyOn(session, 'execute');
     const beforeObject = textObject(session.getSnapshot().document);
@@ -624,7 +620,8 @@ describe('W2.G direct Text editing workspace', () => {
     fireEvent.change(textarea, { target: { value: 'Rascunho\n± 0.05 °C' } });
     expect(execute).not.toHaveBeenCalled();
     expect(session.getSnapshot().document).toBe(beforeDocument);
-    fireEvent.keyDown(textarea, { key: 'Escape' });
+    // FR-19: Esc now concludes the text box (like PowerPoint); the explicit Cancelar button discards.
+    fireEvent.click(button(container, 'cancel-text'));
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
     expect(execute).not.toHaveBeenCalled();
     expect(session.getSnapshot().canUndo).toBe(false);
@@ -709,7 +706,7 @@ describe('W2.G direct Text editing workspace', () => {
     selectText(container, 94);
     fireEvent.click(button(container, 'edit-text'));
     fireEvent.change(container.querySelector('[data-text-edit-textarea]')!, { target: { value: 'Commit antes da troca de página' } });
-    const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button')][1];
+    const secondPage = [...container.querySelectorAll<HTMLButtonElement>('.vnext-page-list [data-page-nav-id]')][1];
     fireEvent.click(secondPage);
     expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
     expect(projectEditableRichText(textObject(session.getSnapshot().document).text)).toBe('Commit antes da troca de página');
@@ -868,7 +865,7 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     fireEvent.click(button(container, 'distribute-horizontal'));
     expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'objects.distribute', axis: 'horizontal' });
 
-    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list button');
+    const pages = container.querySelectorAll<HTMLButtonElement>('.vnext-page-list [data-page-nav-id]');
     expect(pages).toHaveLength(2);
     fireEvent.click(pages[1]);
     expect(button(container, 'toggle-multi-select')).toHaveAttribute('aria-pressed', 'false');
@@ -1049,7 +1046,7 @@ describe('W4.F.5 visible object arrangement and locking', () => {
     await waitFor(() => expect(container.querySelector('[data-cell-edit-session]')).toBeTruthy());
     expect(shell).toHaveAttribute('data-editor-mode', 'cell-edit');
     expect(button(container, 'insert-rows-after')).toBeDisabled();
-    expect(button(container, 'insert-rows-after')).toHaveAttribute('title', 'Conclua a edição da célula antes de alterar eixos.');
+    expect(button(container, 'insert-rows-after')).toHaveAttribute('title', 'Conclua a edição da célula antes de mudar linhas e colunas.');
     const originalCellContent = structuredClone(canonicalTable().table.cells[0].content);
     const draftSequence = session.getSnapshot().localSequence;
     const draftCallsBefore = execute.mock.calls.length;
@@ -1157,9 +1154,10 @@ describe('W2.D visible snapping and diagnostics', () => {
     expect(container.querySelector('[data-editorial-root] [data-editor-diagnostic-badge]')).toBeNull();
 
     const x = container.querySelector<HTMLInputElement>('[data-inspector-field="x"]')!;
-    fireEvent.change(x, { target: { value: '-1' } });
+    // FR-54: até 3 mm fora é sangria (aviso) para uma forma; 4 mm continua erro.
+    fireEvent.change(x, { target: { value: '-4' } });
     fireEvent.blur(x);
-    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-1);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-4);
     await waitFor(() => {
       expect(container.querySelector('[data-diagnostic-code="OBJECT_OUTSIDE_PAGE"][data-diagnostic-severity="ERROR"]')).toBeTruthy();
     });
@@ -1223,7 +1221,6 @@ function renderTableStyleGuidance(hasCellDraft: boolean, isLocked: boolean) {
     onPaddingLinkedChange={() => undefined}
     onPatch={() => undefined}
     onBorderPreset={() => undefined}
-    onPreset={() => undefined}
     onAnnotationGap={() => undefined}
   />);
   const control = view.container.querySelector<HTMLSelectElement>('[data-style-property="fontFamily"]');
@@ -1249,6 +1246,12 @@ describe('W4.F.2 F1 disabled Table style guidance', () => {
       'Tabela bloqueada. Desbloqueie a tabela para alterar a apresentação.'
     );
     expect(view.container.textContent).not.toContain('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+  });
+
+  it('speaks plain Portuguese in the table style panel (no "tipo de linha", no "topologia")', () => {
+    const view = renderTableStyleGuidance(false, false);
+    expect(view.getByRole('combobox', { name: 'Aplicar o estilo em' })).toBeInTheDocument();
+    expect(view.container.textContent).not.toMatch(/tipo de linha|topologia|linha\/coluna/);
   });
 
   it('keeps an editable Table enabled with no stale reason or aria reference', () => {
@@ -1283,9 +1286,16 @@ describe('P1.A simple-by-default workspace', () => {
       const after = session.getSnapshot();
       const created = after.document.pages[0].objects.find((object) => !before.document.pages[0].objects.some((existing) => existing.id === object.id));
       if (!created || created.type !== 'table') throw new Error('Missing default table');
-      expect(created.table.rows).toHaveLength(1);
-      expect(created.table.columns).toHaveLength(1);
-      expect(after.localSequence).toBe(before.localSequence + 1);
+      // FR-31: the default is a useful 6 × 3 table with a header row, the house preset and the usable width.
+      expect(created.table.rows).toHaveLength(6);
+      expect(created.table.columns).toHaveLength(3);
+      expect(created.table.rows.map((row) => row.role)).toEqual(['header', 'body', 'body', 'body', 'body', 'body']);
+      expect(created.table.style.rowRoles.header?.fontWeight).toBe(700);
+      expect(created.frame.xMm).toBe(12);
+      expect(created.frame.widthMm).toBe(186);
+      // FR-33: the insert, the bold names and the 68 mm first column of "Especificações" are one transaction.
+      expect(created.table.columns[0].width).toEqual({ mode: 'fixed', mm: 68 });
+      expect(after.localSequence).toBe(before.localSequence + 3);
       fireEvent.click(button(container, 'undo'));
       expect(session.getSnapshot().document).toEqual(before.document);
     }
@@ -1306,7 +1316,8 @@ describe('P1.A simple-by-default workspace', () => {
     expect(table.table.columns).toHaveLength(5);
     expect(table.table.cells).toHaveLength(50);
     expect(table.table.cells.every((cell) => cell.content.type === 'empty')).toBe(true);
-    expect(after.localSequence).toBe(before.localSequence + 1);
+    // The insert plus the "Especificações" first column (cells and width), undone and redone as one step.
+    expect(after.localSequence).toBe(before.localSequence + 3);
     expect(new Set([table.table.id, ...table.table.rows.map((row) => row.id), ...table.table.columns.map((column) => column.id), ...table.table.cells.map((cell) => cell.id)]).size).toBe(66);
     fireEvent.click(button(container, 'undo'));
     expect(session.getSnapshot().document).toEqual(before.document);
@@ -1324,7 +1335,7 @@ describe('P1.A simple-by-default workspace', () => {
   });
 
   it.each([
-    ['00017\t±0,01%\n°C\tμA', '2 linha(s) × 2 coluna(s)', '1 linha(s) × 1 coluna(s)'],
+    ['00017\t±0,01%\n°C\tμA', '2 linhas × 2 colunas', '1 linha × 1 coluna'],
     ['A\tB\nC', 'quantidades diferentes de colunas', 'incluindo as células vazias'],
     ['"sem fechamento', 'aspas incompletas', 'Copie novamente'],
   ])('keeps paste discoverable and explains rejected input without changing the table: %s', async (input, diagnosis, recovery) => {

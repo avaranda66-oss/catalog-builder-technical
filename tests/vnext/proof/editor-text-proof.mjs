@@ -107,9 +107,10 @@ try {
   assert.equal(await textarea.evaluate((element)=>document.activeElement===element),true,'Symbol insertion must restore textarea focus');
   assert.deepEqual(await textState(page,textId),original,'Symbol insertion must not commit canonical content');
 
-  await textarea.press('Escape');
+  // FR-19: Esc now concludes the text box (like PowerPoint); the explicit Cancelar button discards.
+  await page.locator('[data-editor-action="cancel-text"]').click();
   await page.locator('[data-text-edit-textarea]').waitFor({state:'detached'});
-  assert.deepEqual(await textState(page,textId),original,'Escape must discard the draft');
+  assert.deepEqual(await textState(page,textId),original,'Cancelar must discard the draft');
 
   await openWithEnter(page,textId);
   const commitTextarea=page.locator('[data-text-edit-textarea]');

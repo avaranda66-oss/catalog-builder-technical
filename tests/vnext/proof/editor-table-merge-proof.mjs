@@ -10,7 +10,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const output=resolve(root,'scratch/w4c-table-merge-proof'); await mkdir(output,{recursive:true});
 const port=Number(process.env.W4C_PROOF_PORT??5231);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 const editorUrl=`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w4c-editor-browser.html`;
 const publicationUrl=`http://127.0.0.1:${port}/src/labs/presys-editorial-proof/index.html?fixture=W2A`;
 let browser;
@@ -44,7 +44,7 @@ try{
 
   // W4.B anchor authoring and properties still work on merged owner.
   await grid(page).press('F2'); await page.locator('[data-cell-edit-session]').waitFor(); await page.locator('[data-cell-content-type]').selectOption('technicalCode'); if(await page.locator('[data-cell-type-confirmation]').count()) await page.getByRole('button',{name:'Confirmar substituição'}).click(); await page.locator('[data-cell-technical-code]').fill('MERGED-W4C'); await page.locator('[data-editor-action="commit-cell-content"]').click(); await page.locator('[data-cell-edit-session]').waitFor({state:'detached'});
-  await page.locator('[data-cell-property="textAlign"]').selectOption('center'); const authored=await state(page); assert.equal(cell(authored,'w4c-cell-1-0').content.value,'MERGED-W4C'); assert.equal(cell(authored,'w4c-cell-1-0').style.textAlign,'center');
+  await page.locator('[data-style-property="textAlign"]').selectOption('center'); const authored=await state(page); assert.equal(cell(authored,'w4c-cell-1-0').content.value,'MERGED-W4C'); assert.equal(cell(authored,'w4c-cell-1-0').style.textAlign,'center');
 
   // explicit unmerge restores former rectangle and latent styles before isolated eligibility checks.
   await page.locator('[data-table-cell="1:0"]').click(); await page.locator('[data-editor-action="unmerge-cell"]').click(); await page.waitForFunction(()=>!window.__W4C_PROOF__.state().cells.find((x)=>x.id==='w4c-cell-1-0')?.span); const unmerged=await state(page); assert.equal(cell(unmerged,'w4c-cell-1-1').coveredBy,undefined); assert.deepEqual(cell(unmerged,'w4c-cell-1-1').style,latent.style); assert.deepEqual(cell(unmerged,'w4c-cell-1-1').presentation,latent.presentation); await page.locator('[data-table-selection-highlight]').waitFor({timeout:5000}); assert.equal(await page.locator('[data-table-selection-highlight]').count(),1);

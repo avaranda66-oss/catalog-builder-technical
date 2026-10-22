@@ -1,5 +1,6 @@
 import { parseCanonicalDocument } from '../application/document';
 import { plainRichText, type CatalogDocument } from '../domain';
+import { createPresysArchetypeDocument, PRESYS_DATASHEET_SEQUENCE, PRESYS_FOLDER_SEQUENCE } from './presys-archetypes';
 import { PRESYS_STARTER } from './presys-ta25n-starter';
 import type { StarterAssetManifest } from './starter-dependencies';
 
@@ -9,6 +10,10 @@ export interface CatalogStarterDefinition {
   readonly label: string;
   readonly description?: string;
   readonly category?: string;
+  /** The starter the "Novo catálogo" dialog should mark as the one to begin with. */
+  readonly recommended?: boolean;
+  /** Provenance and review notes for review screens (FR-81): never printed on the pages. */
+  readonly reviewNotes?: readonly string[];
   readonly sourceDocument: CatalogDocument;
   readonly requiredAssets?: readonly StarterAssetManifest[];
 }
@@ -44,6 +49,8 @@ function parseDefinition(definition: CatalogStarterDefinition): CatalogStarterDe
     label: clean(definition.label, 'label'),
     ...(definition.description === undefined ? {} : { description: clean(definition.description, 'description') }),
     ...(definition.category === undefined ? {} : { category: clean(definition.category, 'category') }),
+    ...(definition.recommended === undefined ? {} : { recommended: definition.recommended === true }),
+    ...(definition.reviewNotes === undefined ? {} : { reviewNotes: definition.reviewNotes.map((note, index) => clean(note, `reviewNotes.${index}`)) }),
     sourceDocument: parseCanonicalDocument(definition.sourceDocument),
     ...(definition.requiredAssets ? { requiredAssets: definition.requiredAssets.map(asset => ({ ...asset })) } : {}),
   };
@@ -60,9 +67,12 @@ export function createStaticCatalogStarterRegistry(
     }
     byId.set(definition.starterId, definition);
   }
+  if (parsed.filter((definition) => definition.recommended).length > 1) {
+    throw new CatalogStarterRegistryError('Only one starter can be recommended');
+  }
   const summaries = parsed.map(({ sourceDocument: _sourceDocument, requiredAssets: _requiredAssets, ...summary }) => summary);
   return {
-    list: () => summaries.map((summary) => ({ ...summary })),
+    list: () => summaries.map((summary) => ({ ...summary, ...(summary.reviewNotes ? { reviewNotes: [...summary.reviewNotes] } : {}) })),
     get: (starterId) => byId.get(starterId),
   };
 }
@@ -136,6 +146,33 @@ const ESSENTIAL_TECHNICAL_SHEET: CatalogDocument = {
   assets: [],
 };
 
+export const PRESYS_DATASHEET_STARTER_ID = 'presys-ficha-tecnica-a4';
+export const PRESYS_FOLDER_STARTER_ID = 'presys-folder-a4';
+
+/** FR-80: product-agnostic PRESYS starters built from the archetypes P1–P9 (blueprint §0). */
+export const PRESYS_DATASHEET_STARTER: CatalogStarterDefinition = {
+  starterId: PRESYS_DATASHEET_STARTER_ID,
+  revision: 1,
+  label: 'Ficha técnica (4 a 6 páginas)',
+  description: 'Seis páginas A4 no padrão PRESYS: capa, visão geral, especificações, faixas, código de pedido e fornecimento. Apague as que não usar. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.',
+  category: 'PRESYS',
+  recommended: true,
+  sourceDocument: createPresysArchetypeDocument({
+    documentId: 'presys-ficha-tecnica-source', title: 'Ficha técnica', sequence: PRESYS_DATASHEET_SEQUENCE, variant: 'datasheet',
+  }),
+};
+
+export const PRESYS_FOLDER_STARTER: CatalogStarterDefinition = {
+  starterId: PRESYS_FOLDER_STARTER_ID,
+  revision: 1,
+  label: 'Folder (8 a 12 páginas)',
+  description: 'Dez páginas A4 no padrão PRESYS, da capa à contracapa, com espaços para fotos, tabelas, código de pedido e acessórios. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.',
+  category: 'PRESYS',
+  sourceDocument: createPresysArchetypeDocument({
+    documentId: 'presys-folder-source', title: 'Folder de produto', sequence: PRESYS_FOLDER_SEQUENCE, variant: 'folder',
+  }),
+};
+
 export function createDefaultCatalogStarterRegistry(): CatalogStarterRegistry {
   return createStaticCatalogStarterRegistry([{
     starterId: 'essential-technical-sheet',
@@ -144,5 +181,5 @@ export function createDefaultCatalogStarterRegistry(): CatalogStarterRegistry {
     description: 'Título e tabela básica para começar uma ficha de produto.',
     category: 'Ficha técnica',
     sourceDocument: ESSENTIAL_TECHNICAL_SHEET,
-  }, PRESYS_STARTER]);
+  }, PRESYS_DATASHEET_STARTER, PRESYS_FOLDER_STARTER, PRESYS_STARTER]);
 }

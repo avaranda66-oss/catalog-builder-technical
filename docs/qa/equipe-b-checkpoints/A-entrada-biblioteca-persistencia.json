@@ -1,0 +1,141 @@
+{
+  "group": "A-entrada-biblioteca-persistencia",
+  "at": "2026-10-17T13:50:00-03:00",
+  "base": "33cd5df (equipe-b/usabilidade) · servidor vite compartilhado http://127.0.0.1:5190 · harness fixtures/father-harness.html (persistência local, sem Supabase)",
+  "viewports": ["1366x768", "1280x720 (VP=1280)"],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4 ou só-produção); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos nos steps (findingSteps) sem mudar o estado da jornada — ver fixtures/father-eyes.mjs finishJourneyGraded.",
+  "journeys": [
+    {
+      "id": "J1",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j01-entrar-meus-catalogos.mjs",
+      "results": ["scratch/father-journeys/results/j01-entrar-meus-catalogos.json", "scratch/father-journeys/results/j01-entrar-meus-catalogos@1280.json"],
+      "steps": { "ok": 22, "fail": 0, "findings": 4, "pending": 1 },
+      "reason": "Critério cumprido no harness (1366 e 1280): a biblioteca abre direto em ~350 ms com 'Meus catálogos', tudo em português (0 termos técnicos/ingleses fora do nome do produto), 'Novo catálogo' e 'Criar novo catálogo' visíveis sem rolar, o diálogo já começa com o cursor em 'Nome do catálogo', Enter sem nome NÃO cria nada (foco vai para a opção recomendada), Esc fecha, criar leva 2 cliques + nome e o editor abre 'Salvo' em ~340 ms com o nome digitado; 'Meus catálogos' volta à lista com o catálogo. PENDENTE: o redirecionamento real '/ → /v2' depois do login (no máximo 1 redirecionamento) só é testável em produção — coberto pelo teste unitário tests/app/root-redirect.test.tsx (existe nesta base). 4 achados P3 de letra/alvo pequenos (A-01, A-02, A-03)."
+    },
+    {
+      "id": "J11",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j11-biblioteca.mjs",
+      "results": ["scratch/father-journeys/results/j11-biblioteca.json", "scratch/father-journeys/results/j11-biblioteca@1280.json"],
+      "steps": { "ok": 27, "fail": 0, "findings": 2, "pending": 1 },
+      "reason": "Funciona sem ajuda (1366 e 1280): buscar 'Y18'/'y18' filtra a lista ~260 ms depois da última letra (1 clique + digitar; termo sem resultado mostra 'Nenhum catálogo encontrado · Tente outro termo de busca.'); 'Duplicar' cria 'Cópia de PCON-Y18 — Folder 2026' no topo em <2 s e 'Renomear' (nome já preenchido, Enter salva) vira 'PCON-Y18 — Modelo de folder' = 2 cliques; arquivar por engano = 3 cliques (Mais → Arquivar → 'Arquivar catálogo'), com confirmação que explica que não é exclusão e como voltar, foco em 'Cancelar'; recuperar = 2 cliques (aba 'Arquivados' → 'Duplicar'), volta para 'Ativos' com o aviso 'Cópia criada em Ativos: …' visível sem rolar; a cópia abre no editor salva com o mesmo conteúdo; o arquivado continua guardado. PENDENTE: 'Restaurar' na linha arquivada (Onda 4, 4D). Achado P2 A-04 (nada é dito depois de arquivar; sem 'Desfazer')."
+    },
+    {
+      "id": "J7",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j07-salvar-reabrir.mjs",
+      "results": ["scratch/father-journeys/results/j07-salvar-reabrir.json", "scratch/father-journeys/results/j07-salvar-reabrir@1280.json"],
+      "steps": { "ok": 22, "fail": 0, "findings": 0, "pending": 2 },
+      "reason": "Nada se perde e nada bloqueia (1366 e 1280): editar → 'Salvo' volta sozinho em ~1,3 s; fechar a aba depois de 'Salvo' e reabrir: tudo lá, sem tela de recuperação; com servidor lento (holdSaves) o status diz 'Salvando…', o navegador pergunta ao fechar e fica uma cópia local; reabrir OUTRO catálogo (TA-25N): nenhuma tela bloqueante vinda do PCON-Y18, edita e salva; reabrir o MESMO: 'Recuperação local' em 2–3 ms, em português simples (nome do catálogo, 'Guardada em DD/MM/AAAA às HH:MM · 1 página', 'O último salvamento destas alterações não chegou a ser confirmado…'), opção recomendada destacada 'Conferir se foi salvo' (1 clique) → abre com a alteração 'rev. 2', cópia local limpa, nenhuma tela ao reabrir de novo; texto ainda sendo digitado (caixa aberta) ao fechar a aba: aviso do navegador, recuperação diz 'inclui: texto que estava sendo digitado', 'Ver alterações recuperadas' mostra prévia + o texto numa caixa só de leitura, 'Recuperar minhas alterações' devolve o texto e 'Concluir' grava. PENDENTES (Onda 2): 'Salvo às HH:MM' (2G, FR-44 — hoje só 'Salvo') e letra do status 'Salvo' com 11 px (2C, FR-16b escala 60+). SUPOSIÇÃO: o 'Supabase real' do plano não está no harness (servidor é localStorage); latência/sessão reais ficam para a J13/produção."
+    }
+  ],
+  "findings": [
+    {
+      "id": "A-01",
+      "journey": "J1, J11",
+      "severity": "P3",
+      "title": "Na linha do catálogo, os botões Abrir/Duplicar/Renomear/Mais e a linha de data têm 12 px (o selo 'Arquivado' tem 11 px): legíveis só com óculos de leitura, e Duplicar/Renomear/Mais são cinza claro sobre fundo claro.",
+      "steps": ["Abrir 'Meus catálogos' com pelo menos um catálogo", "Olhar a linha do catálogo: 'Português (Brasil) · Atualizado em …' e os botões à direita", "Medir com getComputedStyle: font-size 12 px (altura dos botões 40 px, OK); aba Arquivados: selo 'Arquivado' 11 px"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1366-02-busca-y18.png",
+      "impact": "O pai enxerga mal o que cada botão faz e quando o catálogo foi mexido; tende a clicar só no 'Abrir' azul e não descobre Duplicar/Renomear/Mais.",
+      "proposedFix": "Subir para ≥ 14 px `.vnext-library-row-actions button` e `.vnext-library-meta` (e o selo `.vnext-library-archived-state`) e dar contraste aos botões `is-quiet`. Arquivo: src/vnext/app/styles.css (PROIBIDO — Onda 2) → registrar em _state/PROPOSTAS.md; cabe na 4D (FR-05, biblioteca em cartões).",
+      "knownFR": "FR-05",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j11-biblioteca.mjs"
+    },
+    {
+      "id": "A-02",
+      "journey": "J1",
+      "severity": "P3",
+      "title": "O seletor 'Ordenar catálogos' (Mais recentes / Título A–Z / Z–A) tem só 19 px de altura e 12 px de letra; a moldura de 42 px em volta parece o botão, mas clicar nela não abre a lista.",
+      "steps": ["Abrir 'Meus catálogos'", "Clicar na borda da caixa 'Mais recentes' (fora do texto): a lista não abre", "Medir o <select>: 19 px de altura, 12 px; o <label> em volta: 42 px"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j01-entrar-meus-catalogos-1366-01-biblioteca-vazia.png",
+      "impact": "Alvo pequeno para o pai; ele clica na caixa e 'não acontece nada'. (A busca não tem esse problema: o rótulo inteiro de 42 px põe o cursor no campo.)",
+      "proposedFix": "Fazer o `<select>` ocupar o rótulo inteiro (`.vnext-library-sort select { min-height: 40px; height: 100%; font-size: 14px }`). Arquivo: src/vnext/app/styles.css (PROIBIDO) → PROPOSTAS.md; cabe na 4D (FR-05).",
+      "knownFR": "FR-05",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j01-entrar-meus-catalogos.mjs"
+    },
+    {
+      "id": "A-03",
+      "journey": "J1, J11",
+      "severity": "P3",
+      "title": "Nos diálogos da biblioteca, rótulos, descrições e botões têm 12 px: 'Nome do catálogo' e a descrição de cada opção em 'Novo catálogo'; 'Cancelar', 'Arquivar catálogo' e 'Salvar nome' em Arquivar/Renomear.",
+      "steps": ["'Novo catálogo' → medir o rótulo 'Nome do catálogo' (12 px) e 'Comece com uma página vazia.' (12 px)", "Linha do catálogo → 'Mais' → 'Arquivar' → medir 'Cancelar' e 'Arquivar catálogo' (12 px, 40 px de altura)", "'Renomear' → medir 'Salvar nome' (12 px)"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j01-entrar-meus-catalogos-1366-02-dialogo-novo-catalogo.png",
+      "impact": "Justamente nas decisões (que modelo escolher, confirmar arquivar) o texto é o menor da tela; o pai lê a descrição da opção com dificuldade.",
+      "proposedFix": "`.vnext-library-create-name`, `.vnext-library-create-options small` e `.vnext-library-dialog button` para ≥ 14 px. Arquivo: src/vnext/app/styles.css (PROIBIDO) → PROPOSTAS.md.",
+      "knownFR": null,
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j01-entrar-meus-catalogos.mjs"
+    },
+    {
+      "id": "A-04",
+      "journey": "J11",
+      "severity": "P2",
+      "title": "Depois de confirmar 'Arquivar catálogo' não aparece nenhuma mensagem nem 'Desfazer': a linha só some da lista.",
+      "steps": ["Na linha 'PCON-Y18 — Folder 2026' clicar 'Mais' → 'Arquivar'", "Clicar 'Arquivar catálogo' no diálogo", "A linha some; nenhum aviso ([data-library-notice] vazio) e nenhuma ação de desfazer; a explicação de como voltar ficou só no diálogo anterior"],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1366-05-arquivados.png",
+      "impact": "Quem arquivou por engano fica sem retorno imediato e precisa descobrir sozinho a aba 'Arquivados'; na prova, a recuperação por 'Duplicar' funciona (2 cliques), mas gera 'Cópia de …' e deixa o original em Arquivados.",
+      "proposedFix": "Em `confirmArchive` (src/vnext/app/CatalogLibrary.tsx — PROIBIDO) chamar `setNotice('“X” foi arquivado. Ele continua em Arquivados.')` reaproveitando o aviso já existente da duplicação, com um botão 'Desfazer' assim que a 4D trouxer 'Restaurar' (FR-04). Registrar em PROPOSTAS.md.",
+      "knownFR": "FR-04 (4D: Restaurar) — o aviso pós-arquivar em si não está listado",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j11-biblioteca.mjs"
+    }
+  ],
+  "observations": [
+    "J11: 'Duplicar' em Ativos não mostra mensagem; o retorno é a linha 'Cópia de …' aparecendo no topo (visível, discreto). Pela linha arquivada há aviso ('Cópia criada em Ativos…', 14 px, visível sem rolar).",
+    "J7: a tela 'Recuperação local' oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada em azul-marinho; 'Apagar a cópia' pede uma segunda confirmação ('Sim, apagar a cópia') — sem perigo de perda em 1 clique. Sugestão P3: esconder 'Ver alterações' e 'Apagar' atrás de 'Mais opções'.",
+    "J7: depois de recuperar pelo 'Conferir se foi salvo' aparece a etiqueta vermelha '10 a corrigir · 0 para revisar' do diagnóstico de publicação (campos 'Preencha o modelo' do modelo inicial). Não é da J7 (é J8/grupo C), mas para o pai parece que 'recuperar' causou 10 erros.",
+    "J1: a linha de marca 'PRESYS · Catalog Builder' tem 11 px (decorativa; é o nome do produto, em inglês).",
+    "J1/J11: 'Zoom' no editor foi tratado como palavra corrente em português (não conta como inglês); 'PSV Inspector' é nome de produto PRESYS e foi retirado da varredura de jargão na J11."
+  ],
+  "files": [
+    "tests/vnext/proof/father-journeys/j01-entrar-meus-catalogos.mjs",
+    "tests/vnext/proof/father-journeys/j11-biblioteca.mjs",
+    "tests/vnext/proof/father-journeys/j07-salvar-reabrir.mjs",
+    "tests/vnext/proof/father-journeys/fixtures/father-eyes.mjs (ampliado: findingStep, finishJourneyGraded, STATUS_RULE, classifyConsole/DEV_SERVER_NOISE — compartilhado com o grupo B, só acréscimos)",
+    "C:/Users/Usuario/Desktop/CONFIGURATOR PCON/wt-equipe-b/_state/5-jornadas/A-entrada-biblioteca-persistencia.json",
+    "scratch/father-journeys/results/j01-entrar-meus-catalogos.json",
+    "scratch/father-journeys/results/j01-entrar-meus-catalogos@1280.json",
+    "scratch/father-journeys/results/j11-biblioteca.json",
+    "scratch/father-journeys/results/j11-biblioteca@1280.json",
+    "scratch/father-journeys/results/j07-salvar-reabrir.json",
+    "scratch/father-journeys/results/j07-salvar-reabrir@1280.json"
+  ],
+  "evidence": [
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j01-entrar-meus-catalogos-1366-01-biblioteca-vazia.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j01-entrar-meus-catalogos-1366-02-dialogo-novo-catalogo.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j01-entrar-meus-catalogos-1280-04-biblioteca-com-catalogo.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1366-02-busca-y18.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1366-04-confirmar-arquivar.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1366-05-arquivados.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j11-biblioteca-1280-06-recuperado-em-ativos.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j07-salvar-reabrir-1366-02-salvando-servidor-lento.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j07-salvar-reabrir-1366-04-recuperacao-local.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j07-salvar-reabrir-1280-06-texto-digitando-recuperado.png"
+  ],
+  "consoleErrors": [],
+  "consoleNote": "Rodadas finais (6 execuções: 3 provas × 2 janelas): 0 erros de console do aplicativo, 0 avisos, 0 pageerror. Em duas rodadas anteriores da J11 apareceram mensagens do servidor de desenvolvimento ([hmr] Failed to reload…/500 e 'createRoot() on a container that has already been passed to createRoot') porque outro agente (correções FR-54/idiomas) estava editando src/vnext/publication/preflight.ts e src/vnext/translation/** neste mesmo worktree durante a prova (mtimes 10:25–10:30 confirmados). Não é erro do app: father-eyes.classifyConsole separa esse ruído (DEV_SERVER_NOISE) e a prova o registra como observação, nunca como verde.",
+  "timings": {
+    "J1": { "libraryVisibleMs": { "1366": 331, "1280": 358 }, "createToEditorSavedMs": { "1366": 340, "1280": 384 }, "clicks": { "criar catálogo": 2, "voltar": 1 } },
+    "J11": { "searchFilterMsAfterLastKey": { "1366": 259, "1280": 260 }, "duplicateMs": { "1366": 1, "1280": 2 }, "recoverMs": { "1366": 3, "1280": 3 }, "setupThreeCatalogsMs": 2218, "clicks": { "buscar": 1, "duplicar como modelo": 2, "arquivar": 3, "recuperar": 2 } },
+    "J7": { "openCatalogMs": { "1366": 257, "1280": 271 }, "editToSavedMs": { "1366": 1267, "1280": 1256 }, "reopenSavedMs": { "1366": 338, "1280": 284 }, "openOtherMs": { "1366": 300, "1280": 272 }, "recoveryDialogMs": { "1366": 2, "1280": 2 }, "clicks": { "recuperar": 1, "reabrir": 1 } }
+  },
+  "notes": {
+    "verificado": [
+      "Todas as provas rodaram em Chromium headless (Playwright) contra http://127.0.0.1:5190, em 1366×768 e 1280×720, uma de cada vez; o navegador fechou ao fim de cada prova; contagem de node.exe igual à do início (56) e nenhum chrome/headless_shell pendurado; disco 13 GB livres (>5 GB).",
+      "Cada passo acima foi visto acontecer na tela (capturas lidas) e conferido pela API window.__FATHER__ (state, recoveryRecords, holdSaves/flushRecovery).",
+      "Textos lidos e julgados como o pai: diálogo 'Novo catálogo' (ajuda explica que o nome pode mudar depois), confirmação de arquivar ('não será excluído permanentemente… abra Arquivados e clique em Duplicar', foco em Cancelar, botão vermelho), aviso 'Cópia criada em Ativos…', tela 'Recuperação local' (cópia de segurança neste computador; sem JSON/IDs; 24/16/16/13 px; botões 38 px).",
+      "Zero jargão/inglês nas telas da biblioteca, do editor (com 'Zoom' permitido) e da recuperação, pela varredura estendida de father-eyes (TSV, JSON, CAS, revision, IndexedDB, eixo, inspector, placeholder, overflow, assets, upload, undo, commit, dock, preset, siglas, 'mm' sem contexto).",
+      "tests/app/root-redirect.test.tsx existe nesta base (não executado: sem npm test por regra)."
+    ],
+    "suposicao": [
+      "Redirecionamento '/ → /v2' após login e 'no máximo 1 redirecionamento' (J1): só em produção; aqui é pendente.",
+      "J7 'Supabase real': o harness usa localStorage como servidor; conflito de duas abas/latência real não foram exercitados aqui (J10/J13, outros grupos).",
+      "Os 11–12 px medidos valem para o Chromium headless a 100 % (deviceScaleFactor 1); no PC do pai com Windows a 125 % ficam ~14–15 px físicos, ainda abaixo dos 15 px lógicos que a 2C promete."
+    ],
+    "retomada": "Trabalho parcial reaproveitado: j01 (reescrito nas medições de alvo/fonte, 'Zoom' permitido, artefato de 30 s na medição da criação corrigido — era um textContent() com timeout padrão, não o app) e fixtures/father-eyes.mjs (só acréscimos). j04 e fixtures/tsv são do grupo B: não tocados. Nada apagado, nenhum git commit/stash/push, nenhum arquivo de src/ ou de PROIBIDOS.txt editado."
+  }
+}

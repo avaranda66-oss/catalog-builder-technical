@@ -179,7 +179,7 @@ describe('W3.H Father conflict resolution', () => {
     };
 
     const copy = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
-    await settleAsyncWork(4);
+    await vi.waitFor(() => expect(state.repository.createCatalog).toHaveBeenCalledTimes(1));
     expect(state.tabB.runtime.conflictResolutionCoordinator.getState()).toBe('resolving-save-as-copy');
     expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
 
@@ -240,7 +240,7 @@ describe('W3.H Father conflict resolution', () => {
     const first = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
     const second = state.tabB.runtime.conflictResolutionCoordinator.saveAsCopy();
     expect(second).toBe(first);
-    await settleAsyncWork(4);
+    await vi.waitFor(() => expect(state.repository.createCatalog).toHaveBeenCalledTimes(1));
     expect(state.repository.createCatalog).toHaveBeenCalledTimes(1);
     const prepared = state.repository.createCatalog.mock.calls[0]?.[0];
     expect(prepared?.documentSnapshot.id).toBeTruthy();

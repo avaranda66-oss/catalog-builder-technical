@@ -164,7 +164,9 @@ try {
     const cover=await readPage(1),index=await readPage(2),references=await readPage(expectedPdfPages);
     assert(cover.includes('CADERNO INSTITUCIONAL') && cover.includes(source.title),'Institutional cover title');
     assert(index.includes(source.sections.at(-1).title),'Technical TOC contains last section');
-    assert(references.includes(source.sources[0].id),'Sources page contains synthetic fixture reference');
+    // FR-81: the closing page is a back cover; sources and fixture hashes stay in the review screens.
+    assert(references.includes(source.title),'Back cover names the document');
+    assert(!references.includes(source.sources[0].id) && !/hash|sintétic|MATERIAL SINTÉTICO/i.test(references),'No provenance or demo text printed');
   }
   await pdf.destroy();
   assert.equal(checkedCells,expected.length*9*7);

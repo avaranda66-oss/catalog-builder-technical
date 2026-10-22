@@ -1,4 +1,4 @@
-import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject, type TextStyle } from '../domain';
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { resolveCellStyle } from '../domain/style-resolution';
 import { VNextError } from '../domain/diagnostics';
@@ -23,6 +23,7 @@ import {
   type TableBulkExpectedTopology,
   type TableColumnWidthU,
   type TableRowHeightPolicyU,
+  type TextStylePatch,
 } from './contracts';
 import {
   ApplicationDocumentError,
@@ -645,6 +646,33 @@ function validateTableStyleFonts(document: CatalogDocument, table: TableModel): 
     }
   } catch (error) {
     return failure('ACTION_INVALID', error instanceof Error ? error.message : String(error));
+  }
+  return undefined;
+}
+
+const TEXT_STYLE_KEYS = ['fontFamily', 'fontSizePt', 'lineHeight', 'fontWeight', 'color', 'textAlign'] as const;
+
+/** Field-by-field comparison, so a style that went through JSON in another key order still matches. */
+function textStyleEquals(left: TextStyle, right: TextStyle): boolean {
+  return TEXT_STYLE_KEYS.every((key) => left[key] === right[key]);
+}
+
+function validateTextStylePatch(
+  document: CatalogDocument,
+  current: TextStyle,
+  patch: TextStylePatch
+): ApplicationActionFailure | undefined {
+  if (patch.color !== undefined
+    && !document.style.palette.some((value) => value.toUpperCase() === patch.color!.toUpperCase())) {
+    return failure('ACTION_INVALID', `Text color ${patch.color} is not in the document palette`);
+  }
+  if (patch.fontWeight !== undefined) {
+    const family = current.fontFamily ?? document.style.defaultText.fontFamily;
+    const declared = document.style.fonts.some((font) =>
+      font.family === family && font.weight === patch.fontWeight && font.style === 'normal');
+    if (!declared) {
+      return failure('ACTION_INVALID', `Font face ${family ?? '(unset)'} / ${patch.fontWeight} / normal is not declared in DocumentStyle.fonts`);
+    }
   }
   return undefined;
 }
@@ -1417,6 +1445,40 @@ export function executeApplicationAction(
         if (!changed) break;
 
         const next = { ...location.object, text: reconciled.richText };
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
+      case 'text.setStyle': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
+        if (location.object.type !== 'text') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
+        if (!textStyleEquals(location.object.style, action.expectedStyle)) {
+          return failure('TARGET_STALE', `Text ${action.objectId} style changed after the command was prepared`);
+        }
+        const patchFailure = validateTextStylePatch(document, location.object.style, action.patch);
+        if (patchFailure) return patchFailure;
+
+        const { fontSizePt, fontWeight, color, textAlign } = action.patch;
+        const style: TextStyle = {
+          ...location.object.style,
+          ...(fontSizePt !== undefined ? { fontSizePt } : {}),
+          ...(fontWeight !== undefined ? { fontWeight } : {}),
+          ...(color !== undefined ? { color } : {}),
+          ...(textAlign !== undefined ? { textAlign } : {}),
+        };
+        changed = !textStyleEquals(location.object.style, style);
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (!changed) break;
+
+        const next = { ...location.object, style };
         candidate = pageWithObjects(
           document,
           location.pageIndex,

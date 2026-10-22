@@ -1,44 +1,42 @@
 import React from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { VNextPersistenceRuntime } from '../persistence';
 import type { RecoveryStartupCandidate } from '../recovery';
 import { compilePlans, DocumentRenderer } from '../rendering';
+import {
+  PENDING_SAVE_PHASE_MESSAGE,
+  RECOVERY_KICKER,
+  overlayDetail,
+  overlayHeading,
+  recoveryCandidateSummary,
+  recoveryCandidateTitle,
+  recoveryDecisionMessage,
+} from './recovery-presentation';
 import { fatherSaveLabel } from './save-presentation';
 
 export type RecoveryGatePhase = 'PENDING' | 'DECISION' | 'FAILED' | 'RELEASED';
 
-function candidateTitle(candidate: RecoveryStartupCandidate): string {
-  return candidate.inspection.status === 'VALID'
-    ? candidate.inspection.record.documentSnapshot.title
-    : `Recuperação inválida (${candidate.inspection.key.catalogId})`;
+/** The non-destructive choices of one backup; discarding is handled apart, behind its confirmation. */
+type RecoveryChoice = 'recover' | 'check' | 'cloud' | 'view';
+
+function pendingMutationOf(candidate: RecoveryStartupCandidate) {
+  return candidate.inspection.status === 'VALID' ? candidate.inspection.record.pendingRemoteMutation : undefined;
 }
 
-function decisionMessage(candidate: RecoveryStartupCandidate): string {
-  switch (candidate.decision.kind) {
-    case 'RECOVERABLE_OVER_SAME_REMOTE_BASE':
-      return candidate.inspection.status === 'VALID' && candidate.inspection.record.pendingRemoteMutation
-        ? 'Uma gravação remota ficou sem confirmação. Verifique-a antes de continuar.'
-        : 'Há trabalho local protegido sobre a mesma base da nuvem.';
-    case 'REMOTE_NEWER_OR_DIFFERENT_CONFLICT':
-      return 'A nuvem mudou. O conteúdo local foi preservado apenas para inspeção.';
-    case 'SAME_REVISION_DIGEST_MISMATCH':
-      return 'A revisão remota tem conteúdo inesperado. A recuperação foi bloqueada.';
-    case 'REMOTE_UNAVAILABLE':
-      return 'Não foi possível verificar a versão da nuvem. Somente a inspeção local protegida é permitida.';
-    case 'INVALID_OR_UNSUPPORTED_RECORD':
-      return 'O registro local é inválido ou incompatível e não será aberto.';
-    case 'REDUNDANT_ALREADY_IN_CLOUD':
-      return 'O trabalho já está confirmado na nuvem.';
-    case 'NO_RECOVERY':
-      return 'Nenhuma recuperação disponível.';
-  }
+/** The catalog this editor opened; only its own local backups may hold the editor. */
+function openCatalogId(runtime: VNextPersistenceRuntime): string {
+  const snapshot = runtime.workspace.getSnapshot();
+  return snapshot.binding.kind === 'PERSISTED'
+    ? snapshot.binding.catalogId
+    : snapshot.session.getSnapshot().document.id;
 }
 
 function ProtectedRecoveryInspection({ candidate }: { readonly candidate: RecoveryStartupCandidate }) {
   if (candidate.inspection.status === 'INVALID') {
     return (
       <div className="vnext-recovery-inspection" data-protected-recovery-inspection="">
-        <strong>Registro local inválido preservado</strong>
-        <p>{candidate.inspection.error.message}</p>
+        <strong>Cópia de segurança danificada</strong>
+        <p>Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.</p>
       </div>
     );
   }
@@ -49,9 +47,10 @@ function ValidRecoveryInspection({ candidate }: { readonly candidate: RecoverySt
   if (candidate.inspection.status !== 'VALID') return null;
   const { record } = candidate.inspection;
   const compiled = compilePlans(record.documentSnapshot);
+  const overlay = record.authoringRecoveryOverlay;
   return (
     <div className="vnext-recovery-inspection" data-protected-recovery-inspection="">
-      <p><strong>Visualização local protegida</strong> — nenhuma ação salva na nuvem.</p>
+      <p><strong>Somente para ver</strong> — nada aqui é salvo.</p>
       <div className="vnext-recovery-document-preview">
         <DocumentRenderer
           document={record.documentSnapshot}
@@ -59,26 +58,21 @@ function ValidRecoveryInspection({ candidate }: { readonly candidate: RecoverySt
           assetUrls={new Map()}
         />
       </div>
-      {record.authoringRecoveryOverlay?.kind === 'TEXT_DRAFT_V1' && (
+      {(overlay?.kind === 'TEXT_DRAFT_V1' || overlay?.kind === 'TABLE_TITLE_DRAFT_V1') && (
         <label>
-          <span>Rascunho de texto ainda não confirmado</span>
-          <textarea readOnly value={record.authoringRecoveryOverlay.draft} />
+          <span>{overlayHeading(overlay)}</span>
+          <textarea readOnly value={overlay.draft} />
         </label>
       )}
-      {record.authoringRecoveryOverlay?.kind === 'TABLE_TITLE_DRAFT_V1' && (
-        <label>
-          <span>Rascunho do título da tabela ainda não confirmado</span>
-          <textarea readOnly value={record.authoringRecoveryOverlay.draft} />
-        </label>
+      {overlay?.kind === 'INSPECTOR_FRAME_DRAFT_V1' && (
+        <p>
+          <strong>{overlayHeading(overlay)}:</strong> {overlayDetail(overlay)}
+        </p>
       )}
-      {record.authoringRecoveryOverlay?.kind === 'INSPECTOR_FRAME_DRAFT_V1' && (
-        <p>Rascunho do Inspector: {JSON.stringify(record.authoringRecoveryOverlay.draft)}</p>
-      )}
-      {record.authoringRecoveryOverlay?.kind === 'TABLE_CELL_DRAFT_V1' && (
+      {overlay?.kind === 'TABLE_CELL_DRAFT_V1' && (
         <div data-recovery-table-cell-draft="">
-          <strong>Rascunho de célula ainda não confirmado</strong>
-          <p>Tipo: {record.authoringRecoveryOverlay.activeType}</p>
-          <pre>{JSON.stringify(record.authoringRecoveryOverlay.draft, null, 2)}</pre>
+          <strong>{overlayHeading(overlay)}</strong>
+          <p>{overlayDetail(overlay)}</p>
         </div>
       )}
     </div>
@@ -96,10 +90,13 @@ export function RecoveryCenter({
 }) {
   const [candidates, setCandidates] = React.useState<readonly RecoveryStartupCandidate[]>([]);
   const [inspectionId, setInspectionId] = React.useState<string>();
+  const [moreOptionsId, setMoreOptionsId] = React.useState<string>();
   const [confirmDiscardId, setConfirmDiscardId] = React.useState<string>();
+  const moreOptionsBaseId = React.useId();
   const [message, setMessage] = React.useState<string>();
   const [phase, setPhase] = React.useState<'PENDING' | 'READY' | 'FAILED'>('PENDING');
   const refreshGeneration = React.useRef(0);
+  const markedPendingSave = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
     const generation = ++refreshGeneration.current;
@@ -112,21 +109,21 @@ export function RecoveryCenter({
       && runtime.workspace.getSnapshot().activeAuthorityScopeId === authorityScopeId
     );
     try {
-      const discovered = await startup.discover(authorityScopeId);
+      const catalogId = openCatalogId(runtime);
+      const discovered = await startup.discover(authorityScopeId, { catalogId });
       if (!isCurrent()) return;
       const visible: RecoveryStartupCandidate[] = [];
       const activeOpenSessionId = runtime.workspace.getSnapshot().binding.openSessionId;
       for (const candidate of discovered) {
         if (!isCurrent()) return;
+        // Backups of other catalogs stay on this computer and never hold this editor.
+        if (candidate.inspection.key.catalogId !== catalogId) continue;
         if (candidate.inspection.key.openSessionId === activeOpenSessionId) continue;
-        const pending = candidate.inspection.status === 'VALID'
-          ? candidate.inspection.record.pendingRemoteMutation
-          : undefined;
-        if (pending) {
-          runtime.workspace.setPhase(
-            'ambiguous',
-            'Há uma gravação anterior que ainda precisa ser verificada.'
-          );
+        const pending = pendingMutationOf(candidate);
+        if (pending && pending.catalogId === catalogId) {
+          // Pause saving only for this catalog's own unconfirmed save; resumed once it is resolved.
+          markedPendingSave.current = true;
+          runtime.workspace.setPhase('ambiguous', PENDING_SAVE_PHASE_MESSAGE);
         }
         if (candidate.decision.kind === 'REDUNDANT_ALREADY_IN_CLOUD' && !pending) {
           await startup.discard(candidate, authorityScopeId);
@@ -142,7 +139,7 @@ export function RecoveryCenter({
       if (!isCurrent()) return;
       setCandidates([]);
       runtime.workspace.setLocalProtectionUnavailable();
-      setMessage('A recuperação local está indisponível.');
+      setMessage('A cópia de segurança deste computador não pôde ser lida.');
       setPhase('FAILED');
     }
   }, [authorityScopeId, runtime]);
@@ -150,6 +147,7 @@ export function RecoveryCenter({
   React.useEffect(() => {
     setCandidates([]);
     setInspectionId(undefined);
+    setMoreOptionsId(undefined);
     setConfirmDiscardId(undefined);
     void refresh();
     return () => {
@@ -162,6 +160,17 @@ export function RecoveryCenter({
     else if (phase === 'FAILED') onGatePhaseChange('FAILED');
     else onGatePhaseChange(candidates.length > 0 ? 'DECISION' : 'RELEASED');
   }, [candidates.length, onGatePhaseChange, phase]);
+
+  React.useEffect(() => {
+    // Once no unconfirmed save of this catalog is left (verified or discarded), saving resumes.
+    if (phase !== 'READY' || !markedPendingSave.current) return;
+    if (candidates.some((candidate) => pendingMutationOf(candidate))) return;
+    markedPendingSave.current = false;
+    const save = runtime.workspace.getSnapshot().save;
+    if (save.phase === 'ambiguous' && save.message === PENDING_SAVE_PHASE_MESSAGE) {
+      runtime.workspace.setPhase('idle');
+    }
+  }, [candidates, phase, runtime]);
 
   const remove = (id: string) => setCandidates((current) => current.filter((entry) => entry.id !== id));
 
@@ -182,7 +191,7 @@ export function RecoveryCenter({
     if (result.ok) remove(candidate.id);
     else setMessage(result.error.code === 'UNSAVED_CHANGES'
       ? 'Salve ou descarte as alterações atuais antes de abrir a versão da nuvem.'
-      : result.error.message ?? 'Não foi possível abrir a versão da nuvem.');
+      : 'Não foi possível abrir a versão salva. Tente novamente.');
   };
 
   const reconcile = async (candidate: RecoveryStartupCandidate) => {
@@ -193,8 +202,8 @@ export function RecoveryCenter({
       return;
     }
     setMessage(result?.status === 'PRESERVED'
-      ? result.error.message ?? 'A gravação continua ambígua e foi preservada.'
-      : 'Não há gravação pendente para verificar.');
+      ? 'Não foi possível confirmar o último salvamento. A cópia de segurança continua guardada neste computador.'
+      : 'Não há salvamento pendente para verificar.');
   };
 
   const discard = async (candidate: RecoveryStartupCandidate) => {
@@ -211,11 +220,11 @@ export function RecoveryCenter({
       }
       await refresh();
       setMessage(result?.status === 'VALID_PRESERVED'
-        ? 'O registro mudou e foi verificado novamente. Escolha uma opção segura para continuar.'
-        : 'O registro mudou e não foi descartado. Verifique-o novamente.');
+        ? 'A cópia de segurança mudou e foi verificada novamente. Escolha uma opção para continuar.'
+        : 'A cópia de segurança mudou e não foi descartada. Veja-a novamente.');
     } catch {
       await refresh();
-      setMessage('Não foi possível descartar a recuperação local. Tente novamente.');
+      setMessage('Não foi possível descartar a cópia de segurança. Tente novamente.');
     }
   };
 
@@ -223,16 +232,27 @@ export function RecoveryCenter({
     refreshGeneration.current += 1;
     setCandidates([]);
     setInspectionId(undefined);
+    setMoreOptionsId(undefined);
     setConfirmDiscardId(undefined);
     setMessage(undefined);
     setPhase('READY');
+  };
+
+  const toggleMoreOptions = (candidateId: string) => {
+    if (moreOptionsId === candidateId) {
+      // Closing "Mais opções" cancels a discard that was waiting for "Sim, apagar a cópia".
+      setMoreOptionsId(undefined);
+      if (confirmDiscardId === candidateId) setConfirmDiscardId(undefined);
+      return;
+    }
+    setMoreOptionsId(candidateId);
   };
 
   if (phase === 'PENDING') {
     return (
       <section className="vnext-recovery-center" role="status" aria-label="Recuperação local">
         <div className="vnext-recovery-panel" data-recovery-startup-state="pending">
-          <span className="vnext-info-kicker">Recuperação local</span>
+          <span className="vnext-info-kicker">{RECOVERY_KICKER}</span>
           <h2>Verificando alterações locais…</h2>
         </div>
       </section>
@@ -243,12 +263,12 @@ export function RecoveryCenter({
     return (
       <section className="vnext-recovery-center" role="dialog" aria-modal="true" aria-label="Recuperação local">
         <div className="vnext-recovery-panel" data-recovery-startup-state="failed">
-          <span className="vnext-info-kicker">Recuperação local</span>
+          <span className="vnext-info-kicker">{RECOVERY_KICKER}</span>
           <h2>Não foi possível verificar alterações locais.</h2>
           {message && <p role="status">{message}</p>}
           <div className="vnext-recovery-actions">
-            <button type="button" onClick={() => void refresh()}>Tentar novamente</button>
-            <button type="button" onClick={continueWithoutRecovery}>Continuar sem recuperação local</button>
+            <button type="button" className="vnext-btn-primary" onClick={() => void refresh()}>Tentar novamente</button>
+            <button type="button" className="vnext-btn-secondary" onClick={continueWithoutRecovery}>Continuar sem recuperação local</button>
           </div>
         </div>
       </section>
@@ -259,32 +279,83 @@ export function RecoveryCenter({
   return (
     <section className="vnext-recovery-center" role="dialog" aria-modal="true" aria-label="Recuperação local">
       <div className="vnext-recovery-panel">
-        <span className="vnext-info-kicker">Recuperação local</span>
-        <h2>Encontramos alterações não salvas neste dispositivo.</h2>
+        <span className="vnext-info-kicker">{RECOVERY_KICKER}</span>
+        <h2>Encontramos alterações deste catálogo que não foram salvas.</h2>
+        <p>Elas ficaram guardadas numa cópia de segurança neste computador. Escolha o que fazer antes de continuar.</p>
         {message && <p role="status">{message}</p>}
-        {candidates.map((candidate) => {
+        {candidates.map((candidate, index) => {
           const valid = candidate.inspection.status === 'VALID';
-          const pending = valid ? candidate.inspection.record.pendingRemoteMutation : undefined;
+          const pending = pendingMutationOf(candidate);
           const canRecover = valid
             && !pending
             && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
           const canOpenCloud = 'remote' in candidate.decision;
+          const summary = recoveryCandidateSummary(candidate);
+          // J7: ONE recommended choice (navy) in view; every other choice stays one click away in "Mais opções".
+          // Recover, else check the pending save, else open the saved version, else just look at the copy.
+          // Discarding is never the recommended choice.
+          const recommended: RecoveryChoice = canRecover ? 'recover' : pending ? 'check' : canOpenCloud ? 'cloud' : 'view';
+          // This decision sentence already says the last save was not confirmed: do not repeat it in a second line.
+          const decisionMentionsPendingSave = Boolean(pending) && candidate.decision.kind === 'RECOVERABLE_OVER_SAME_REMOTE_BASE';
+          const moreOpen = moreOptionsId === candidate.id;
+          const moreId = `${moreOptionsBaseId}-${index}`;
+          const confirmingDiscard = confirmDiscardId === candidate.id;
+          const choiceButton = (choice: RecoveryChoice) => {
+            const className = choice === recommended ? 'vnext-btn-primary' : 'vnext-btn-secondary';
+            switch (choice) {
+              case 'recover':
+                return <button key={choice} type="button" className={className} onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>;
+              case 'check':
+                return <button key={choice} type="button" className={className} onClick={() => void reconcile(candidate)}>Conferir se foi salvo</button>;
+              case 'cloud':
+                return <button key={choice} type="button" className={className} onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>;
+              case 'view':
+                return (
+                  <button key={choice} type="button" className={className} aria-expanded={inspectionId === candidate.id} onClick={() => setInspectionId(
+                    inspectionId === candidate.id ? undefined : candidate.id
+                  )}>Ver alterações recuperadas</button>
+                );
+            }
+          };
+          const available: readonly RecoveryChoice[] = [
+            ...(canRecover ? ['recover' as const] : []),
+            ...(pending ? ['check' as const] : []),
+            ...(canOpenCloud ? ['cloud' as const] : []),
+            'view',
+          ];
+          const others = available.filter((choice) => choice !== recommended);
           return (
             <article key={candidate.id} className="vnext-recovery-card">
-              <h3>{candidateTitle(candidate)}</h3>
-              <p>{decisionMessage(candidate)}</p>
-              {pending && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
+              <h3>{recoveryCandidateTitle(candidate)}</h3>
+              {summary && <p data-recovery-summary="">{summary}</p>}
+              <p data-recovery-decision="">{recoveryDecisionMessage(candidate)}</p>
+              {pending && !decisionMentionsPendingSave && <p data-save-state="">{fatherSaveLabel(runtime.workspace.getSnapshot().save.label)}</p>}
               <div className="vnext-recovery-actions">
-                {canRecover && <button type="button" onClick={() => void recover(candidate)}>Recuperar minhas alterações</button>}
-                {pending && <button type="button" onClick={() => void reconcile(candidate)}>Verificar gravação pendente</button>}
-                {canOpenCloud && <button type="button" onClick={() => void openCloud(candidate)}>Abrir versão salva na nuvem</button>}
-                <button type="button" onClick={() => setInspectionId(
-                  inspectionId === candidate.id ? undefined : candidate.id
-                )}>Ver alterações recuperadas</button>
-                <button type="button" onClick={() => void discard(candidate)}>
-                  {confirmDiscardId === candidate.id ? 'Confirmar descarte local' : 'Descartar recuperação local'}
+                {choiceButton(recommended)}
+                <button
+                  type="button"
+                  className="vnext-btn-secondary vnext-recovery-more-toggle"
+                  aria-expanded={moreOpen}
+                  aria-controls={moreOpen ? moreId : undefined}
+                  onClick={() => toggleMoreOptions(candidate.id)}
+                >
+                  {moreOpen ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
+                  Mais opções
                 </button>
               </div>
+              {moreOpen && (
+                <div id={moreId} className="vnext-recovery-actions vnext-recovery-more" role="group" aria-label="Mais opções" data-recovery-more-options="">
+                  {others.map(choiceButton)}
+                  <button type="button" className="vnext-btn-secondary" onClick={() => void discard(candidate)}>
+                    {confirmingDiscard ? 'Sim, apagar a cópia' : 'Apagar a cópia deste computador'}
+                  </button>
+                  {confirmingDiscard && (
+                    <p className="vnext-recovery-discard-warning" data-recovery-discard-warning="">
+                      As alterações guardadas nesta cópia serão perdidas. Clique em “Sim, apagar a cópia” para confirmar.
+                    </p>
+                  )}
+                </div>
+              )}
               {inspectionId === candidate.id && (
                 <ProtectedRecoveryInspection candidate={candidate} />
               )}

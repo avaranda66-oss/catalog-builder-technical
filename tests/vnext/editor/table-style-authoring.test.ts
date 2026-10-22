@@ -120,10 +120,14 @@ describe('W4.F.2 style authoring projection', () => {
   });
 
   it('provides Father-facing inheritance labels without internal style paths', () => {
-    expect(inheritedLabel({ kind: 'table' })).toBe('Herdado do documento');
+    expect(inheritedLabel({ kind: 'table' })).toBe('Herdado do catálogo');
     expect(inheritedLabel({ kind: 'role', role: 'header' })).toBe('Herdado da tabela');
-    expect(inheritedLabel({ kind: 'columns', columnIds: ['c'] })).toContain('Herdado');
-    expect(inheritedLabel({ kind: 'rows', rowIds: ['r'] })).toContain('Herdado');
-    expect(inheritedLabel({ kind: 'cells', cellIds: ['x'] })).toContain('Herdado');
+    expect(inheritedLabel({ kind: 'columns', columnIds: ['c'] })).toBe('Herdado da tabela');
+    expect(inheritedLabel({ kind: 'rows', rowIds: ['r'] })).toBe('Herdado da tabela ou da coluna');
+    expect(inheritedLabel({ kind: 'cells', cellIds: ['x'] })).toBe('Herdado da linha ou da coluna');
+    // Plain words only: no "tipo de linha" and no slashes (browser check of the table panel).
+    for (const scope of [{ kind: 'columns', columnIds: ['c'] }, { kind: 'rows', rowIds: ['r'] }, { kind: 'cells', cellIds: ['x'] }] as const) {
+      expect(inheritedLabel(scope)).not.toMatch(/\/|tipo/);
+    }
   });
 });

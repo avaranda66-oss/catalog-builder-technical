@@ -19,7 +19,8 @@ export const CatalogAgentRequestSchema = z.object({
   message: z.string().trim().min(4).max(800),
   history: z.array(CatalogConversationTurnSchema).max(8).optional(),
   sections: z.array(z.object({ id, title: label }).strict()).min(1).max(16),
-  models: z.array(label).min(2).max(6),
+  // One model is enough: a single-product datasheet is the most common PRESYS document.
+  models: z.array(label).min(1).max(6),
 }).strict().superRefine((value, ctx) => {
   if (new Set(value.sections.map(section => section.id)).size !== value.sections.length) {
     ctx.addIssue({ code: 'custom', path: ['sections'], message: 'Duplicate section' });

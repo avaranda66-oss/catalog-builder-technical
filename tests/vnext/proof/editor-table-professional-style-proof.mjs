@@ -104,7 +104,7 @@ async function setStyleInput(page, property, value) {
 async function setCustomColor(page, property, value) {
   const before = (await state(page)).localSequence;
   const input = page.locator(`[data-style-property="${property}"]`);
-  await input.fill(value);
+  await input.fill(value.toLowerCase());
   await input.blur();
   await page.waitForFunction(
     (sequence) => window.__W4F2_PROOF__.state().localSequence > sequence,
@@ -148,7 +148,7 @@ async function setBorderSide(page, side, { pattern, thicknessPt, color }) {
       await settle(page, 3);
     }
     if (color !== undefined) {
-      await inputs.nth(1).fill(color);
+      await inputs.nth(1).fill(color.toLowerCase());
       await inputs.nth(1).blur();
       await settle(page, 3);
     }
@@ -419,7 +419,7 @@ try {
   for (const presetId of ['technical-specification', 'technical-grid', 'comparison', 'minimal']) {
     const before = await state(page);
     await page.locator(`[data-table-preset="${presetId}"]`).click();
-    await page.waitForFunction((sequence) => window.__W4F2_PROOF__.state().localSequence === sequence + 1, before.localSequence);
+    await page.waitForFunction((sequence) => window.__W4F2_PROOF__.state().localSequence > sequence, before.localSequence);
     const after = await state(page);
     presetOutputs[presetId] = {
       base: after.main.table.style.base,

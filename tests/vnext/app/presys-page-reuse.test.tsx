@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authoredStructuralIdentityIds, createCatalogDocument, createDocumentSession } from '@/vnext/application';
 import type { AssetPersistenceBridge, AssetRef, AssetResolutionResult } from '@/vnext/asset';
@@ -27,10 +27,12 @@ describe('PILOT.C.1 production page reuse composition', () => {
   it('C1-10/11/12 UI exposes both official pages; insertion/duplication remap graph with no duplicate IDs', async () => {
     const f = fixture();
     const ui = render(<EditorWorkspace session={f.session} />);
-    const choice = ui.getByRole('combobox', { name: 'Modelo de página PRESYS' });
-    expect(ui.getByRole('option', { name: 'TA-25N · Apresentação' })).toBeInTheDocument();
-    expect(ui.getByRole('option', { name: 'TA-25N · Especificações' })).toBeInTheDocument();
-    fireEvent.change(choice, { target: { value: PRESYS_SPECIFICATIONS_PAGE_ID } });
+    const gallery = ui.getByRole('group', { name: 'Modelo de página PRESYS' });
+    expect(within(gallery).getByRole('radio', { name: 'TA-25N · Apresentação' })).toBeInTheDocument();
+    const specifications = within(gallery).getByRole('radio', { name: 'TA-25N · Especificações' });
+    expect(specifications).toHaveAttribute('value', PRESYS_SPECIFICATIONS_PAGE_ID);
+    fireEvent.click(specifications);
+    expect(specifications).toBeChecked();
     fireEvent.click(ui.getByRole('button', { name: 'Inserir modelo após a página atual' }));
     await waitFor(() => expect(f.session.getSnapshot().document.pages).toHaveLength(2));
     await waitFor(() => expect(ui.getByText('Modelo PRESYS inserido como página independente.')).toBeInTheDocument());

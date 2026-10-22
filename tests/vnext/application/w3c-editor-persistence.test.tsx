@@ -429,7 +429,7 @@ describe('W3.C Father-visible Save integration', () => {
     expect(runtime.workspace.getSnapshot().dirty).toBe(true);
     expect(container.querySelector('[data-save-state]')?.textContent).toBe('Alterações não salvas');
 
-    const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] button');
+    const pageButtons = container.querySelectorAll<HTMLButtonElement>('[aria-label="Navegação de páginas"] [data-page-nav-id]');
     expect(pageButtons).toHaveLength(2);
     fireEvent.click(pageButtons[1]);
 
@@ -643,9 +643,11 @@ describe('W3.D typed authoring recovery overlays', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByRole('dialog', { name: 'Recuperação local' })).toBeTruthy());
+    // J7: looking at the copy is one of the "Mais opções"; recovering stays the recommended choice in view.
+    fireEvent.click(view.getByRole('button', { name: 'Mais opções' }));
     fireEvent.click(view.getByRole('button', { name: 'Ver alterações recuperadas' }));
     expect(view.container.querySelector('[data-protected-recovery-inspection] [data-editorial-root]')).toBeTruthy();
-    expect(view.container.textContent).toContain('nenhuma ação salva na nuvem');
+    expect(view.container.textContent).toContain('Somente para ver — nada aqui é salvo.');
     fireEvent.click(view.getByRole('button', { name: 'Recuperar minhas alterações' }));
 
     await waitFor(() => expect(view.queryByRole('dialog', { name: 'Recuperação local' })).toBeNull());
