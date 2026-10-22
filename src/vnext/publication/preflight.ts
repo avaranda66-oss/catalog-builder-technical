@@ -5,6 +5,7 @@ import { findElement,intrinsicMetrics,measurementToleranceQ } from '../rendering
 import { add,mmToU,qToU,uToQ } from '../domain/physical';
 import { diagnostic,type Diagnostic } from '../domain/diagnostics';
 import { walkPageObjects,type CanonicalFrameU,type ObjectTreeEntry } from '../domain/object-tree';
+import { leaderGeometry } from '../rendering/native-paint';
 // toleranceQ is the measurement rounding allowance (0 at 100% zoom); see deviceSnapToleranceQ.
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number,toleranceQ=0):boolean => renderedIntrinsicHeightQ>add(uToQ(authoredFrameHeightU),toleranceQ);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number,toleranceQ=0):boolean =>
@@ -19,7 +20,7 @@ export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authore
  * paints on the next sheet.
  */
 export const BLEED_TOLERANCE_MM=3;
-export const BLEED_OBJECT_TYPES:ReadonlySet<EditorialObject['type']>=new Set<EditorialObject['type']>(['shape','line','image']);
+export const BLEED_OBJECT_TYPES:ReadonlySet<EditorialObject['type']>=new Set<EditorialObject['type']>(['shape','line','image','polygon']);
 export const OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE='OBJECT_OUTSIDE_PAGE';
 export const SAFE_AREA_VIOLATION_DIAGNOSTIC_CODE='SAFE_AREA_VIOLATION';
 /** A bleed keeps the canonical code; only the severity and the `bleedMm=…; toleranceMm=…` detail differ from the blocking error. */
@@ -48,6 +49,19 @@ function frameVerdict(frame:CanonicalFrameU,type:EditorialObject['type'],page:Pa
   return {overflowU,bleed:bleedable&&overflowU<=mmToU(BLEED_TOLERANCE_MM),safeAreaWarning:crossesSafeArea};
 }
 
+/**
+ * Onda 3.5 (E3): a callout's pointer is painted outside its label box, so the page-edge checks use the painted
+ * extent (label plus pointer). Every other object paints inside its frame.
+ */
+export function paintedFrameU(entry:Pick<ObjectTreeEntry,'object'|'resolvedFrameU'>):CanonicalFrameU {
+  const {object,resolvedFrameU:frame}=entry;
+  if(object.type!=='text'||!object.leader)return frame;
+  const {bounds}=leaderGeometry(object.frame,object.leader);
+  const minX=add(frame.xU,mmToU(Math.round(bounds.minX*1000)/1000)),minY=add(frame.yU,mmToU(Math.round(bounds.minY*1000)/1000));
+  const maxX=add(frame.xU,mmToU(Math.round(bounds.maxX*1000)/1000)),maxY=add(frame.yU,mmToU(Math.round(bounds.maxY*1000)/1000));
+  return {xU:minX,yU:minY,widthU:add(maxX,-minX),heightU:add(maxY,-minY)};
+}
+
 /** Grouped children keyed by the index of their top-level group, so each page is walked once. */
 function childrenByTopLevel(entries:readonly ObjectTreeEntry[]):Map<number,ObjectTreeEntry[]> {
   const byTop=new Map<number,ObjectTreeEntry[]>();
@@ -67,7 +81,7 @@ export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
       if(entry.depth!==0)continue;
       const {object}=entry,location={pageId:page.id,objectId:object.id};
       const children=byTop.get(entry.topLevelIndex)??[];
-      const verdicts=(children.length>0?children:[entry]).map(leaf=>frameVerdict(leaf.resolvedFrameU,leaf.object.type,bounds));
+      const verdicts=(children.length>0?children:[entry]).map(leaf=>frameVerdict(paintedFrameU(leaf),leaf.object.type,bounds));
       const outside=verdicts.filter(verdict=>verdict.overflowU>0);
       if(outside.some(verdict=>!verdict.bleed))result.push(diagnostic(OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE,'Authored frame exceeds physical A4 bounds',location));
       else if(outside.length>0)result.push(diagnostic(OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE,
@@ -139,7 +153,9 @@ export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TableP
         }
       }else if(object.type==='text') {
         const objectNode=findElement(root,'data-object-id',object.id),flow=objectNode.querySelector<HTMLElement>('[data-flow-root]')!,metrics=intrinsicMetrics(flow,object.text);
-        if(textObjectOverflows(metrics,w,h,toleranceQ))result.push(diagnostic('TEXT_OBJECT_OVERFLOW','Text exceeds authored object frame',location));
+        // A "Selo" keeps its side padding free of text.
+        const textWidthU=object.box?Math.max(1,add(w,-mmToU(object.box.paddingMm*2))):w;
+        if(textObjectOverflows(metrics,textWidthU,h,toleranceQ))result.push(diagnostic('TEXT_OBJECT_OVERFLOW','Text exceeds authored object frame',location));
       }
     }
   }
@@ -255,6 +271,10 @@ export function imageResolutionDiagnostics(doc:CatalogDocument):Diagnostic[] {
     if(ppi<MINIMUM_PRINT_PPI)result.push(diagnostic(IMAGE_LOW_RESOLUTION_DIAGNOSTIC_CODE,
       `effectivePpi=${ppi}; minimumPpi=${MINIMUM_PRINT_PPI}`,{...location,severity:'WARNING'}));
   };
+  for(const page of doc.pages) {
+    const background=page.background?.image;
+    if(background)check(background.assetId,page.widthMm,page.heightMm,background.fit,{pageId:page.id});
+  }
   for(const page of doc.pages)for(const {object} of walkPageObjects(page)) {
     if(object.type==='image')check(object.assetId,object.frame.widthMm,object.frame.heightMm,object.fit,{pageId:page.id,objectId:object.id});
     if(object.type!=='table')continue;

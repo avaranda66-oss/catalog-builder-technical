@@ -23,8 +23,14 @@ export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Pa
     </div>;
   };
   const renderObject=(object:EditorialObject)=>object.type==='group'?group(object):leaf(object);
+  // Onda 3.5 (P1.2): the page's own background (colour and/or picture) is a page property, never a clickable object.
+  const background=page.background,backgroundUrl=background?.image?assetUrls.get(background.image.assetId):undefined;
   return <section data-page-id={page.id} className="editorial-page" aria-label={'Página '+pageNumber}
-    style={{width:px(page.widthMm),height:px(page.heightMm)}}>
+    data-page-background={background?'':undefined}
+    style={{width:px(page.widthMm),height:px(page.heightMm),
+      ...(background?.color?{backgroundColor:background.color}:{}),
+      ...(background?.image&&backgroundUrl?{backgroundImage:`url("${backgroundUrl.replace(/"/g,'%22')}")`,backgroundSize:background.image.fit,
+        backgroundPosition:'50% 50%',backgroundRepeat:'no-repeat'}:{})}}>
     {page.objects.map((object,index)=>({object,index})).sort((a,b)=>a.object.zIndex-b.object.zIndex||a.index-b.index).map(({object})=>renderObject(object))}
   </section>;
 }

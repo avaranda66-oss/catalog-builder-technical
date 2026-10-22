@@ -9,9 +9,10 @@ const NOUNS: Record<EditorialObject['type'], readonly [singular: string, plural:
   shape: ['forma', 'formas'],
   line: ['linha', 'linhas'],
   icon: ['ícone', 'ícones'],
+  polygon: ['polígono', 'polígonos'],
   group: ['grupo', 'grupos'],
 };
-const ORDER: readonly EditorialObject['type'][] = ['text', 'image', 'table', 'shape', 'line', 'icon', 'group'];
+const ORDER: readonly EditorialObject['type'][] = ['text', 'image', 'table', 'shape', 'polygon', 'line', 'icon', 'group'];
 
 export function pageLabel(index: number): string {
   return `Página ${index + 1}`;

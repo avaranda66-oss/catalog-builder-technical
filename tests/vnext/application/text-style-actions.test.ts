@@ -70,11 +70,12 @@ describe('FR-14 text.setStyle', () => {
     if (result.ok) expect(textOf(result.document).style).toMatchObject({ color: '#0072ce', textAlign: 'center' });
   });
 
-  it('refuses a colour that is not in the document palette', () => {
+  it('Onda 3.5: accepts any #RRGGBB colour, also outside the document palette (the palette is only offered first)', () => {
     const result = run(textDocument(), {
-      type: 'text.setStyle', objectId: 'text-object', expectedStyle: STYLE, patch: { color: '#FF0000' },
+      type: 'text.setStyle', objectId: 'text-object', expectedStyle: STYLE, patch: { color: '#F3DDB8' },
     });
-    expect(result).toMatchObject({ ok: false, error: { code: 'ACTION_INVALID' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(textOf(result.document).style.color).toBe('#F3DDB8');
   });
 
   it('refuses bold when the document does not declare the bold face of the font', () => {
@@ -151,12 +152,14 @@ describe('FR-14 text.setStyle', () => {
     })).toMatchObject({ ok: false, error: { code: 'ACTION_INVALID' } });
   });
 
-  it('accepts only the four simple fields, and never an empty patch', () => {
+  it('accepts the simple fields plus line height and letter spacing (Avançado), and never an empty patch', () => {
     const base = { type: 'text.setStyle', objectId: 'text-object', expectedStyle: STYLE };
     expect(ApplicationActionSchema.safeParse({ ...base, patch: { fontSizePt: 12 } }).success).toBe(true);
     expect(ApplicationActionSchema.safeParse({ ...base, patch: {} }).success).toBe(false);
     expect(ApplicationActionSchema.safeParse({ ...base, patch: { fontFamily: 'Noto Sans' } }).success).toBe(false);
-    expect(ApplicationActionSchema.safeParse({ ...base, patch: { lineHeight: 2 } }).success).toBe(false);
+    expect(ApplicationActionSchema.safeParse({ ...base, patch: { lineHeight: 2 } }).success).toBe(true);
+    expect(ApplicationActionSchema.safeParse({ ...base, patch: { letterSpacingEm: 0.1 } }).success).toBe(true);
+    expect(ApplicationActionSchema.safeParse({ ...base, patch: { letterSpacingEm: 2 } }).success).toBe(false);
     expect(ApplicationActionSchema.safeParse({ ...base, patch: { fontWeight: 500 } }).success).toBe(false);
     expect(ApplicationActionSchema.safeParse({ ...base, patch: { fontSizePt: 0 } }).success).toBe(false);
     expect(ApplicationActionSchema.safeParse({ ...base, patch: { color: 'blue' } }).success).toBe(false);

@@ -105,6 +105,9 @@ export function validateDocument(input:unknown):Diagnostic[] {
       if((object.type==='image'||object.type==='icon')&&!doc.assets.some(asset=>asset.id===object.assetId))
         out.push(diagnostic('ASSET_REFERENCE_DANGLING',object.assetId,{pageId:page.id,objectId:object.id}));
     }
+    const backgroundAssetId=page.background?.image?.assetId;
+    if(backgroundAssetId!==undefined&&!doc.assets.some(asset=>asset.id===backgroundAssetId))
+      out.push(diagnostic('ASSET_REFERENCE_DANGLING',backgroundAssetId,{pageId:page.id}));
   }
   unique(ids,out);
   return out;

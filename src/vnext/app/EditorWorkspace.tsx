@@ -151,6 +151,9 @@ import type { TableGridCommand } from '../editor/table-grid-commands';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
+import { NativeStyleSection } from './editor/NativeStyleSection';
+import { PageBackgroundSection } from './editor/PageBackgroundSection';
+import { ElementInsertButtons } from './editor/ElementInsertButtons';
 import { TextEditToolbar } from './editor/TextEditToolbar';
 import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
 import { AssistantDock, assistantSelectionLabel, useAssistantWide } from './editor/AssistantDock';
@@ -4017,6 +4020,10 @@ export function EditorWorkspace({
                   <button type="button" data-editor-action="add-shape" onClick={() => insertObject('shape')}>{simpleByDefault ? 'Forma' : 'Adicionar forma'}</button>
                   <button type="button" data-editor-action="add-line" onClick={() => insertObject('line')}>{simpleByDefault ? 'Linha' : 'Adicionar linha'}</button>
                 </div>
+                <ElementInsertButtons session={session} pageId={editorState.activePageId}
+                  prepare={() => { if (!finishTextEditBeforeCommand()) return false; controller.cancel('superseded'); return true; }}
+                  onInserted={(objectId, message) => { if (objectId) selectObject(objectId); setStatusMessage(message); }}
+                  onMessage={setStatusMessage} />
                 <div className="vnext-tool-group" aria-label="Seleção e posicionamento">
                   <button type="button" data-editor-action="toggle-snapping" aria-pressed={snappingEnabled} className={snappingEnabled ? 'is-active' : undefined} onClick={toggleSnapping}>
                     {simpleByDefault ? (snappingEnabled ? 'Encaixe ligado' : 'Encaixe desligado') : (snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado')}
@@ -4283,11 +4290,12 @@ export function EditorWorkspace({
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
-              ? selectedObject.type === 'text' ? 'Texto'
+              ? selectedObject.type === 'text' ? selectedObject.box ? 'Selo' : selectedObject.leader ? 'Chamada' : 'Texto'
                 : selectedObject.type === 'image' ? 'Imagem'
                   : selectedObject.type === 'table' ? 'Tabela'
                     : selectedObject.type === 'shape' ? 'Forma'
                       : selectedObject.type === 'line' ? 'Linha'
+                        : selectedObject.type === 'polygon' ? 'Polígono'
                         : selectedObject.type === 'group' ? 'Grupo'
                           : 'Objeto'
               : 'Geometria do objeto'
@@ -4412,6 +4420,11 @@ export function EditorWorkspace({
               {selectedObject.type === 'text' && (
                 <TextInspectorSection object={selectedObject} simple={simpleByDefault} disabled={selectedMutationLocked} session={session}
                   measurement={measuredLayout?.source === document ? measuredLayout : null}
+                  prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                  onMessage={setStatusMessage} />
+              )}
+              {(selectedObject.type === 'shape' || selectedObject.type === 'line' || selectedObject.type === 'polygon') && (
+                <NativeStyleSection object={selectedObject} disabled={selectedMutationLocked} session={session}
                   prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
                   onMessage={setStatusMessage} />
               )}
@@ -4713,9 +4726,16 @@ export function EditorWorkspace({
                 ))}
               </div>
             </>
-          ) : <p className="vnext-context-help">{simpleByDefault
-            ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
-            : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>}
+          ) : <>
+            <p className="vnext-context-help">{simpleByDefault
+              ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
+              : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>
+            {editorState.activePageId && selectedObjects.length === 0 && (
+              <PageBackgroundSection pageId={editorState.activePageId} session={session}
+                prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                onMessage={setStatusMessage} />
+            )}
+          </>}
           {!simpleByDefault && <>
           <div className="vnext-divider" />
           <h3>Salvamento</h3>

@@ -86,6 +86,7 @@ export type {
   IdGenerator,
   ImageExpectedState,
   ObjectInsertSpec,
+  LineStyleState,
   TableCellContentInput,
   TableBulkCellContentInput,
   TableBulkExpectedTopology,

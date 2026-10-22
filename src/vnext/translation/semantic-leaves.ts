@@ -159,10 +159,11 @@ function assertObjectShape(object: Record<string, unknown>): void {
   const common = ['id', 'type', 'frame', 'zIndex', 'locked'];
   switch (object.type) {
     case 'table': assertKnownKeys('table-object', object, [...common, 'table']); break;
-    case 'text': assertKnownKeys('text-object', object, [...common, 'text', 'style']); break;
+    case 'text': assertKnownKeys('text-object', object, [...common, 'text', 'style', 'box', 'leader']); break;
     case 'image': assertKnownKeys('image-object', object, [...common, 'assetId', 'fit', 'focalPoint']); break;
     case 'shape': assertKnownKeys('shape-object', object, [...common, 'shape', 'style']); break;
-    case 'line': assertKnownKeys('line-object', object, [...common, 'axis', 'color']); break;
+    case 'line': assertKnownKeys('line-object', object, [...common, 'axis', 'color', 'thicknessPt', 'dash', 'opacity']); break;
+    case 'polygon': assertKnownKeys('polygon-object', object, [...common, 'points', 'style']); break;
     case 'icon': assertKnownKeys('icon-object', object, [...common, 'assetId']); break;
     case 'group': assertKnownKeys('group-object', object, [...common, 'objects']); break;
     default: unknownSurface('editorial-object', object.type);
@@ -324,7 +325,7 @@ export async function extractSemanticTranslationCoverage(document: CatalogDocume
 
   for (const page of document.pages) {
     assertKnownKeys('page', page as unknown as Record<string, unknown>, [
-      'id', 'widthMm', 'heightMm', 'safeArea', 'objects',
+      'id', 'widthMm', 'heightMm', 'safeArea', 'background', 'objects',
     ]);
     for (const { object } of walkPageObjects(page)) {
       assertObjectShape(object as unknown as Record<string, unknown>);
@@ -350,6 +351,9 @@ export async function extractSemanticTranslationCoverage(document: CatalogDocume
           break;
         case 'shape':
           exclusions.push(excluded('shape', `shape:${object.id}`, { pageId: page.id, objectId: object.id }));
+          break;
+        case 'polygon':
+          exclusions.push(excluded('shape', `polygon:${object.id}`, { pageId: page.id, objectId: object.id }));
           break;
         case 'line':
           exclusions.push(excluded('line', `line:${object.id}`, { pageId: page.id, objectId: object.id }));
