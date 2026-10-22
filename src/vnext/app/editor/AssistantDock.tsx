@@ -1,8 +1,7 @@
 import React from 'react';
 import type { EditorialObject } from '../../domain';
 import { SIDE_ASSISTANT_PANEL_ID } from './SidePanelTabs';
-
-export type AssistantMode = 'gemini' | 'tools';
+import './AssistantDock.css';
 
 export interface AssistantSelection {
   /** How many objects are selected on the page. */
@@ -15,7 +14,7 @@ const OBJECT_NAMES: Readonly<Record<EditorialObject['type'], string>> = {
   text: 'texto', image: 'imagem', table: 'tabela', shape: 'forma', line: 'linha', icon: 'ícone', group: 'grupo',
 };
 
-/** Plain words for what the assistant works on, shown at the top of the assistant tab. */
+/** Plain words for what the assistant works on, shown above its text box. */
 export function assistantSelectionLabel({ count, type }: AssistantSelection): string {
   if (count > 1) return `${count} objetos selecionados na página`;
   if (count === 1) return `Selecionado na página: ${type ? OBJECT_NAMES[type] : 'objeto'}`;
@@ -25,11 +24,23 @@ export function assistantSelectionLabel({ count, type }: AssistantSelection): st
 export interface AssistantDockProps {
   open: boolean;
   onClose: () => void;
-  mode: AssistantMode;
-  onModeChange: (mode: AssistantMode) => void;
-  selection: AssistantSelection;
-  /** The assistant for the current mode (Gemini composer or the quick tools). */
+  /** The assistant (its own header has "Fechar"). */
   children: React.ReactNode;
+}
+
+/** Remembered in this browser only (a convenience: without storage the panel simply opens at its normal width). */
+export const ASSISTANT_WIDE_STORAGE_KEY = 'catalog-builder:assistant-wide:v1';
+
+/** "Ampliar": the wider assistant panel, remembered in this browser. */
+export function useAssistantWide(): [boolean, (wide: boolean) => void] {
+  const [wide, setWide] = React.useState(() => {
+    try { return globalThis.localStorage?.getItem(ASSISTANT_WIDE_STORAGE_KEY) === '1'; } catch { return false; }
+  });
+  const change = React.useCallback((next: boolean) => {
+    setWide(next);
+    try { globalThis.localStorage?.setItem(ASSISTANT_WIDE_STORAGE_KEY, next ? '1' : '0'); } catch { /* not remembered */ }
+  }, []);
+  return [wide, change];
 }
 
 function isShown(element: Element | null | undefined): element is HTMLElement {
@@ -38,14 +49,15 @@ function isShown(element: Element | null | undefined): element is HTMLElement {
 
 /**
  * FR-17: the assistant panel, shown in the right column in place of "Propriedades" (as a fixed
- * panel over the screen only below 900 px). The (empty, hidden) panel is always there, so the tab
+ * panel over the screen only below 900 px), a little wider than "Propriedades" so the conversation
+ * reads like a chat ("Ampliar" widens it more). The (empty, hidden) panel is always there, so the tab
  * and the top bar button always point at it; the assistant inside is created on the first opening
  * and then stays mounted while hidden, so going back to "Propriedades" and returning keeps the
  * typed request, the conversation and any proposal waiting for confirmation. The selection on the
- * page stays as it is; the first line says what the assistant sees selected. Closing it from
- * inside ("Fechar", Esc) puts the keyboard focus back on what opened it.
+ * page stays as it is. Closing it from inside ("Fechar", Esc) puts the keyboard focus back on what
+ * opened it.
  */
-export function AssistantDock({ open, onClose, mode, onModeChange, selection, children }: AssistantDockProps) {
+export function AssistantDock({ open, onClose, children }: AssistantDockProps) {
   const [mounted, setMounted] = React.useState(open);
   if (open && !mounted) setMounted(true);
   const panelRef = React.useRef<HTMLElement>(null);
@@ -96,17 +108,7 @@ export function AssistantDock({ open, onClose, mode, onModeChange, selection, ch
         if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
       }}
     >
-      {mounted && <>
-        <div className="vnext-assistant-dock-controls">
-          <span data-assistant-selection="">{assistantSelectionLabel(selection)}</span>
-          <button type="button" aria-label="Fechar painel do assistente" onClick={onClose}>Fechar <span aria-hidden="true">✕</span></button>
-        </div>
-        <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
-          <button role="tab" aria-selected={mode === 'gemini'} type="button" onClick={() => onModeChange('gemini')}>Criar com Gemini</button>
-          <button role="tab" aria-selected={mode === 'tools'} type="button" onClick={() => onModeChange('tools')}>Ferramentas</button>
-        </div>
-        {children}
-      </>}
+      {mounted && children}
     </aside>
   );
 }

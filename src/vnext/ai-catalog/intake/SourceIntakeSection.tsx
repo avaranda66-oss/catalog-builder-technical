@@ -83,7 +83,7 @@ export function SourceIntakeSection({
         </p>
       )}
       <SourceDropZone compact={intake.entries.length > 0} disabled={working} dragging={drop.dragging} onFiles={addFiles} />
-      <SourceFileList entries={intake.entries}
+      <SourceFileList entries={intake.entries} photoLinks={intake.photoLinks} onLinkPhoto={intake.linkPhoto}
         onRemove={(id) => { if (choosing?.entryId === id) setChoosing(null); intake.remove(id); }} />
       {chosenBlock
         ? <ColumnChooser key={chosenBlock.id} block={chosenBlock} name={sourceTableName(chosenBlock)} busy={working}

@@ -210,14 +210,21 @@ try {
   await createCatalog(page, { name: 'PCON — Sensores e faixas', starter: 'Criar com IA a partir de arquivos' });
   const assistant = page.locator('[data-vnext-assistant="open"]');
   await assistant.waitFor({ state: 'visible', timeout: 15000 });
-  const intake = assistant.getByRole('region', { name: 'Arquivos para o catálogo', exact: true });
+  // C1 (chat): não há mais a região "Arquivos para o catálogo". O pai vê a dica de arrastar no começo da conversa e o clipe
+  // "Anexar arquivos" ao lado da caixa de texto; os arquivos viram chips acima da caixa e UMA mensagem "Li 1 arquivo: …"
+  // com "Ver detalhes", onde ficam "Escolher colunas" e "Inserir como tabela".
+  const intake = assistant;
   const drop = intake.getByRole('button', { name: 'Arraste aqui PDFs, planilhas e fotos (ou clique para escolher)', exact: true });
-  j.step('B1 o cartão cria o catálogo e abre o assistente com a área de arquivos', await drop.isVisible());
+  const paperclip = intake.getByRole('button', { name: 'Anexar arquivos', exact: true });
+  j.step('B1 o cartão cria o catálogo e abre o assistente com a área de arquivos (dica de arrastar e clipe visíveis)',
+    await drop.isVisible() && await paperclip.isVisible() && await paperclip.isEnabled(),
+    `dica: ${await drop.isVisible()} · clipe: ${await paperclip.isVisible()} · clipe habilitado: ${await paperclip.isEnabled()}`);
+  j.addEvidence(await shot(page, 'j12-01-assistente-aberto-com-dica-e-clipe'));
   const beforeInsertion = structuredClone((await state(page)).runtime.document);
   const readingStarted = Date.now();
   await intake.locator('input[type=file][aria-label="Escolher arquivos"]').setInputFiles(XLSX_PATH);
   await page.waitForFunction(() => {
-    const row = document.querySelector('.ai-intake-files > li');
+    const row = document.querySelector('[data-vnext-assistant="open"] .ai-chat-files > li');
     return row && ['ready', 'needs-help', 'error'].includes(row.getAttribute('data-intake-state'));
   }, null, { timeout: 45000 });
   timings.leituraPelaTelaMs = Date.now() - readingStarted;
@@ -225,6 +232,11 @@ try {
   const fileState = await files.locator('li').first().getAttribute('data-intake-state');
   j.step('B2 o arquivo real é lido e aparece Pronto, sem pedir ajuda', fileState === 'ready',
     `${fileState} · ${timings.leituraPelaTelaMs} ms`);
+  const message = intake.getByRole('article', { name: 'Arquivos lidos', exact: true });
+  const messageText = ((await message.innerText()) ?? '').replace(/\s+/g, ' ').trim();
+  j.step('B2 a leitura vira UMA mensagem curta na conversa, sem lista longa de abas', await message.count() === 1
+    && messageText.startsWith(`Li 1 arquivo: ${XLSX_NAME}.`) && (await intake.locator('.ai-intake-review').count()) === 0, messageText.slice(0, 400));
+  await clicks.click('ver detalhes', message.getByRole('button', { name: 'Ver detalhes', exact: true }));
   const found = intake.getByRole('region', { name: `O que encontrei em ${XLSX_NAME}`, exact: true });
   await found.waitFor({ state: 'visible' });
   const hiddenToggle = found.getByRole('checkbox', { name: 'Incluir dados ocultos', exact: true });

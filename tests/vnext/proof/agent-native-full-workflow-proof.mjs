@@ -41,7 +41,7 @@ try{
   const baseline=await state(page);
   assert.equal(baseline.pageCount,1);
   await page.getByRole('button',{name:'Abrir assistente de edição'}).click();
-  await page.getByRole('tab',{name:'Criar com Gemini'}).waitFor();
+  await page.getByRole('textbox',{name:'Seu pedido ao Gemini'}).waitFor();
   // Server key by default (FR-60): no personal key, password or vault step.
   await page.getByText('IA pronta.',{exact:true}).waitFor();
 
@@ -52,11 +52,11 @@ try{
     const before=await state(page);
     await page.getByRole('textbox',{name:'Seu pedido ao Gemini'}).fill(prompt);
     await page.getByRole('button',{name:/Enviar ao Gemini/}).click();
-    await page.getByRole('button',{name:'Confirmar e inserir no catálogo'}).waitFor();
+    await page.getByRole('group',{name:'Proposta de páginas'}).getByRole('button',{name:'Aplicar',exact:true}).waitFor();
     const pending=await state(page);
     assert.equal(pending.pageCount,before.pageCount,'Provider cannot directly mutate document');
-    await page.getByRole('button',{name:'Confirmar e inserir no catálogo'}).click();
-    await page.getByRole('log',{name:'Histórico de criação do catálogo'})
+    await page.getByRole('group',{name:'Proposta de páginas'}).getByRole('button',{name:'Aplicar',exact:true}).click();
+    await page.getByRole('log',{name:'Conversa com o assistente'})
       .getByText('Apliquei 3 página(s)',{exact:false}).last().waitFor();
     await waitSaved(page);
     const after=await state(page);
@@ -146,7 +146,11 @@ try{
   assert.equal(afterReopen.tableCount,4);
   assert.equal(createHash('sha256').update(JSON.stringify(afterReopen.document)).digest('hex'),snapshotHash);
   await page.getByRole('button',{name:'Abrir assistente de edição'}).click();
-  const dialogueCount=Number(await page.getByLabel('Quantidade de mensagens').textContent());
+  // C1 (chat): o contador de mensagens saiu do cabeçalho. A conversa guardada volta inteira como mensagens da
+  // própria conversa (pedidos à direita, respostas à esquerda); cada uma é um <article class="ai-chat-turn">.
+  const thread=page.getByRole('log',{name:'Conversa com o assistente'});
+  await thread.locator('article.ai-chat-turn').first().waitFor();
+  const dialogueCount=await thread.locator('article.ai-chat-turn').count();
   assert.equal(dialogueCount,12,'Conversation history must survive catalog reopen');
   assert.equal(afterReopen.modelRequests,4,'Reopen cannot silently call a provider again');
   assert.deepEqual(errors,[]);

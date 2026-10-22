@@ -1,6 +1,6 @@
 import React from 'react';
 import type { createDocumentSession } from '../application';
-import { applyRefinement } from './composition';
+import { runQuickTool } from './assistant-quick-tools';
 import {
   WORKBENCH_MESSAGE_LIMIT, appendWorkbenchDialogue,
   interpretWorkbenchRequest, readWorkbenchDialogue, type WorkbenchEntry,
@@ -70,41 +70,9 @@ export function CatalogWorkbenchChat({ documentId, session, canPublish, onPublic
     setMessage(''); setWarning('');
     const user = writeEntry('user', submitted);
     const action = interpretWorkbenchRequest(submitted);
-    let response: string;
-    try {
-      if (['compact', 'undo', 'redo'].includes(action) && onBeforeMutation && !onBeforeMutation()) {
-        response = 'Conclua ou cancele a edição em andamento antes de pedir outra alteração. O catálogo não foi modificado.';
-      } else switch (action) {
-        case 'compact':
-          if (!session.getSnapshot().document.pages.some(page => page.objects.some(object => object.type === 'table'))) {
-            response = 'Ainda não há tabelas neste catálogo para compactar. Adicione uma tabela ou peça outra alteração.';
-          } else {
-            applyRefinement(session, 'compact');
-            response = 'Compactei as tabelas no catálogo aberto. Veja a mudança na página, confira e use Salvar quando estiver satisfeito.';
-          }
-          break;
-        case 'undo':
-          session.undo();
-          response = 'Executei Desfazer. Confira a prévia; alterações não salvas exigem nova aprovação.';
-          break;
-        case 'redo':
-          session.redo();
-          response = 'Executei Refazer. Confira a prévia antes de publicar.';
-          break;
-        case 'publication':
-          if (canPublish) { onPublication(); response = 'Abri a revisão física das páginas para impressão e PDF.'; }
-          else response = 'Primeiro confira e salve a versão atual. O PDF não será liberado com alterações pendentes.';
-          break;
-        case 'editor':
-          onEditor();
-          response = 'Abri a edição manual com as ferramentas avançadas do Catalog Builder.';
-          break;
-        default:
-          response = 'Ainda não consigo fazer esse ajuste por aqui. Posso compactar tabelas, desfazer, refazer, abrir o editor ou a revisão do PDF. Para criar páginas, use a aba “Criar com Gemini”; valores, fotos, capa e títulos se ajustam no editor. Não alterei o catálogo.';
-      }
-    } catch {
-      response = 'Essa operação não pôde ser concluída com segurança. O documento anterior foi preservado. Abra o editor para verificar os detalhes.';
-    }
+    const response = action === 'help'
+      ? 'Ainda não consigo fazer esse ajuste por aqui. Posso compactar tabelas, desfazer, refazer, abrir o editor ou a revisão do PDF. Para criar páginas, use a aba “Criar com Gemini”; valores, fotos, capa e títulos se ajustam no editor. Não alterei o catálogo.'
+      : runQuickTool(action, { session, onBeforeMutation, canPublish, onPublication, onEditor });
     persist(user);
     // The second setState is queued after the first in the same event.
     persist(writeEntry('assistant', response, action));

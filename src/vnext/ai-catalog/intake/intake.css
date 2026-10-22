@@ -91,6 +91,13 @@
 .ai-intake-file-state[data-intake-state="needs-help"] { color: #7c5b00; }
 .ai-intake-file-state[data-intake-state="error"] { color: #8f3030; }
 .ai-intake-file-note { grid-column: 1; color: #5f7287; font-size: 13px; }
+.ai-intake-photo-link { grid-column: 1; margin-top: 2px; font-size: 13px; color: #246344; }
+.ai-intake-photo-link[data-photo-link="ask"] { color: #7c5b00; }
+.ai-intake-photo-link p { margin: 0; }
+.ai-intake-photo-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.ai-intake .ai-intake-photo-choice { min-height: 36px; padding: 4px 10px; font-weight: 600; }
+.ai-intake .ai-intake-photo-choice[aria-pressed="true"] { background: #e4f1fb; border-color: #0072ce; color: #003f78; }
+.ai-intake .ai-intake-photo-select { min-height: 44px; margin-top: 4px; max-width: 100%; padding: 6px 8px; border: 1px solid #bdc9d6; border-radius: 7px; font: inherit; font-size: 14px; }
 .ai-intake .ai-intake-file-remove { grid-column: 2; grid-row: 1 / span 3; min-height: 36px; padding: 4px 10px; font-weight: 600; }
 
 .ai-intake-notice { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #eef6fc; color: #1d3a5a; }

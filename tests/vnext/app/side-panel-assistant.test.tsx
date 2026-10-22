@@ -123,7 +123,7 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
     expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.click(assistantTab());
-    fireEvent.keyDown(within(assistant()!).getByRole('tab', { name: 'Criar com Gemini' }), { key: 'Escape' });
+    fireEvent.keyDown(within(assistant()!).getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { key: 'Escape' });
     expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
     expect(assistant()).toBeNull();
   });
@@ -131,7 +131,8 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
   it('keeps the selection on the page and says what the assistant sees selected', () => {
     const { container } = setup();
     fireEvent.click(assistantTab());
-    expect(within(assistant()!).getByText('Nada selecionado na página')).toBeInTheDocument();
+    // Nothing selected: no line about it (the panel stays quiet).
+    expect(within(assistant()!).queryByText('Nada selecionado na página')).toBeNull();
     fireEvent.click(propertiesTab());
 
     const hit = selectText(container);
@@ -150,13 +151,14 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
   it('keeps what was typed in the assistant when going to "Propriedades" and back', () => {
     setup();
     fireEvent.click(assistantTab());
-    fireEvent.click(within(assistant()!).getByRole('tab', { name: 'Ferramentas' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), { target: { value: 'Deixe as tabelas mais compactas' } });
+    // One assistant: no "Criar com Gemini" / "Ferramentas" tabs inside it.
+    expect(within(assistant()!).queryByRole('tab')).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Deixe as tabelas mais compactas' } });
     fireEvent.click(propertiesTab());
     fireEvent.click(assistantTab());
-    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' })).toHaveValue('Deixe as tabelas mais compactas');
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Deixe as tabelas mais compactas');
     // Coming back puts the cursor in the request field.
-    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' })).toHaveFocus();
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveFocus();
   });
 
   it('moves between the tabs with the arrow keys', () => {
@@ -172,18 +174,32 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
     expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('keeps one right column of the same width with the assistant open, and is a fixed panel only below 900 px', () => {
+  it('puts the assistant in a wider right column ("Ampliar" widens it more, remembered), a fixed panel only below 900 px', () => {
     injectEditorCss();
-    const { container } = setup();
-    const workspace = container.querySelector<HTMLElement>('.vnext-workspace')!;
-    const columns = getComputedStyle(workspace).gridTemplateColumns;
+    const { container, unmount } = setup();
     fireEvent.click(assistantTab());
-    expect(getComputedStyle(workspace).gridTemplateColumns).toBe(columns);
     // On a computer screen the panel flows in the column (jsdom applies no media query: the < 900 px overlay is not active).
     expect(getComputedStyle(assistant()!).position).not.toBe('fixed');
+    const shell = container.querySelector<HTMLElement>('[data-vnext-shell]')!;
+    expect(shell).toHaveAttribute('data-assistant-open', 'true');
+    expect(shell).not.toHaveAttribute('data-assistant-wide');
+    const widen = within(assistant()!).getByRole('button', { name: 'Ampliar o painel' });
+    expect(widen).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(widen);
+    expect(shell).toHaveAttribute('data-assistant-wide', 'true');
+    expect(widen).toHaveAttribute('aria-pressed', 'true');
+    // Back to "Propriedades": the column goes back to its own width.
+    fireEvent.click(propertiesTab());
+    expect(shell).not.toHaveAttribute('data-assistant-wide');
+    unmount();
+    const again = setup();
+    fireEvent.click(assistantTab());
+    expect(again.container.querySelector('[data-vnext-shell]')).toHaveAttribute('data-assistant-wide', 'true');
+    const dockCss = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/AssistantDock.css'), 'utf8');
+    expect(dockCss).toMatch(/data-assistant-open="true"\] \.vnext-workspace \{\s*grid-template-columns: 176px minmax\(440px, 1fr\) min\(440px/);
+    expect(dockCss).toMatch(/data-assistant-wide="true"\] \.vnext-workspace \{\s*grid-template-columns: 176px minmax\(420px, 1fr\) min\(660px/);
     const css = readFileSync(resolve(process.cwd(), 'src/vnext/app/styles.css'), 'utf8');
     expect(css).not.toMatch(/max-width:\s*1420px/);
-    expect(css).not.toMatch(/data-assistant-open="true"\]\s*\.vnext-workspace/);
     const overlay = css.slice(css.indexOf('FR-17: only on a small screen'));
     expect(overlay).toMatch(/position:\s*fixed/);
     expect(css.slice(0, css.indexOf('FR-17: only on a small screen')).lastIndexOf('@media (max-width: 900px)'))
@@ -223,7 +239,7 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
     // Opened from the "Assistente" tab: Esc goes back to the tab.
     assistantTab().focus();
     fireEvent.click(assistantTab());
-    const field = screen.getByRole('textbox', { name: /Pe[çc]a|Descreva|pedido/i });
+    const field = screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
     field.focus();
     fireEvent.keyDown(field, { key: 'Escape' });
     expect(propertiesTab()).toHaveAttribute('aria-selected', 'true');
@@ -241,8 +257,7 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
   it('shows "Propriedades" when a problem is chosen ("Corrigir este item"), keeping what was typed in the assistant', () => {
     const { session, rerender } = setup();
     fireEvent.click(assistantTab());
-    fireEvent.click(within(assistant()!).getByRole('tab', { name: 'Ferramentas' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), { target: { value: 'Deixe as tabelas mais compactas' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Deixe as tabelas mais compactas' } });
     const pageId = session.getSnapshot().document.pages[0].id;
     rerender(<EditorWorkspace session={session} simpleByDefault locateRequest={{
       id: 1,
@@ -252,7 +267,7 @@ describe('FR-17 assistant as a tab next to "Propriedades"', () => {
     expect(properties()).toBeVisible();
     expect(document.querySelector('[data-editor-object-id="text-target"]')).toHaveAttribute('data-selected', 'true');
     fireEvent.click(assistantTab());
-    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' })).toHaveValue('Deixe as tabelas mais compactas');
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Deixe as tabelas mais compactas');
   });
 
   it('has no tabs and no assistant in the full (advanced) mode', () => {

@@ -1,0 +1,31 @@
+/* J2-lite cards in the conversation: same navy/white look and 60+ text scale as the chat (assistant-chat.css). */
+.ai-spec-pages { margin: 0 0 10px; padding: 8px 10px 10px; border: 1px solid #e1e9f0; border-radius: 8px; }
+.ai-spec-pages legend { padding: 0 4px; color: #122c49; font-weight: 700; overflow-wrap: anywhere; }
+.ai-spec-pages label { display: inline-flex; align-items: center; gap: 6px; margin: 4px 14px 0 0; font-size: 15px; }
+.ai-spec-pages input {
+  width: 5.5em;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid #b9cce3;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 16px;
+}
+.ai-spec-guess { margin: 0 0 4px; color: #35516e; }
+.ai-spec-problem { margin: 8px 0 0; color: #8c1d18; font-weight: 600; }
+.ai-spec-page-notes { margin: 6px 0 0; padding-left: 18px; color: #4f6378; font-size: 13px; }
+.ai-spec-preview-wrap { max-width: 100%; overflow-x: auto; margin: 6px 0 8px; }
+.ai-spec-preview { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.35; }
+.ai-spec-preview caption { padding: 0 0 4px; color: #122c49; font-size: 15px; font-weight: 700; text-align: left; }
+.ai-spec-preview :is(th, td) { padding: 4px 6px; border: 1px solid #d5e0ea; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.ai-spec-preview tr[data-row-role="header"] th { background: #003f78; color: #fff; }
+.ai-spec-preview tr[data-row-role="section"] td { background: #eef3f8; font-weight: 700; }
+.ai-spec-preview td:first-child { font-weight: 600; color: #1d3a5a; }
+.ai-spec-preview td:is([data-cell-state="pending"], [data-cell-state="blank"]) { background: #fff7e0; }
+.ai-spec-blank { color: #7a5a00; font-style: italic; }
+.ai-spec-notes { margin: 4px 0 0; padding-left: 18px; color: #4f6378; font-size: 13px; }
+.ai-spec-start { margin-top: 8px; }
+.ai-spec-models { display: grid; gap: 4px; margin: 0 0 10px; font-size: 15px; }
+.ai-spec-models span { color: #122c49; font-weight: 700; }
+.ai-spec-models input { min-height: 44px; padding: 6px 10px; border: 1px solid #b9cce3; border-radius: 7px; font: inherit; font-size: 16px; }
+.ai-spec-models small { color: #5f7287; font-size: 13px; line-height: 1.4; }

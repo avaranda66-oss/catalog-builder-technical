@@ -1,9 +1,9 @@
 // J-IA1 — Assistente IA sem chave pessoal (grupo D, Equipe B).
 // O pai abre o "Assistente IA" sem chave nem senha; o painel diz "IA pronta."; ele pede "capa e
-// especificações do TA-25N"; a proposta chega (capa + tabela "Ficha técnica" vazia + notas); clica em
-// "Confirmar e inserir no catálogo"; UM Ctrl+Z desfaz as 3 páginas. Depois, com o limite diário
-// atingido (?ia=limite) e com o servidor sem IA (?ia=off), lê a mensagem que aparece.
-// "Avançado (chave própria)" não pode aparecer quando o servidor não oferece chave própria (FR-60/1B).
+// especificações do TA-25N"; a proposta chega como cartão na conversa (capa + tabela "Ficha técnica" vazia + notas);
+// clica em "Aplicar"; UM Ctrl+Z desfaz as 3 páginas. Depois, com o limite diário atingido (?ia=limite) e com o
+// servidor sem IA (?ia=off), lê a mensagem que aparece. A chave própria fica no menu de opções (⚙) e só aparece lá
+// quando o servidor a oferece (FR-60/1B). C1: o painel é um chat (uma área de rolagem, várias mensagens à vista).
 // FR-17/FR-16b integradas: abas, ausência de sobreposição e escala são verificações obrigatórias.
 //   BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/jia1-assistente.mjs
 //   VP=1280 BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/jia1-assistente.mjs
@@ -59,8 +59,8 @@ async function installReadinessObserver() {
     const rec = { advancedSeen: false, advancedFirstAtMs: null, advancedGoneAtMs: null, readiness: [] };
     const t0 = performance.now();
     const scan = () => {
-      const buttons = [...document.querySelectorAll('[data-vnext-assistant="open"] button')];
-      const present = buttons.some((b) => /Avançado \(chave própria\)/.test(b.textContent ?? ''));
+      const buttons = [...document.querySelectorAll('[data-vnext-assistant="open"] :is(button, [role="menuitem"])')];
+      const present = buttons.some((b) => /Avançado \(chave própria\)|Usar minha própria chave/.test(b.textContent ?? ''));
       if (present) {
         rec.advancedSeen = true;
         if (rec.advancedFirstAtMs === null) rec.advancedFirstAtMs = Math.round(performance.now() - t0);
@@ -110,6 +110,19 @@ async function overlap() {
   });
 }
 
+/** Botões de chave própria visíveis no painel, sem abrir menu (o C1 tirou os botões sempre visíveis). */
+const keyOptionsOnScreen = () => dock().locator('button, [role="menuitem"]')
+  .filter({ hasText: /Avançado \(chave própria\)|Usar minha própria chave|Voltar a usar a IA do servidor/ }).count();
+/** Abre o menu de opções (⚙), lê os itens e fecha com Esc (o painel continua aberto). */
+async function optionItems() {
+  await dock().getByRole('button', { name: 'Opções do assistente' }).click();
+  const items = (await dock().getByRole('menuitem').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  await page.keyboard.press('Escape');
+  // O pai continua escrevendo: o cursor volta para a caixa do pedido.
+  await dock().getByRole('textbox').first().focus();
+  return items;
+}
+
 /** Abre o painel do assistente (1 clique) e espera a prontidão resolver. Devolve o que o observador viu. */
 async function openAssistant(task) {
   await installReadinessObserver();
@@ -127,7 +140,7 @@ async function openAssistant(task) {
   const rec = await page.evaluate(() => window.__jia1.stop());
   const readiness = ((await dock().locator('.ai-readiness').textContent().catch(() => '')) ?? '').trim();
   const keyInputs = await dock().locator('input[type="password"], input[autocomplete="current-password"]').count();
-  const advanced = await dock().getByRole('button', { name: 'Avançado (chave própria)' }).count();
+  const advanced = await keyOptionsOnScreen();
   const flickerMs = rec.advancedFirstAtMs !== null ? (rec.advancedGoneAtMs ?? ms) - rec.advancedFirstAtMs : 0;
   return { ms, rec, readiness, keyInputs, advanced, flickerMs };
 }
@@ -154,14 +167,14 @@ try {
   j.step('A2 o painel abre e diz "IA pronta." sem pedir chave nem senha', opened.readiness === 'IA pronta.' && opened.keyInputs === 0,
     `texto: "${opened.readiness}" · campos de senha/chave: ${opened.keyInputs} · em ${opened.ms} ms · sequência: ${opened.rec.readiness.join(' → ') || '-'}`);
   if (opened.advanced > 0) {
-    j.step('A3 "Avançado (chave própria)" não aparece quando o servidor não oferece chave própria (FR-60/1B)', false,
-      `botões "Avançado (chave própria)" na tela depois de "IA pronta.": ${opened.advanced}`);
+    j.step('A3 nenhum botão de chave própria fica à vista no painel (C1: só no menu ⚙, e só se o servidor oferecer)', false,
+      `botões de chave própria na tela depois de "IA pronta.": ${opened.advanced}`);
   } else if (opened.rec.advancedSeen) {
-    findingStep(j, 'A3 "Avançado (chave própria)" pisca ao abrir o painel: aparece enquanto diz "Verificando a IA…" e some em "IA pronta."',
+    findingStep(j, 'A3 a opção de chave própria pisca ao abrir o painel: aparece enquanto diz "Verificando a IA…" e some em "IA pronta."',
       `apareceu em ${opened.rec.advancedFirstAtMs} ms e sumiu em ${opened.rec.advancedGoneAtMs} ms (visível por ~${opened.flickerMs} ms no harness; em produção dura o tempo da consulta ao servidor). Ao final: ${opened.advanced} botão(ões).`,
       { id: 'D-01', severity: 'P3', knownFR: 'FR-60' });
   } else {
-    j.step('A3 "Avançado (chave própria)" não aparece quando o servidor não oferece chave própria (FR-60/1B)', true, 'nem de relance');
+    j.step('A3 nenhum botão de chave própria à vista no painel (C1: fica no menu ⚙; FR-60/1B)', true, 'nem de relance');
   }
   const focused = await page.evaluate(() => document.activeElement?.id ?? document.activeElement?.tagName ?? '');
   j.step('A4 o cursor já está na caixa "Seu pedido ao Gemini" ao abrir (não precisa clicar nela)', focused === 'gemini-catalog-command', `foco em: ${focused}`);
@@ -177,24 +190,23 @@ try {
 
   const d = dock();
   measures.painel = await measureAll({
-    rotuloEditando: d.locator('.vnext-assistant-dock-controls span').first(),
+    titulo: d.getByRole('heading', { name: 'Assistente', exact: true }),
+    novaConversa: d.getByRole('button', { name: 'Nova conversa' }),
+    historico: d.getByRole('button', { name: 'Conversas anteriores' }),
+    ampliar: d.getByRole('button', { name: 'Ampliar o painel' }),
+    opcoes: d.getByRole('button', { name: 'Opções do assistente' }),
     fechar: d.getByRole('button', { name: 'Fechar painel do assistente' }),
-    abaGemini: d.getByRole('tab', { name: 'Criar com Gemini' }),
-    abaFerramentas: d.getByRole('tab', { name: 'Ferramentas' }),
-    titulo: d.locator('h3').first(),
-    descricao: d.locator('.ai-chat-heading p').first(),
     prontidao: d.locator('.ai-readiness'),
-    contador: d.locator('.ai-chat-count'),
-    boasVindas: d.locator('.ai-chat-welcome p').first(),
+    boasVindas: d.locator('.ai-chat-welcome-title'),
     sugestao1: d.locator('.ai-chat-suggestions button').first(),
     dicaPequena: d.locator('.ai-chat-welcome small'),
-    rotuloPedido: d.locator('label[for="gemini-catalog-command"]'),
     caixaPedido: d.getByRole('textbox', { name: 'Seu pedido ao Gemini' }),
+    anexar: d.getByRole('button', { name: 'Anexar arquivos' }),
     enviar: d.getByRole('button', { name: 'Enviar ao Gemini' }),
     limite: d.locator('.ai-boundary'),
   });
-  const fontKeys = ['rotuloEditando', 'fechar', 'abaGemini', 'abaFerramentas', 'titulo', 'descricao', 'prontidao', 'boasVindas', 'sugestao1', 'dicaPequena', 'rotuloPedido', 'caixaPedido', 'enviar', 'limite'];
-  const targetKeys = ['fechar', 'abaGemini', 'abaFerramentas', 'sugestao1', 'enviar'];
+  const fontKeys = ['titulo', 'novaConversa', 'prontidao', 'boasVindas', 'sugestao1', 'dicaPequena', 'caixaPedido', 'limite'];
+  const targetKeys = ['novaConversa', 'historico', 'ampliar', 'opcoes', 'fechar', 'sugestao1', 'anexar', 'enviar'];
   const smallF = smallFonts(measures.painel, fontKeys);
   const smallT = smallTargets(measures.painel, targetKeys);
   if (measures.botaoAssistente.fontPx < MIN_BODY_FONT_PX) smallF.unshift(`botão "Assistente IA" (barra de cima): ${measures.botaoAssistente.fontPx} px`);
@@ -207,6 +219,12 @@ try {
       && measures.sobreposicaoInicial.dock !== null && measures.sobreposicaoInicial.pagina !== null
       && measures.sobreposicaoInicial.position !== 'fixed' && measures.sobreposicaoInicial.paginaCobertaPx <= 1,
     JSON.stringify(measures.sobreposicaoInicial));
+  observations.abasNoPainel = await d.getByRole('tab').count();
+  observations.menuOpcoes = await optionItems();
+  j.step('A8 C1: sem aba "Ferramentas" nem botões de chave à vista; as ações rápidas ficam no menu de opções (⚙)',
+    observations.abasNoPainel === 0 && observations.menuOpcoes.includes('Deixar as tabelas mais compactas')
+      && !observations.menuOpcoes.some((t) => /chave própria/.test(t)) && (await d.count()) === 1,
+    `abas: ${observations.abasNoPainel} · menu: ${observations.menuOpcoes.join(' | ')}`);
   j.addEvidence(await shot(page, 'jia1-01-painel-pronto'));
 
   // ------------------------------------------------------------------ B. pedido e proposta
@@ -236,8 +254,11 @@ try {
     `${timings.propostaMs} ms · "Gemini está preparando…" chegou a aparecer: ${preparing}`);
   j.step('B3 a conversa explica a proposta e avisa que nenhum valor técnico será inventado',
     /Revise a proposta de 3 página\(s\) antes de aplicar\. Nenhum valor técnico será inventado\./.test(texts.conversaAposProposta), texts.conversaAposProposta.slice(0, 300));
-  const confirmButton = proposal.getByRole('button', { name: 'Confirmar e inserir no catálogo' });
-  const rejectButton = proposal.getByRole('button', { name: 'Rejeitar proposta' });
+  const confirmButton = proposal.getByRole('button', { name: 'Aplicar', exact: true });
+  const rejectButton = proposal.getByRole('button', { name: 'Descartar', exact: true });
+  j.step('B8 C1: a proposta é um cartão dentro da conversa, com Aplicar / Ajustar / Descartar',
+    (await d.getByRole('log').locator('[role="group"][aria-label="Proposta de páginas"]').count()) === 1
+      && (await proposal.getByRole('button', { name: 'Ajustar', exact: true }).count()) === 1);
   measures.proposta = await measureAll({
     titulo: proposal.locator('h4'),
     resumo: proposal.locator('p').first(),
@@ -253,7 +274,7 @@ try {
     `letras pequenas: ${smallFP.join(', ') || '-'} · alvos pequenos: ${smallTP.join(', ') || '-'}`);
   const jargonB = scanJargon(texts.conversaAposProposta, { allow: ALLOW });
   j.step('B6 a proposta e a conversa estão em português, sem jargão', jargonB.length === 0, jargonB.map((h) => `${h.term} («${h.context}»)`).join(' | ') || '-');
-  observations.palavrasNaProposta = ['proposta', 'revisar', 'esqueleto', 'estrutura', 'versão', 'dados ainda vazios', 'inserir', 'Rejeitar'].filter((w) => texts.conversaAposProposta.includes(w));
+  observations.palavrasNaProposta = ['proposta', 'revisar', 'esqueleto', 'estrutura', 'versão', 'dados ainda vazios', 'Aplicar', 'Descartar'].filter((w) => texts.conversaAposProposta.includes(w));
   // O histórico rola até os botões: o título "Proposta para revisar" e a "Página 1: Capa" podem ficar cortados acima.
   const clipped = await page.evaluate(() => {
     const h4 = document.querySelector('[data-vnext-assistant="open"] [role="group"][aria-label="Proposta de páginas"] h4');
@@ -277,7 +298,7 @@ try {
   await confirmButton.scrollIntoViewIfNeeded();
   await rejectButton.scrollIntoViewIfNeeded();
   const botoesDepoisDeRolar = await measureAll({ confirmar: confirmButton, rejeitar: rejectButton });
-  j.step('B4 "Confirmar e inserir no catálogo" e "Rejeitar proposta" ficam visíveis depois de rolar o painel uma vez',
+  j.step('B4 "Aplicar" e "Descartar" ficam visíveis depois de rolar o painel uma vez',
     botoesDepoisDeRolar.confirmar?.fullyVisible && botoesDepoisDeRolar.rejeitar?.fullyVisible, JSON.stringify(botoesDepoisDeRolar));
 
   // ------------------------------------------------------------------ C. confirmar e inserir
@@ -297,7 +318,7 @@ try {
     styleKeys: Object.keys(table.table.style ?? {}), frame: table.frame,
   } : null;
   observations.paginasNovas = newPages.map((p) => p.objects.filter((o) => o.type === 'text').map((o) => plainText(o.text).slice(0, 40)));
-  j.step('C1 "Confirmar e inserir" cria 3 páginas com 1 tabela de 3 colunas × 5 linhas', pagesAfter === pagesBefore + 3 && tables.length === 1 && table.table.columns.length === 3 && table.table.rows.length === 5,
+  j.step('C1 "Aplicar" cria 3 páginas com 1 tabela de 3 colunas × 5 linhas', pagesAfter === pagesBefore + 3 && tables.length === 1 && table.table.columns.length === 3 && table.table.rows.length === 5,
     `páginas: ${pagesBefore} → ${pagesAfter} · tabelas novas: ${tables.length} · ${JSON.stringify(observations.tabelaInserida)} · em ${insertedMs} ms`);
   texts.conversaAposInserir = await dockText();
   const applied = d.locator('.ai-chat-turn').filter({ hasText: /Apliquei/ }).first();
@@ -318,6 +339,26 @@ try {
   const saveAfter = await saveText();
   j.step('C4 volta a "Salvo" sozinho depois de inserir', SAVED.test(saveAfter), `texto: "${saveAfter}" · ${timings.salvoAposInserirMs} ms`);
   j.step('C4 o salvamento confirmado mostra o horário (FR-44)', /^Salvo às \d{2}:\d{2}$/.test(saveAfter), saveAfter);
+  // C1: a conversa mostra várias mensagens de uma vez, inteiras, numa só área de rolagem.
+  measures.conversa = await page.evaluate(() => {
+    const log = document.querySelector('[data-vnext-assistant="open"] [role="log"]');
+    if (!log) return null;
+    const box = log.getBoundingClientRect();
+    const messages = [...log.querySelectorAll('.ai-chat-msg')];
+    const whole = messages.filter((m) => { const r = m.getBoundingClientRect(); return r.height > 0 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1; });
+    const scrollers = [...document.querySelectorAll('[data-vnext-assistant="open"] *')].filter((el) => {
+      const st = getComputedStyle(el);
+      return /(auto|scroll)/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 1;
+    }).map((el) => el.className || el.tagName);
+    const cut = messages.filter((m) => m.scrollWidth > m.clientWidth + 1 || m.querySelector('.ai-chat-bubble')?.scrollHeight > m.querySelector('.ai-chat-bubble')?.clientHeight + 1).length;
+    return { alturaDaConversaPx: Math.round(box.height), mensagens: messages.length, inteirasNaTela: whole.length, cortadas: cut, areasComRolagem: scrollers };
+  });
+  j.step('C6 C1: a conversa ocupa o painel e mostra várias mensagens inteiras ao mesmo tempo, sem cortes',
+    measures.conversa && measures.conversa.inteirasNaTela >= 3 && measures.conversa.cortadas === 0
+      && measures.conversa.alturaDaConversaPx >= (viewport.height >= 768 ? 300 : 250),
+    JSON.stringify(measures.conversa));
+  j.step('C7 C1: no máximo uma área com rolagem no painel (a conversa)',
+    measures.conversa && measures.conversa.areasComRolagem.length <= 1, JSON.stringify(measures.conversa?.areasComRolagem));
   j.addEvidence(await shot(page, 'jia1-03-inserido'));
   observations.cliquesAteInserir = (clicks.counts['abrir o assistente'] ?? 0) + (clicks.counts['pedir'] ?? 0) + (clicks.counts['confirmar'] ?? 0);
   j.step('C5 do editor até as páginas inseridas: 3 cliques + digitar o pedido', observations.cliquesAteInserir === 3, `cliques: ${observations.cliquesAteInserir} (abrir, enviar, confirmar)`);
@@ -380,6 +421,18 @@ try {
   }
   const dockJargon = scanJargon(await dockText(), { allow: ALLOW });
   j.step('E2 painel sem jargão depois de usar', dockJargon.length === 0, dockJargon.map((h) => h.term).join(', ') || '-');
+  await box.fill('');
+  await clicks.click('nova conversa', d.getByRole('button', { name: 'Nova conversa' }));
+  const emptyAfterNew = (await d.locator('.ai-chat-welcome').count()) === 1 && !/Apliquei/.test(await dockText());
+  await clicks.click('abrir conversas anteriores', d.getByRole('button', { name: 'Conversas anteriores' }));
+  const earlier = d.getByRole('menuitem').filter({ hasText: /Crie a capa e as especificações do TA-25N/ });
+  observations.historico = (await d.getByRole('menuitem').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  const listed = (await earlier.count()) === 1;
+  if (listed) await clicks.click('voltar à conversa anterior', earlier);
+  j.step('E3 C1: "Nova conversa" começa vazia e "Conversas anteriores" traz de volta a conversa deste catálogo',
+    emptyAfterNew && listed && /Apliquei 3 página\(s\)/.test(await dockText()),
+    `vazia: ${emptyAfterNew} · menu: ${observations.historico.join(' | ')}`);
+  j.addEvidence(await shot(page, 'jia1-07-historico'));
   texts.painelAria = await aria(page, d);
 
   // ------------------------------------------------------------------ F. limite diário (?ia=limite)
@@ -403,12 +456,14 @@ try {
   j.step('F1 com o limite diário atingido, "Enviar" fica desligado e a explicação aparece em português logo abaixo',
     sendDisabledL && /limite diário de uso da IA foi atingido/.test(texts.alertaLimite) && /continua guardado/.test(texts.alertaLimite) && measures.alertaLimite.fullyVisible,
     `"${texts.alertaLimite}" · desligado: ${sendDisabledL} · visível: ${measures.alertaLimite.fullyVisible} · prontidão: "${limite.readiness}"`);
-  // Com o limite atingido, a consulta de prontidão falha (429) antes de o servidor dizer "byok: false"; o painel então
-  // oferece "Avançado (chave própria)" — a chave pessoal + senha que o FR-60 tirou do caminho do pai.
-  const advancedL = d.getByRole('button', { name: 'Avançado (chave própria)' });
-  if ((await advancedL.count()) > 0) {
+  // Com o limite atingido, a consulta de prontidão falha (429) antes de o servidor dizer "byok: false". Se o menu ⚙
+  // oferecer "Usar minha própria chave", é a chave pessoal + senha que o FR-60 tirou do caminho do pai.
+  observations.menuOpcoesLimite = await optionItems();
+  const advancedL = d.getByRole('menuitem', { name: 'Usar minha própria chave' });
+  if (observations.menuOpcoesLimite.includes('Usar minha própria chave')) {
+    await d.getByRole('button', { name: 'Opções do assistente' }).click();
     measures.avancadoLimite = await measure(advancedL);
-    await clicks.click('abrir "Avançado" (limite diário)', advancedL);
+    await clicks.click('abrir "Usar minha própria chave" (limite diário)', advancedL);
     await page.waitForTimeout(300);
     const settings = page.locator('#catalog-gemini-settings');
     texts.avancadoAberto = ((await settings.innerText().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
@@ -418,12 +473,12 @@ try {
       botoes: await settings.locator('button').allInnerTexts(),
       jargao: scanJargon(texts.avancadoAberto, { allow: ALLOW }).map((h) => h.term),
     };
-    findingStep(j, 'F1b com o limite diário atingido, aparece "Avançado (chave própria)" — e ele pede chave do Gemini e senha, embora o servidor nunca tenha dito que aceita chave própria',
+    findingStep(j, 'F1b com o limite diário atingido, o menu ⚙ oferece "Usar minha própria chave" — e ela pede chave do Gemini e senha, embora o servidor nunca tenha dito que aceita chave própria',
       `botão visível (${measures.avancadoLimite.fontPx} px); ao clicar: ${observations.avancadoLimite.camposDeSenha} campo(s) de senha, campos: ${observations.avancadoLimite.campos.join(' | ')}; botões: ${observations.avancadoLimite.botoes.join(' | ')}; texto: "${texts.avancadoAberto.slice(0, 260)}"`,
       { id: 'D-06', severity: 'P2', knownFR: 'FR-60' });
-    await clicks.click('fechar "Avançado"', advancedL);
+    await clicks.click('fechar "Usar minha própria chave"', page.locator('#catalog-gemini-settings').getByRole('button', { name: 'Fechar', exact: true }));
   } else {
-    j.step('F1b com o limite diário atingido, "Avançado (chave própria)" continua escondido', true);
+    j.step('F1b com o limite diário atingido, o menu ⚙ não oferece chave própria', true, observations.menuOpcoesLimite.join(' | '));
   }
   j.step('F2 o pedido continua na caixa e nenhuma proposta aparece',
     (await boxL.inputValue()) === PEDIDO && (await d.getByRole('group', { name: 'Proposta de páginas' }).count()) === 0,
@@ -440,12 +495,13 @@ try {
   texts.prontidaoSemIA = off.readiness;
   observations.avancadoPiscouSemIA = { viu: off.rec.advancedSeen, duracaoMs: off.flickerMs };
   measures.prontidaoSemIA = await measure(d.locator('.ai-readiness'));
-  j.step('G1 com o servidor sem IA, o painel avisa em português (sem pedir chave) e "Avançado" continua escondido',
+  j.step('G1 com o servidor sem IA, o painel avisa em português (sem pedir chave) e nenhum botão de chave aparece',
     /A IA do servidor ainda não foi configurada\. Fale com o administrador\./.test(off.readiness) && off.keyInputs === 0 && off.advanced === 0,
     `"${off.readiness}" · campos de chave: ${off.keyInputs} · "Avançado": ${off.advanced}`);
-  if (/Avançado \(chave própria\)/.test(off.readiness) && off.advanced === 0) {
-    findingStep(j, 'G2 a mensagem "servidor sem IA" manda usar "Avançado (chave própria)", mas esse botão não existe na tela',
-      `texto: "${off.readiness}" · botões "Avançado (chave própria)" na tela: ${off.advanced}`, { id: 'D-04', severity: 'P2', knownFR: 'FR-60' });
+  observations.menuOpcoesSemIA = await optionItems();
+  if (/chave própria/.test(off.readiness) && !observations.menuOpcoesSemIA.includes('Usar minha própria chave')) {
+    findingStep(j, 'G2 a mensagem "servidor sem IA" manda usar a chave própria, mas essa opção não existe no menu',
+      `texto: "${off.readiness}" · menu: ${observations.menuOpcoesSemIA.join(' | ')}`, { id: 'D-04', severity: 'P2', knownFR: 'FR-60' });
   } else {
     j.step('G2 a mensagem "servidor sem IA" não cita botão inexistente', true);
   }

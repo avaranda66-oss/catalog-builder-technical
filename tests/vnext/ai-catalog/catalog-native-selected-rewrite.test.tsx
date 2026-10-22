@@ -42,7 +42,7 @@ async function requestRewrite() {
     target: { value: 'Reescreva esta frase em linguagem institucional mais clara.' },
   });
   fireEvent.click(screen.getByRole('button', { name: /Pedir reescrita ao Gemini/ }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar reescrita selecionada' })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Aplicar' })).toBeInTheDocument());
 }
 describe('Selected-text Gemini editing in the same conversation and canonical document', () => {
   it('shows before/after and changes the selected text only after explicit approval', async () => {
@@ -62,7 +62,7 @@ describe('Selected-text Gemini editing in the same conversation and canonical do
     // Server key by default: no personal credential travels with the rewrite.
     expect(request.body).not.toHaveProperty('credential');
     expect(JSON.stringify(request.body)).not.toContain('schemaVersion');
-    fireEvent.click(screen.getByRole('button', {name:'Confirmar reescrita selecionada'}));
+    fireEvent.click(screen.getByRole('button', {name:'Aplicar'}));
     const changed=f.session.getSnapshot().document;
     expect(changed).not.toEqual(original);
     const text=changed.pages[0].objects[0];
@@ -78,7 +78,7 @@ describe('Selected-text Gemini editing in the same conversation and canonical do
     await requestRewrite();
     expect(f.session.execute({type:'page.add'}).ok).toBe(true);
     const before=structuredClone(f.session.getSnapshot().document);
-    fireEvent.click(screen.getByRole('button', {name:'Confirmar reescrita selecionada'}));
+    fireEvent.click(screen.getByRole('button', {name:'Aplicar'}));
     expect(f.session.getSnapshot().document).toEqual(before);
     expect(screen.getByRole('alert')).toHaveTextContent('Nenhuma reescrita foi aprovada');
   });
