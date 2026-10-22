@@ -192,7 +192,7 @@ describe('W2.G text.setContent', () => {
     });
   });
 
-  it('returns OBJECT_NOT_FOUND, OBJECT_TYPE_MISMATCH, OBJECT_LOCKED, and grouped-child ACTION_INVALID in the frozen order', () => {
+  it('returns OBJECT_NOT_FOUND, OBJECT_TYPE_MISMATCH, OBJECT_LOCKED in the frozen order and edits a grouped text in place (Onda 3.5)', () => {
     const document = textDocument();
     const expectedText = textObject(document).text;
     const missing = executeApplicationAction(document, {
@@ -261,7 +261,19 @@ describe('W2.G text.setContent', () => {
     const grouped = executeApplicationAction(groupedDocument, {
       type: 'text.setContent', objectId: 'text-object', expectedText, plainText: 'X',
     }, { createId: ids() });
-    expect(grouped.ok ? null : grouped.error.code).toBe('ACTION_INVALID');
+    expect(grouped.ok).toBe(true);
+    const group = grouped.ok ? grouped.document.pages[0].objects[0] : undefined;
+    expect(group?.frame).toEqual(groupedDocument.pages[0].objects[0].frame);
+    expect(group?.type === 'group' && group.objects[0].type === 'text' ? group.objects[0].text.paragraphs[0].inlines : null)
+      .toEqual([expect.objectContaining({ kind: 'text', text: 'X' })]);
+    const lockedGroup: CatalogDocument = {
+      ...groupedDocument,
+      pages: [{ ...groupedDocument.pages[0], objects: [{ ...groupedDocument.pages[0].objects[0], locked: true }] }],
+    };
+    const refused = executeApplicationAction(lockedGroup, {
+      type: 'text.setContent', objectId: 'text-object', expectedText, plainText: 'X',
+    }, { createId: ids() });
+    expect(refused.ok ? null : refused.error.code).toBe('OBJECT_LOCKED');
   });
 
   it('rejects stale expectedText while allowing unrelated document changes', () => {

@@ -210,6 +210,14 @@ export const ObjectSetLockedActionSchema = z.object({
   locked: z.boolean(),
 }).strict();
 
+/** "Camadas": turn an object off (not painted on screen, not printed) or back on. One undo step. */
+export const ObjectSetHiddenActionSchema = z.object({
+  type: z.literal('object.setHidden'),
+  objectId: applicationId,
+  expectedHidden: z.boolean(),
+  hidden: z.boolean(),
+}).strict();
+
 export const ObjectFrameExpectationSchema = z.object({
   objectId: applicationId,
   expectedFrame: FrameUSchema,
@@ -225,6 +233,15 @@ const uniqueObjectFrameTargets = (minimum: number) => z.array(ObjectFrameExpecta
 
 export const ObjectFrameTargetsSchema = uniqueObjectFrameTargets(2);
 export const ObjectDistributionFrameTargetsSchema = uniqueObjectFrameTargets(3);
+
+/** Moves several selected objects by the same offset as one change (drag of a multiple selection). */
+export const MoveObjectsActionSchema = z.object({
+  type: z.literal('objects.move'),
+  pageId: applicationId,
+  targets: uniqueObjectFrameTargets(1),
+  dxU: safeInteger,
+  dyU: safeInteger,
+}).strict();
 
 export const AlignObjectsActionSchema = z.object({
   type: z.literal('objects.align'),
@@ -991,6 +1008,8 @@ export const ApplicationActionSchema = z.union([
   TableFitHeightActionSchema,
   ReorderObjectActionSchema,
   ObjectSetLockedActionSchema,
+  ObjectSetHiddenActionSchema,
+  MoveObjectsActionSchema,
   AlignObjectsActionSchema,
   DistributeObjectsActionSchema,
   ImageSetPresentationActionSchema,

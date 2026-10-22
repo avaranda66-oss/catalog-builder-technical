@@ -5,8 +5,11 @@ import { PrimitiveRenderer } from './PrimitiveRenderer';
 
 export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Page;document:CatalogDocument;pageNumber:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>}) {
   const px=(mm:number)=>qCss(uToQ(mmToU(mm)));
+  // A hidden object ("Camadas") keeps its box, so measurement still finds it, but it is never painted: screen and PDF agree.
+  const visibility=(object:EditorialObject)=>object.hidden?{visibility:'hidden' as const}:{};
   const leaf=(object:LeafEditorialObject,left=px(object.frame.xMm),top=px(object.frame.yMm))=><div key={object.id} data-object-id={object.id} data-object-type={object.type} className="editorial-object"
-    style={{left,top,width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex}}>
+    data-object-hidden={object.hidden?'true':undefined}
+    style={{left,top,width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex,...visibility(object)}}>
     <PrimitiveRenderer object={object} document={document} plans={plans} assetUrls={assetUrls}/>
   </div>;
   const group=(object:GroupObject)=>{
@@ -18,7 +21,8 @@ export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Pa
       qCss(add(uToQ(add(groupYU,mmToU(child.frame.yMm))),-groupYQ)),
     );
     return <div key={object.id} data-object-id={object.id} data-object-type="group" className="editorial-object editorial-group"
-      style={{left:qCss(groupXQ),top:qCss(groupYQ),width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex}}>
+      data-object-hidden={object.hidden?'true':undefined}
+      style={{left:qCss(groupXQ),top:qCss(groupYQ),width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex,...visibility(object)}}>
       {object.objects.map((child,index)=>({child,index})).sort((a,b)=>a.child.zIndex-b.child.zIndex||a.index-b.index).map(({child})=>groupedLeaf(child))}
     </div>;
   };

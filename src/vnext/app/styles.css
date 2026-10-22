@@ -81,6 +81,10 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-authoring-toolbar { display: flex; max-width: 820px; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; margin: 0 auto 12px; }
 .vnext-toolbar-primary { flex: 1 1 auto; }
 .vnext-toolbar-advanced { display: flex; width: 100%; flex-wrap: wrap; gap: 8px; border-top: 1px solid #dbe3ec; padding-top: 8px; }
+/* Onda 3.5 (S1): "Mais opções" opens ONE row (scrolls sideways when it does not fit), so it never eats the page height. */
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-advanced { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 2px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-advanced .vnext-tool-group { flex-wrap: nowrap; flex: none; }
+.vnext-shell[data-simple-by-default="true"] .vnext-toolbar-advanced button { white-space: nowrap; }
 .vnext-more-options { min-height: 32px; border: 0; background: transparent; color: #45627f; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; padding: 0 6px; }
 .vnext-more-options:hover { color: #003f78; text-decoration: underline; }
 .vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar { max-width: 680px; border: 1px solid #dbe3ec; border-radius: 8px; background: rgb(255 255 255 / .92); padding: 7px 9px; box-shadow: 0 3px 10px rgb(23 32 51 / .05); }
@@ -113,7 +117,15 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-snap-guide.is-x { top: 0; bottom: 0; width: 1px; transform: translateX(-.5px); }
 .vnext-snap-guide.is-y { left: 0; right: 0; height: 1px; transform: translateY(-.5px); }
 .vnext-object-hit-target { position: absolute; border: 0; outline: none; background: transparent; cursor: move; touch-action: none; }
-.vnext-object-hit-target.is-selected { z-index: 2147483647 !important; }
+/* Onda 3.5 (S1): selecting never changes the stacking. Hit targets live in their own stacking context (so any
+   zIndex stays inside it); the outline, the handles and the selection box are drawn in a layer above it. */
+.vnext-hit-layer { position: absolute; inset: 0; z-index: 0; }
+.vnext-object-hit-target.is-table-grid { z-index: 2147483000 !important; }
+.vnext-selection-layer { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.vnext-selection-box { position: absolute; pointer-events: none; }
+.vnext-selection-box > [data-resize-handle] { pointer-events: auto; }
+.vnext-selection-box.is-compact > [data-resize-handle] { --vnext-handle-out: calc(-24px * var(--vnext-stage-unzoom, 1)); }
+.vnext-selection-marquee { position: absolute; border: calc(1.5px * var(--vnext-stage-unzoom, 1)) dashed #0072ce; background: rgba(0,114,206,.08); pointer-events: none; }
 .vnext-object-hit-target.is-table-grid { cursor: default; touch-action: pan-x pan-y; }
 .vnext-document-preview [data-object-type="table"] { overflow: hidden; }
 .vnext-table-grid-overlay { position: absolute; inset: 0; z-index: 4; border: 0; outline: none; cursor: default; touch-action: pan-x pan-y; }
@@ -902,5 +914,8 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   height: 44px; margin-bottom: 6px; overflow: hidden; color: #5c6c80; font-size: 13px; line-height: 44px; text-overflow: ellipsis; white-space: nowrap;
 }
 .vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar > [data-editor-action="toggle-advanced-tools"] { flex: none; }
+.vnext-show-layers { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; border: 1px solid #c7d1dd; border-radius: 999px; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; padding: 0 12px; }
+.vnext-show-layers:hover { background: #edf5ff; border-color: #8db4db; }
+.vnext-show-layers:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
 /* With several objects selected there are no selection buttons on that line: it keeps its height, without the hint. */
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-area:has([data-editor-object-id][data-selected="true"]) .vnext-toolbar-primary::after { visibility: hidden; }
