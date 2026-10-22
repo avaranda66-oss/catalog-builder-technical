@@ -6,14 +6,17 @@
 //
 // What this proof does (one Vite dev server on 127.0.0.1:5191, one headless Chromium, both closed at the end):
 //   1. Renders a 2-page document with the real DocumentRenderer (production CSS from src/vnext/rendering/styles.css).
-//   2. Screen media: the band's box overshoots page 1 by 2 mm and elementFromPoint 1 mm below page 1 hits the band
-//      (the editor keeps showing the bleed).
+//   2. Screen media (pages separated by the same 16px gap as the app's page list): the band's box overshoots page 1 by
+//      2 mm and elementFromPoint 1 mm below page 1 hits the band (the editor keeps showing the bleed).
 //   3. Print media (page.emulateMedia): the band's box is unchanged (geometry untouched), .editorial-page is
 //      overflow:hidden, and the same point now hits page 2, not the band (the bleed is clipped).
 //   4. page.pdf(): pdf.js + @napi-rs/canvas rasterize both sheets; the top 2 mm of page 2 are pure white, the bottom
 //      2 mm of page 1 are band-coloured, and page 2's own text is still printed.
 //   5. Control: the same page with `overflow: visible !important` injected for print is rasterized again, so the
 //      evidence records whether the strip really appears without the fix (sensitivity of the pixel check).
+//   6. Onda 3.5 native elements: a one-page document with a PAGE BACKGROUND colour and a native POLYGON (SVG) that bleeds 2 mm
+//      below the last page. Screen: the bleed is painted and hit by the polygon. Print: the page is clipped at its box, the PDF
+//      has exactly one sheet, the background colour covers the sheet and the polygon prints down to the bottom edge.
 //
 // Run: node tests/vnext/proof/fr54-bleed-print-proof.mjs   (FR54_PROOF_PORT overrides the port; 5190/5185/5186 are taken)
 import assert from 'node:assert/strict';
@@ -34,13 +37,20 @@ const port = Number(process.env.FR54_PROOF_PORT ?? 5191);
 const origin = `http://127.0.0.1:${port}`;
 const route = '/fr54-bleed-print';
 const BAND = { id: 'footer-band', fill: '#173F52', rgb: [23, 63, 82] };
+const NATIVE_ROUTE = '/fr54-bleed-print-native';
+const NATIVE = { id: 'native-band', page: 'fr54-native-page', background: '#EAF1F4', backgroundRgb: [234, 241, 244], fill: '#173F52' };
 const PAGE_ONE = 'fr54-page-1';
 const PAGE_TWO = 'fr54-page-2';
 const MM_PER_CSS_PX = 25.4 / 96;
 
 // Production renderer, production stylesheet. Only the harness (mount + fixture) lives here.
-const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html,body{margin:0;padding:0;background:#ffffff;} @page { size: A4; margin: 0; }</style></head>
+const htmlFor = (fixture) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;padding:0;background:#ffffff;} @page { size: A4; margin: 0; }
+/* Onda 3.5: every page is its own stacking context (isolation), so a later page paints over the bleed of the previous one
+   when the two touch. The app never shows touching pages on screen (the editor draws one page; the publication list
+   leaves 16px between pages, see .vnext-publication-pages), so the screen harness leaves the same gap. In print the
+   production stylesheet butts the pages (margin 0) and clips each one at its box. */
+@media screen { [data-editorial-root] .editorial-page { margin-bottom: 16px; } }</style></head>
 <body><div id="root"></div><script type="module">
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
@@ -51,13 +61,17 @@ import { plainRichText } from '/src/vnext/domain/editorial-model.ts';
 import { authoredFrameDiagnostics } from '/src/vnext/publication/preflight.ts';
 let n = 0;
 const base = createCatalogDocument(() => 'fr54-' + (++n), 'Prova FR-54 · sangria na impressão');
-const pageOne = { ...base.pages[0], id: '${PAGE_ONE}', objects: [
+const pages = ${fixture === 'native'
+  ? `[{ ...base.pages[0], id: '${NATIVE.page}', background: { color: '${NATIVE.background}' }, objects: [
+  { id: '${NATIVE.id}', type: 'polygon', frame: { xMm: 0, yMm: 257, widthMm: 210, heightMm: 42 }, zIndex: 1,
+    points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], style: { fill: { kind: 'solid', color: '${NATIVE.fill}' } } },
+] }]`
+  : `[{ ...base.pages[0], id: '${PAGE_ONE}', objects: [
   { id: '${BAND.id}', type: 'shape', frame: { xMm: 0, yMm: 257, widthMm: 210, heightMm: 42 }, zIndex: 1, shape: 'rectangle', style: { fill: '${BAND.fill}' } },
-] };
-const pageTwo = { ...base.pages[0], id: '${PAGE_TWO}', objects: [
+] }, { ...base.pages[0], id: '${PAGE_TWO}', objects: [
   { id: 'page-two-text', type: 'text', frame: { xMm: 12, yMm: 12, widthMm: 150, heightMm: 10 }, zIndex: 1, text: plainRichText('page-two-text', 'Topo da página 2'), style: {} },
-] };
-const catalog = { ...base, pages: [pageOne, pageTwo] };
+] }]`};
+const catalog = { ...base, pages };
 window.__FR54__ = { document: catalog, diagnostics: authoredFrameDiagnostics(catalog), ready: false };
 flushSync(() => createRoot(document.getElementById('root')).render(createElement(DocumentRenderer, { document: catalog, plans: new Map(), assetUrls: new Map() })));
 window.__FR54__.ready = true;
@@ -67,10 +81,11 @@ const server = await createServer({
   root,
   plugins: [{ name: 'fr54-bleed-print-page', configureServer(devServer) {
     devServer.middlewares.use(async (req, res, next) => {
-      if ((req.url ?? '').split('?')[0] !== route) return next();
+      const path = (req.url ?? '').split('?')[0];
+      if (path !== route && path !== NATIVE_ROUTE) return next();
       try {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.end(await devServer.transformIndexHtml(req.url, html));
+        res.end(await devServer.transformIndexHtml(req.url, htmlFor(path === NATIVE_ROUTE ? 'native' : 'shape')));
       } catch (error) { next(error); }
     });
   } }],
@@ -82,11 +97,11 @@ const evidence = { feature: 'FR-54', question: 'Does a 2 mm downward bleed print
 const errors = [];
 const near = (actual, expected, toleranceMm, label) => assert(Math.abs(actual - expected) <= toleranceMm, `${label}: ${actual} vs ${expected} (±${toleranceMm} mm)`);
 
-async function openFixture(context, label) {
+async function openFixture(context, label, path = route) {
   const page = await context.newPage();
   page.on('pageerror', error => errors.push({ label, message: error.message }));
   page.on('console', message => { if (message.type() === 'error') errors.push({ label, message: message.text() }); });
-  await page.goto(origin + route, { waitUntil: 'domcontentloaded' });
+  await page.goto(origin + path, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__FR54__?.ready === true, { timeout: 30000 });
   await page.evaluate(() => document.fonts.ready);
   return page;
@@ -128,14 +143,15 @@ async function rasterize(bytes, label) {
     const image = context.getImageData(0, 0, canvas.width, canvas.height).data;
     const sample = (fromMm, toMm) => {
       const fromRow = Math.max(0, Math.ceil(fromMm * pxPerMm)), toRow = Math.min(canvas.height, Math.floor(toMm * pxPerMm));
-      let pixels = 0, nonWhite = 0, bandColoured = 0;
+      let pixels = 0, nonWhite = 0, bandColoured = 0, backgroundColoured = 0;
       for (let row = fromRow; row < toRow; row++) for (let column = 0; column < canvas.width; column++) {
         const offset = (row * canvas.width + column) * 4, r = image[offset], g = image[offset + 1], b = image[offset + 2];
         pixels++;
         if (r < 250 || g < 250 || b < 250) nonWhite++;
         if (Math.abs(r - BAND.rgb[0]) <= 12 && Math.abs(g - BAND.rgb[1]) <= 12 && Math.abs(b - BAND.rgb[2]) <= 12) bandColoured++;
+        if (Math.abs(r - NATIVE.backgroundRgb[0]) <= 6 && Math.abs(g - NATIVE.backgroundRgb[1]) <= 6 && Math.abs(b - NATIVE.backgroundRgb[2]) <= 6) backgroundColoured++;
       }
-      return { fromMm, toMm, rows: toRow - fromRow, pixels, nonWhite, bandColoured, bandShare: pixels ? bandColoured / pixels : 0 };
+      return { fromMm, toMm, rows: toRow - fromRow, pixels, nonWhite, bandColoured, bandShare: pixels ? bandColoured / pixels : 0, backgroundShare: pixels ? backgroundColoured / pixels : 0 };
     };
     await writeFile(resolve(output, `${label}-sheet-${number}.png`), canvas.toBuffer('image/png'));
     sheets.push({ sheet: number, widthMm, heightMm, top0to2mm: sample(0, 2), top0to5mm: sample(0, 5), text10to20mm: sample(10, 20), bottom2mm: sample(heightMm - 2, heightMm) });
@@ -173,6 +189,8 @@ try {
   near(screen.band.topMm, 257, 0.05, 'band top'); near(screen.band.bottomMm, 299, 0.05, 'band bottom');
   near(screen.band.overshootBelowPageMm, 2, 0.05, 'band overshoot below page 1');
   assert.equal(screen.probe.hitObject, BAND.id, 'on screen the bleed below page 1 is painted (and hit) by the band');
+  assert.equal(screen.probe.hitPage, PAGE_ONE, 'the band that bleeds belongs to page 1 (not covered by page 2) on screen');
+  assert(screen.pageTwoStartsAfterPageOneMm > 1.5, `on screen the probe point lies in the gap between pages (gap ${screen.pageTwoStartsAfterPageOneMm} mm)`);
   evidence.screen = screen;
 
   // 2. Print media: same geometry, page clipped, the band no longer paints below page 1.
@@ -209,6 +227,47 @@ try {
   evidence.control = { probe: controlProbe, pdf: control, stripOnSheetTwo: control.sheets[1]?.top0to2mm.nonWhite > 0, stripBandShare: control.sheets[1]?.top0to2mm.bandShare ?? null };
   await controlContext.close();
 
+  // 6. Native elements (Onda 3.5): a page background colour and an SVG-painted polygon bleeding below the LAST page.
+  const nativeContext = await browser.newContext({ viewport: { width: 1000, height: 1400 }, deviceScaleFactor: 1 });
+  const nativePage = await openFixture(nativeContext, 'native', NATIVE_ROUTE);
+  const nativePreflight = await nativePage.evaluate(() => window.__FR54__.diagnostics);
+  assert.deepEqual(nativePreflight.map(issue => `${issue.objectId}:${issue.code}:${issue.severity}`), [`${NATIVE.id}:OBJECT_OUTSIDE_PAGE:WARNING`], 'the bleeding polygon is released as a bleed WARNING only');
+  const nativeProbe = () => nativePage.evaluate(({ id, mmPerPx }) => {
+    const mm = px => Math.round(px * mmPerPx * 1000) / 1000;
+    const sheet = document.querySelector('[data-editorial-root] .editorial-page');
+    const box = sheet.getBoundingClientRect(), object = document.querySelector(`[data-object-id="${id}"]`).getBoundingClientRect();
+    const hit = document.elementFromPoint((box.left + box.right) / 2, box.bottom + 1 / mmPerPx);
+    return {
+      media: matchMedia('print').matches ? 'print' : 'screen', overflow: getComputedStyle(sheet).overflow, background: getComputedStyle(sheet).backgroundColor,
+      svg: Boolean(document.querySelector(`[data-object-id="${id}"] svg`)),
+      page: { widthMm: mm(box.width), heightMm: mm(box.height) },
+      object: { topMm: mm(object.top - box.top), bottomMm: mm(object.bottom - box.top), overshootBelowPageMm: mm(object.bottom - box.bottom) },
+      hitObject: hit?.closest('[data-object-id]')?.getAttribute('data-object-id') ?? null,
+    };
+  }, { id: NATIVE.id, mmPerPx: MM_PER_CSS_PX });
+  const nativeScreen = await nativeProbe();
+  assert.equal(nativeScreen.media, 'screen');
+  assert.equal(nativeScreen.overflow, 'visible', 'screen keeps overflow visible so the editor shows the polygon bleed');
+  assert.equal(nativeScreen.background, 'rgb(234, 241, 244)', 'the page background colour is painted on the page box');
+  assert.equal(nativeScreen.svg, true, 'the polygon is drawn as SVG');
+  near(nativeScreen.object.overshootBelowPageMm, 2, 0.05, 'polygon overshoot below the page');
+  assert.equal(nativeScreen.hitObject, NATIVE.id, 'on screen the polygon bleed below the page is painted (and hit) by the polygon');
+  await nativePage.emulateMedia({ media: 'print' });
+  const nativePrint = await nativeProbe();
+  assert.equal(nativePrint.overflow, 'hidden', 'print clips the page at its box');
+  assert.deepEqual(nativePrint.object, nativeScreen.object, 'print must not move or resize the authored polygon');
+  assert.deepEqual(nativePrint.page, nativeScreen.page, 'print must not change the page box');
+  assert.equal(nativePrint.background, nativeScreen.background, 'print keeps the page background colour');
+  assert.notEqual(nativePrint.hitObject, NATIVE.id, 'in print the polygon must not be painted below the page');
+  const nativePdf = await printToPdf(nativePage, 'native');
+  evidence.native = { preflight: nativePreflight, screen: nativeScreen, print: nativePrint, pdf: nativePdf };
+  assert.equal(nativePdf.pageCount, 1, 'the bleed of the last page does not add a sheet');
+  const [nativeSheet] = nativePdf.sheets;
+  assert(nativeSheet.top0to5mm.backgroundShare >= 0.98, `the page background colour must print on the sheet (share ${nativeSheet.top0to5mm.backgroundShare})`);
+  assert(nativeSheet.text10to20mm.backgroundShare >= 0.98, `the page background colour must print all over the sheet (share ${nativeSheet.text10to20mm.backgroundShare})`);
+  assert(nativeSheet.bottom2mm.bandShare >= 0.98, `the polygon must still print down to the bottom edge of the sheet (share ${nativeSheet.bottom2mm.bandShare})`);
+  await nativeContext.close();
+
   assert.deepEqual(errors, [], 'no page/console errors');
   evidence.errors = errors;
   evidence.finishedAt = new Date().toISOString();
@@ -219,6 +278,7 @@ try {
   console.log(`  print : overflow=${print.pageOverflow}, hit below page 1 = ${print.probe.hitObject ?? 'none'} on ${print.probe.hitPage}`);
   console.log(`  pdf   : ${fixed.pageCount} sheets; sheet 2 top 2 mm non-white = ${sheetTwo.top0to2mm.nonWhite}/${sheetTwo.top0to2mm.pixels}; sheet 1 bottom 2 mm band share = ${sheetOne.bottom2mm.bandShare.toFixed(4)}`);
   console.log(`  control (overflow visible in print): strip on sheet 2 = ${evidence.control.stripOnSheetTwo} (non-white ${control.sheets[1]?.top0to2mm.nonWhite}, band share ${evidence.control.stripBandShare?.toFixed(4)})`);
+  console.log(`  native: polygon bleeds ${nativeScreen.object.overshootBelowPageMm} mm on screen (hit = ${nativeScreen.hitObject}), print overflow=${nativePrint.overflow}; ${nativePdf.pageCount} sheet; background share ${nativeSheet.top0to5mm.backgroundShare.toFixed(4)}, polygon share at the bottom edge ${nativeSheet.bottom2mm.bandShare.toFixed(4)}`);
   console.log('  evidence:', resolve(output, 'evidence.json'));
 } catch (error) {
   evidence.verdict = 'FAIL';

@@ -73,7 +73,9 @@ try {
   await page.screenshot({ path: resolve(output, 'editor-thumbnails.png') });
   await page.getByRole('button', { name: 'Usar modelo…' }).click();
   const gallery = page.getByRole('group', { name: 'Modelo de página PRESYS' });
-  assert.equal(await gallery.getByRole('radio').count(), 11);
+  // Onda 3.5 (S3): the gallery lists the 9 archetypes + the native "Capa de produto — PCON" + the 2 TA25N starters.
+  assert.equal(await gallery.getByRole('radio').count(), 12);
+  assert.equal(await gallery.getByRole('radio', { name: 'Capa de produto — PCON' }).count(), 1);
   await gallery.getByText('Contracapa', { exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('[data-page-model-gallery] [data-page-thumbnail]')]
     .filter((host) => host.getAttribute('data-thumbnail-state') === 'rendered').length >= 3);
