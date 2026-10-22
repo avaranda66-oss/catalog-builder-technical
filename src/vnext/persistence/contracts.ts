@@ -29,7 +29,10 @@ export interface CatalogPersistenceEnvelope extends CatalogPersistenceMetadata {
   readonly documentSnapshot: CatalogDocument;
 }
 
-export type CatalogListItem = Omit<CatalogPersistenceMetadata, 'lastMutationId'>;
+export type CatalogListItem = Omit<CatalogPersistenceMetadata, 'lastMutationId'> & {
+  /** Optional on older servers; presentation only, never an authorization claim. */
+  readonly updatedByName?: string | null;
+};
 
 export interface CatalogPersistenceHandle {
   readonly catalogId: string;
@@ -95,6 +98,8 @@ export interface ArchiveCatalogCasRequest {
   readonly expectedRemoteRevision: number;
 }
 
+export type UnarchiveCatalogCasRequest = ArchiveCatalogCasRequest;
+
 /**
  * Infrastructure-neutral W3 persistence contract.
  * Implementations belong to later W3 slices; this interface carries no transport authority.
@@ -105,4 +110,6 @@ export interface CatalogRepository {
   createCatalog(request: CreateCatalogRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>>;
   saveCAS(request: SaveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceEnvelope>>;
   archiveCAS(request: ArchiveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceMetadata>>;
+  /** Older adapters can omit restore until their backing store supports it. */
+  unarchiveCAS?(request: UnarchiveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceMetadata>>;
 }
