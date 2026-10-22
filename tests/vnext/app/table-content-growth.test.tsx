@@ -180,6 +180,35 @@ describe('B-01 · typing in a table grows its frame (J4: Parâmetro, Faixa, Ente
     expect(session.getSnapshot().document).toEqual(before);
   });
 
+  it('pasting a block of cells and the growth of the frame are one Desfazer and one Refazer (one Ctrl+Z, not two)', async () => {
+    const session = newTableSession();
+    const { container } = render(<VNextApp session={session} simpleByDefault />);
+    await openTableGrid(container);
+    const before = session.getSnapshot().document;
+    expect(session.getSnapshot().canUndo).toBe(false);
+
+    fireEvent.click(container.querySelector<HTMLElement>('[data-table-cell="0:0"]')!);
+    fireEvent.click(container.querySelector<HTMLElement>('[data-editor-action="toggle-table-options"]')!);
+    fireEvent.click(container.querySelector<HTMLElement>('[data-editor-action="paste-table-cells"]')!);
+    fireEvent.change(container.querySelector<HTMLTextAreaElement>('[data-table-paste-textarea]')!, { target: { value: 'Parâmetro\tValor\nPressão\t25 bar\nTemperatura\t90 °C' } });
+    const sequenceBefore = session.getSnapshot().localSequence;
+    fireEvent.click(container.querySelector<HTMLElement>('[data-editor-action="apply-native-table-paste"]')!);
+
+    expect(textAt(session, 1, 1)).toBe('25 bar');
+    // The measured growOnly fit lands after the paste: the session counts two actions, the person has one undo step.
+    await waitFor(() => expect(tableObject(session).frame.heightMm).toBeGreaterThan(39), { timeout: 5_000 });
+    await waitFor(() => expect(container.querySelector('[data-table-auto-fit]')).toBeNull(), { timeout: 5_000 });
+    expect(session.getSnapshot().localSequence - sequenceBefore).toBe(2);
+    const afterPaste = session.getSnapshot().document;
+
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="undo"]')!);
+    expect(session.getSnapshot().document).toEqual(before);
+    expect(session.getSnapshot().canUndo).toBe(false);
+    fireEvent.click(container.querySelector<HTMLButtonElement>('[data-editor-action="redo"]')!);
+    expect(session.getSnapshot().document).toEqual(afterPaste);
+    expect(session.getSnapshot().canRedo).toBe(false);
+  });
+
   it('typing the next cell right away does not stop the growth, and Tab grows it again (no "A tabela ultrapassa")', async () => {
     const session = newTableSession();
     const { container } = render(<VNextApp session={session} simpleByDefault />);

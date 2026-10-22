@@ -400,7 +400,14 @@ async function workflow(browser, width) {
     await shot(page, targetLocale + '-generating', width);
     holdTranslation = false; releaseTranslation?.();
     await page.locator('[data-translation-run="0"]').waitFor();
-    assert.equal(await selector.isDisabled(), true, 'Target stays pinned to the generated candidate');
+    // F-09: with runs on screen the selector gives way to one line "<título> · origem → destino"; the target stays pinned to
+    // the generated candidate (no control left to change it) and the father still reads which language he is reviewing.
+    assert.equal(await selector.count(), 0, 'Target stays pinned to the generated candidate: no selector during review');
+    assert.equal(await dialog.getByRole('combobox').count(), 0);
+    const languages = dialog.locator('[data-translation-languages="compact"]');
+    assert.equal(await languages.count(), 1);
+    const compactText = (await languages.innerText()).replace(/\s+/g, ' ');
+    assert(compactText.includes('Português (Brasil)') && compactText.includes('→') && compactText.includes(language), `Compact header must name source and target: ${compactText}`);
     await modalKeyboard(page, dialog);
     await shot(page, targetLocale + '-review', width);
     const title = page.locator('[data-translation-run="0"]');
