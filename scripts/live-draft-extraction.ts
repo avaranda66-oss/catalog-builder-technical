@@ -9,7 +9,7 @@
  * Tooling only: never imported by the app, so it never reaches the bundle.
  *
  *   GEMINI_API_KEY=... npx vite-node scripts/live-draft-extraction.ts -- \
- *     --pdf-root "<pasta CONFIGURATOR PCON>" --out <pasta> [--only ta-manual-pt,y17-folder]
+ *     --pdf-root "<pasta CONFIGURATOR PCON>" --out <pasta> [--only ta-manual-pt,y17-folder] [--pages ta-folder=9-10] [--no-models]
  *
  * --replay reviews the answers saved in <out>/raw again (no API call, no key).
  *
@@ -28,7 +28,7 @@ import { GroundTruthSchema, summarizeAgainstTruth } from './extract-facts-eval';
 
 const TA = ['TA-25N', 'TA-35N', 'TA-50N'];
 const SOURCES = [
-  { id: 'ta-folder', path: 'catalogospdf/presys-ta-folder (4).pdf', pages: [9, 13] as const, models: TA },
+  { id: 'ta-folder', path: 'catalogospdf/presys-ta-folder (4).pdf', pages: [9, 13] as readonly [number, number], models: TA },
   { id: 'ta-manual-pt', path: 'banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf',
     pages: [5, 8] as const, models: TA },
   { id: 'y17-folder', path: 'presyspdfs/pressure-controller-pcon-y17-folder.pdf', pages: [11, 11] as const, models: ['PCON-Y17'] },
@@ -42,8 +42,17 @@ const args = process.argv.slice(2).filter(arg => arg !== '--');
 const option = (name: string) => { const at = args.indexOf(name); return at >= 0 ? args[at + 1] : undefined; };
 const pdfRoot = option('--pdf-root'), out = option('--out');
 const only = option('--only')?.split(',');
+// --pages id=first-last[,id=first-last]: another page range for a source (J2-lite live check: TA folder pp. 9-10).
+for (const item of option('--pages')?.split(',') ?? []) {
+  const match = /^([a-z0-9-]+)=(\d+)-(\d+)$/u.exec(item.trim());
+  const source = match ? SOURCES.find(entry => entry.id === match[1]) : undefined;
+  if (!match || !source || Number(match[2]) > Number(match[3])) throw new Error(`--pages inválido: ${item}`);
+  (source as { pages: readonly [number, number] }).pages = [Number(match[2]), Number(match[3])];
+}
 if (!pdfRoot || !out) throw new Error('Use: --pdf-root <pasta> --out <pasta> [--only id,id]');
 const replay = args.includes('--replay');
+// --no-models: ask without the product list, as the app's J2-lite button does (the model lists what it finds).
+const noModels = args.includes('--no-models');
 const key = process.env.GEMINI_API_KEY?.trim() ?? '';
 if (!replay && key.length < 12) throw new Error('Defina GEMINI_API_KEY no ambiente (a chave nunca é impressa).');
 const redact = (text: string) => (key ? text.split(key).join('[chave]') : text);
@@ -220,7 +229,7 @@ for (const source of SOURCES.filter(item => !only || only.includes(item.id))) {
   const pdf = await extractPdfText(fileName, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   const path = `${USER}/${pdf.sha256}.pdf`;
   files.set(path, bytes);
-  const body = { version: 1, task: 'extract_facts', models: source.models, source: { path, sha256: pdf.sha256,
+  const body = { version: 1, task: 'extract_facts', models: noModels ? [] : source.models, source: { path, sha256: pdf.sha256,
     mimeType: 'application/pdf', fileName, pageCount: pdf.pageCount, firstPage: source.pages[0], lastPage: source.pages[1] } };
   for (const attempt of replay ? ['first'] as const : ['first', 'cache'] as const) {
     calls = [];
@@ -241,7 +250,7 @@ for (const source of SOURCES.filter(item => !only || only.includes(item.id))) {
       record.costUsdReserved2027 = usage.estimatedUsd;
       if (attempt === 'first') {
         const review = reviewExtraction(extraction.sheet, { sourceId: source.id, fileName, sha256: pdf.sha256, pageCount: pdf.pageCount,
-          firstPage: source.pages[0], lastPage: source.pages[1] }, pdf, { models: source.models, trimmedByServer: extraction.trimmed });
+          firstPage: source.pages[0], lastPage: source.pages[1] }, pdf, { ...(noModels ? {} : { models: source.models }), trimmedByServer: extraction.trimmed });
         reviews.set(source.id, { review, pdf, fileName });
         const modelTruth = summarizeAgainstTruth(reviewSourceValues(review), truth, [source.id]);
         const puaVerified = review.tables.flatMap(table => table.report.values).filter(value => isVerifiedStatus(value.status) &&

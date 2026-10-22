@@ -9,7 +9,7 @@ import {
 import type { ExtractionReview } from '../extraction-review';
 import type { ExtractedPdf } from '../pdf-intake';
 import type { IntakeEntry } from '../intake/intake-model';
-import { guessSpecificationPages, pageRangeProblem, type PageGuess, type SpecTableGateway } from './spec-table-gateway';
+import { guessSpecificationPages, pageRangeProblem, parseModelNames, type PageGuess, type SpecTableGateway } from './spec-table-gateway';
 
 /**
  * J2-lite (slice 3B) state: "Montar tabela de especificações a partir deste
@@ -39,6 +39,8 @@ export interface SpecTableFile {
   readonly lastPage: number;
   /** The pages suggested from the file's text (`found` false: only a starting point). */
   readonly guess: PageGuess;
+  /** The person typed the pages: a new model list no longer moves them. */
+  readonly edited?: boolean;
 }
 export interface SpecTableRead {
   readonly fileName: string;
@@ -60,6 +62,8 @@ export interface SpecTableFlow {
   readonly conversationId: string;
   readonly at: number;
   readonly entries: readonly IntakeEntry[];
+  /** Models the person wants, as typed ("TA-25N, TA-35N"); empty lets the AI list the products it finds. */
+  readonly models: string;
   readonly stage: SpecTableStage;
 }
 
@@ -123,7 +127,7 @@ export function useSpecTableDraft({ gateway, session, activePageId, onBeforeMuta
         return;
       }
       if (id !== serial.current) return;
-      const guess = guessSpecificationPages(pdf);
+      const guess = guessSpecificationPages(pdf, { models: parseModelNames(flowRef.current?.models ?? '') });
       files.push({ entryId: entry.id, sourceId: `arquivo-${index + 1}`, file: entry.file, fileName: entry.fileName, pdf,
         firstPage: guess.firstPage, lastPage: guess.lastPage, guess });
     }
@@ -137,7 +141,7 @@ export function useSpecTableDraft({ gateway, session, activePageId, onBeforeMuta
     const id = ++serial.current;
     const pdfs = specTablePdfs(entries);
     say(conversationId, 'user', specTableActionLabel(pdfs.length));
-    setFlow({ id, batchId, conversationId, at: Date.now(), entries, stage: { kind: 'checking' } });
+    setFlow({ id, batchId, conversationId, at: Date.now(), entries, models: '', stage: { kind: 'checking' } });
     void prepare(id, entries);
   };
   const retry = () => {
@@ -151,8 +155,20 @@ export function useSpecTableDraft({ gateway, session, activePageId, onBeforeMuta
   const setPages = (entryId: string, firstPage: number, lastPage: number) => {
     const current = flowRef.current;
     if (current?.stage.kind !== 'pages' && current?.stage.kind !== 'failed') return;
-    const files = current.stage.files.map(file => file.entryId === entryId ? { ...file, firstPage, lastPage } : file);
+    const files = current.stage.files.map(file => file.entryId === entryId ? { ...file, firstPage, lastPage, edited: true } : file);
     setFlow({ ...current, stage: { kind: 'pages', files } });
+  };
+  /** The models typed by the person; the pages they did not type follow the pages that name those models. */
+  const setModels = (models: string) => {
+    const current = flowRef.current;
+    if (current?.stage.kind !== 'pages' && current?.stage.kind !== 'failed') return;
+    const names = parseModelNames(models);
+    const files = current.stage.files.map(file => {
+      if (file.edited) return file;
+      const guess = guessSpecificationPages(file.pdf, { models: names });
+      return { ...file, guess, firstPage: guess.firstPage, lastPage: guess.lastPage };
+    });
+    setFlow({ ...current, models, stage: { kind: 'pages', files } });
   };
   const choosePages = () => {
     const current = flowRef.current;
@@ -170,11 +186,12 @@ export function useSpecTableDraft({ gateway, session, activePageId, onBeforeMuta
     }
     const id = ++serial.current;
     setFlow({ ...current, id, stage: { kind: 'reading', files } });
+    const models = parseModelNames(current.models);
     const reads: SpecTableRead[] = [];
     for (const file of files) {
       try {
         const review = await gateway.extract({ file: file.file, pdf: file.pdf, firstPage: file.firstPage, lastPage: file.lastPage,
-          sourceId: file.sourceId });
+          sourceId: file.sourceId, ...(models.length ? { models } : {}) });
         reads.push({ fileName: file.fileName, review });
       } catch (failure) {
         reads.push({ fileName: file.fileName, error: draftErrorMessage(failure) });
@@ -225,6 +242,6 @@ export function useSpecTableDraft({ gateway, session, activePageId, onBeforeMuta
   };
   const discard = () => { serial.current++; setFlow(undefined); };
 
-  return { flow, start, retry, setPages, choosePages, read, cancel, choose, apply, discard, available: Boolean(gateway) };
+  return { flow, start, retry, setPages, setModels, choosePages, read, cancel, choose, apply, discard, available: Boolean(gateway) };
 }
 export type SpecTableController = ReturnType<typeof useSpecTableDraft>;

@@ -86,6 +86,15 @@ describe('compileDraft: T1 "Comparativo de modelos" from the verified TA folder'
     expect(matrix(tables(marked.document)[0].object.table)[2]).toEqual(['Resolution', 'A COMPLETAR', 'A COMPLETAR', 'A COMPLETAR']);
     expect(draftIntegrityProblems(set, marked.draft, 'A COMPLETAR')).toEqual([]);
   });
+
+  it('a label printed with its colon ("Operating Range:", as in the real folder) is not doubled in the note', async () => {
+    const { report } = await folderReport();
+    const set = factSetFromReport(report);
+    const colon = { ...set, rows: set.rows.map(row => ({ ...row, label: `${row.label}:` })) };
+    const [{ object }] = tables(compileDraftDocument(colon).document);
+    expect(object.table.annotations.map(note => richPlain(note.text))).toEqual(['Operating Range: ambient temperature: 23 °C']);
+    expect(matrix(object.table)[1][0]).toBe('Operating Range:');
+  });
 });
 
 describe('T3 "Especificações": one product, label and value', () => {

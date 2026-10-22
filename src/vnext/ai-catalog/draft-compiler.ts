@@ -403,7 +403,8 @@ function buildGrid(set: DraftFactSet, layout: DraftLayout, pendingText: string):
       const chosenCondition = condition
         ? (() => { const resolved = resolvePosition(set, condition); return 'candidate' in resolved ? condition.candidates[resolved.candidate].value : ''; })()
         : row.condition;
-      const note = chosenCondition.trim() ? `${row.label}: ${chosenCondition.trim()}` : '';
+      // A label printed with its colon ("Display Accuracy:") is not doubled in the note.
+      const note = chosenCondition.trim() ? `${row.label.replace(/\s*:\s*$/u, '')}: ${chosenCondition.trim()}` : '';
       if (note && !grid.notes.includes(note)) grid.notes.push(note);
     }
   }

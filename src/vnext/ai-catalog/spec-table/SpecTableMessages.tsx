@@ -84,6 +84,12 @@ export function SpecTableMessages({ controller, document, activePageId, onShowTa
         <button type="button" onClick={controller.cancel}>Cancelar</button>
       </>}>
       <div data-spec-table="pages">
+        <label className="ai-spec-models">
+          <span>Modelos que você quer na tabela (opcional)</span>
+          <input type="text" value={flow.models} maxLength={300} placeholder="Ex.: TA-25N, TA-35N, TA-50N"
+            onChange={(event) => controller.setModels(event.target.value)} />
+          <small>Se o PDF tiver vários produtos, escreva os modelos como aparecem no PDF, separados por vírgula.</small>
+        </label>
         {stage.files.map(file => <PageChoice key={file.entryId} file={file}
           onChange={(first, last) => controller.setPages(file.entryId, first, last)} />)}
         <p className="ai-chat-note">{SEND_NOTICE}</p>

@@ -80,7 +80,7 @@ export function serverSpecTableGateway(client: DraftClient, userId: string,
 /** Words and printed units that mark a page of technical specifications (PT, EN, ES). */
 const SPEC_WORDS = /(?:especifica[cç]|specification|technical data|dados t[eé]cnicos|caracter[ií]sticas t[eé]cnicas|faixa|range|rango|exatid[aã]o|accuracy|exactitud|precis[aã]o|resolu[cç]|resolution|estabilidade|stability|alimenta[cç]|power supply|pot[eê]ncia|power|peso|weight|dimens|temperatura ambiente|ambient temperature)/giu;
 const PRINTED_UNIT = /\d\s?(?:°\s?[CF]|º\s?[CF]|mA|mV|V(?![a-z])|W(?![a-z])|Hz|bar|psi|kPa|MPa|mm|kg|%)/gu;
-const scoreOf = (text: string) => (text.match(SPEC_WORDS)?.length ?? 0) + (text.match(PRINTED_UNIT)?.length ?? 0);
+export const specificationPageScore = (text: string) => (text.match(SPEC_WORDS)?.length ?? 0) + (text.match(PRINTED_UNIT)?.length ?? 0);
 
 export interface PageGuess {
   readonly firstPage: number;
@@ -89,21 +89,47 @@ export interface PageGuess {
   readonly found: boolean;
 }
 
+/** Model names typed by the person ("TA-25N, TA-35N"), as printed: at most 6, each up to 60 characters. */
+export function parseModelNames(text: string): string[] {
+  const names: string[] = [];
+  for (const raw of text.split(/[,;\n]/u)) {
+    const name = raw.replace(/\s+/gu, ' ').trim().slice(0, 60);
+    if (name && !names.some(other => other.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names.slice(0, 6);
+}
+const mentions = (text: string, models: readonly string[]) => {
+  const flat = text.replace(/\s+/gu, ' ').toLowerCase();
+  return models.some(model => flat.includes(model.toLowerCase()));
+};
+
 /**
  * The pages most likely to hold the specification table, read from the text
- * on this computer: the best page plus the pages right after it that still
- * look like specifications (at most `maxPages`). Only a suggestion; the person
- * can change it before anything is sent.
+ * on this computer: the best page plus the neighbouring page, before or after
+ * it, that still looks like specifications (at most `maxPages`). With the
+ * models the person typed, only pages that name one of them count: the TA
+ * folder has several product families on pages 9 to 16, and "TA-25N" leads
+ * to pages 9 and 10. Only a suggestion: the person can change it before
+ * anything is sent.
  */
-export function guessSpecificationPages(pdf: Pick<ExtractedPdf, 'pageCount' | 'pages'>, maxPages = 2): PageGuess {
-  const limit = Math.max(1, Math.min(maxPages, DRAFT_LIMITS.maxRangePages));
-  const scores = new Map(pdf.pages.map(page => [page.number, scoreOf(page.text)]));
+export function guessSpecificationPages(pdf: Pick<ExtractedPdf, 'pageCount' | 'pages'>,
+  options: { readonly maxPages?: number; readonly models?: readonly string[] } = {}): PageGuess {
+  const limit = Math.max(1, Math.min(options.maxPages ?? 2, DRAFT_LIMITS.maxRangePages));
+  const models = options.models ?? [];
+  const scores = new Map(pdf.pages.filter(page => !models.length || mentions(page.text, models))
+    .map(page => [page.number, specificationPageScore(page.text)]));
   let best = 0, bestScore = 0;
   for (const [page, score] of scores) if (score > bestScore) { best = page; bestScore = score; }
   if (!best || bestScore < 3) return { firstPage: 1, lastPage: Math.min(pdf.pageCount, limit), found: false };
-  let last = best;
-  while (last - best + 1 < limit && last < pdf.pageCount && (scores.get(last + 1) ?? 0) * 2 >= bestScore) last++;
-  return { firstPage: best, lastPage: last, found: true };
+  const looksLikeSpecs = (page: number) => page >= 1 && page <= pdf.pageCount && (scores.get(page) ?? 0) * 2 >= bestScore;
+  let first = best, last = best;
+  while (last - first + 1 < limit) {
+    const before = looksLikeSpecs(first - 1) ? scores.get(first - 1) ?? 0 : -1;
+    const after = looksLikeSpecs(last + 1) ? scores.get(last + 1) ?? 0 : -1;
+    if (before < 0 && after < 0) break;
+    if (before >= after) first--; else last++;
+  }
+  return { firstPage: first, lastPage: last, found: true };
 }
 
 /** Plain-Portuguese check of a page range typed by the person; undefined when it can be read. */

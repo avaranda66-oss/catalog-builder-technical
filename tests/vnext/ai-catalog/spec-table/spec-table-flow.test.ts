@@ -9,7 +9,7 @@ import {
 import { reviewExtraction, type ExtractionReview } from '@/vnext/ai-catalog/extraction-review';
 import { extractPdfText, type ExtractedPdf } from '@/vnext/ai-catalog/pdf-intake';
 import { draftPreview } from '@/vnext/ai-catalog/spec-table/draft-preview';
-import { guessSpecificationPages, pageRangeProblem } from '@/vnext/ai-catalog/spec-table/spec-table-gateway';
+import { guessSpecificationPages, pageRangeProblem, parseModelNames } from '@/vnext/ai-catalog/spec-table/spec-table-gateway';
 import { compileSpecTable } from '@/vnext/ai-catalog/spec-table/useSpecTableDraft';
 import {
   FOLDER_FILE, FOLDER_SPEC_PAGE, MANUAL_FILE, MANUAL_SPEC_PAGE, TA, folderPdfBytes, folderSheet, manualPdfBytes, manualSheet,
@@ -123,5 +123,23 @@ describe('J2-lite fixture: the real TA folder p. 9 and manual p. 5 facts, checke
     expect(guessSpecificationPages({ pageCount: 4, pages: [page(1, 'Capa'),
       page(2, 'Especificações Faixa 0 a 20 bar Exatidão 0,1 % Alimentação 24 V'), page(3, 'Peso 2 kg Dimensões 10 x 20 mm Potência 5 W'),
       page(4, 'Contato')] })).toEqual({ firstPage: 2, lastPage: 3, found: true });
+    // A run of specification pages: the best one and its best neighbour, before or after it (more on request).
+    const specs = 'Especificações Faixa 0 a 20 bar Exatidão 0,1 % Alimentação 24 V Peso 2 kg';
+    const run = { pageCount: 8, pages: [page(1, 'Capa'), page(2, specs), page(3, `${specs} ${specs}`),
+      page(4, specs), page(5, specs), page(6, specs), page(7, 'Contato'), page(8, 'Fim')] };
+    expect(guessSpecificationPages(run)).toEqual({ firstPage: 2, lastPage: 3, found: true });
+    expect(guessSpecificationPages(run, { maxPages: 4 })).toEqual({ firstPage: 2, lastPage: 5, found: true });
+  });
+
+  it('with the models the person typed, only pages that name them count (a folder with several families)', () => {
+    const page = (number: number, text: string) => ({ number, text, textLength: text.length, needsVisualExtraction: false });
+    const specs = 'Especificações Faixa -25 °C a 155 °C Exatidão 0,1 °C Potência 200 W Peso 10,5 kg';
+    const folder = { pageCount: 4, pages: [page(1, 'Capa TA-25N'), page(2, `TA-25N TA-35N ${specs}`),
+      page(3, `TA-350PL ${specs} ${specs}`), page(4, 'Contato')] };
+    expect(guessSpecificationPages(folder)).toEqual({ firstPage: 2, lastPage: 3, found: true });
+    expect(guessSpecificationPages(folder, { models: parseModelNames('ta-25n') })).toEqual({ firstPage: 2, lastPage: 2, found: true });
+    expect(guessSpecificationPages(folder, { models: ['PCON-Y17'] })).toMatchObject({ found: false });
+    expect(parseModelNames(' TA-25N,  TA-35N ;TA-25N\nTA-50N ,, ')).toEqual(['TA-25N', 'TA-35N', 'TA-50N']);
+    expect(parseModelNames('A,B,C,D,E,F,G')).toHaveLength(6);
   });
 });

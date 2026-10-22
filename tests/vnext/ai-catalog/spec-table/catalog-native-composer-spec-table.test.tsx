@@ -93,6 +93,10 @@ describe('J2-lite inside the chat: a verified specification table from the dropp
     expect(await within(pages).findByRole('alert')).toHaveTextContent(`${FOLDER_FILE}: Escolha páginas entre 1 e 10.`);
     expect(draft.upload).not.toHaveBeenCalled();
     fireEvent.change(within(pages).getAllByRole('spinbutton', { name: 'Da página' })[0], { target: { value: '9' } });
+    // The models typed go to the server as printed; pages the person typed are not moved.
+    fireEvent.change(within(pages).getByRole('textbox', { name: /Modelos que você quer na tabela/ }),
+      { target: { value: 'TA-25N, TA-35N, TA-50N' } });
+    expect(within(pages).getAllByRole('spinbutton').map(input => (input as HTMLInputElement).value)).toEqual(['9', '9', '5', '5']);
     fireEvent.click(within(pages).getByRole('button', { name: 'Ler estas páginas' }));
 
     const preview = await screen.findByRole('group', { name: 'Prévia da tabela de especificações' }, { timeout: 20000 });
@@ -100,6 +104,7 @@ describe('J2-lite inside the chat: a verified specification table from the dropp
       .filter(body => body.task === 'extract_facts');
     expect(extractions.map(body => [(body.source as { fileName: string }).fileName, (body.source as { firstPage: number }).firstPage,
       (body.source as { lastPage: number }).lastPage])).toEqual([[FOLDER_FILE, 9, 9], [MANUAL_FILE, 5, 5]]);
+    expect(extractions.map(body => body.models)).toEqual([['TA-25N', 'TA-35N', 'TA-50N'], ['TA-25N', 'TA-35N', 'TA-50N']]);
     // No credential ever leaves the browser: the server key reads the file.
     expect(JSON.stringify(extractions)).not.toMatch(/key|credential|byok/i);
     expect(within(preview).getByText('6 valores conferidos no PDF entram na tabela. 6 ficam em branco para você conferir (veja as Pendências acima).')).toBeInTheDocument();
