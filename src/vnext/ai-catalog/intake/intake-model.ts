@@ -33,6 +33,8 @@ export interface IntakeEntry {
   readonly message?: string;
   readonly code?: SourceErrorCode | 'SOURCE_UNKNOWN';
   readonly duplicateOf?: string;
+  /** FR-71: the product the person picked for a photo (a model code); it wins over what the file name says. */
+  readonly photoProduct?: string;
 }
 
 export type SourceTableBlock = Extract<SourceBlock, { kind: 'table' }>;

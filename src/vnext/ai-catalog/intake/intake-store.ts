@@ -75,6 +75,8 @@ export interface SourceFileStore {
   /** Reads one file again with other options (hidden data, a range, other PDF pages). */
   readonly reread: (id: string, options: SourceReadOptions) => void;
   readonly remove: (id: string) => void;
+  /** FR-71: the product (a model code) the person chose for a photo; `undefined` goes back to what the name says. */
+  readonly choosePhotoProduct: (id: string, code: string | undefined) => void;
   readonly clear: () => void;
 }
 
@@ -147,6 +149,12 @@ export function createSourceFileStore(): SourceFileStore {
       if (!entry || entry.state === 'duplicate' || entry.state === 'skipped') return;
       patch(id, (live) => ({ ...live, state: 'reading', options: { ...live.options, ...options } }));
       schedule(id, false);
+    },
+    choosePhotoProduct: (id, code) => {
+      const choice = code?.trim() || undefined;
+      if (entries.get().some((entry) => entry.id === id && entry.kind === 'photo' && entry.photoProduct !== choice)) {
+        patch(id, (live) => ({ ...live, photoProduct: choice }));
+      }
     },
     remove: (id) => {
       forget(id);

@@ -151,9 +151,12 @@ export function TableGridToolbar({
         <button type="button" data-editor-action="paste-table-cells" disabled={mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
       </div>
       <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
-      {/* Last, on a line of its own: the note comes and goes with the cell editing (the click that ends it is
-          the same click on "Desmesclar", "Voltar ao objeto"...), so it must never move a button under the pointer. */}
-      {(!simple || tableOptionsOpen) && notes.length > 0 && <p id={noteId} className="vnext-disclosure-help" data-table-axis-note="">{notes.join(' ')}</p>}
+      {/* Last, on a line of its own, and always there: the note comes and goes with the selection and the cell editing
+          (the click that ends it is the same click on "Desmesclar", "Voltar ao objeto"...), so the line keeps its
+          height when it is empty and nothing under the pointer, nor the page below the bar, ever moves. */}
+      {(!simple || tableOptionsOpen) && (
+        <p id={noteId} className="vnext-disclosure-help vnext-table-axis-note" data-table-axis-note={notes.length > 0 ? '' : undefined}>{notes.join(' ')}</p>
+      )}
     </div>
   );
 }
