@@ -123,7 +123,7 @@ describe('Onda 3.5 · reaching the object below', () => {
     // "Travar o fundo": the plate and the overlay.
     for (const id of ['overlay', 'plate']) {
       const row = layersTree().querySelector<HTMLElement>(`[data-layer-id="${id}"]`)!;
-      fireEvent.click(within(row).getByRole('button', { name: /^Travar Imagem/ }));
+      fireEvent.click(within(row).getByRole('button', { name: /^Travar Página inteira/ }));
     }
     expect(objectsOf(session).find((object) => object.id === 'overlay')?.locked).toBe(true);
     press(hit(container, 'overlay'), 100, 150);
@@ -154,7 +154,7 @@ describe('Onda 3.5 · "Camadas" panel', () => {
 
   it('the eye hides the object (not on the page, warned before publishing) and Desfazer brings it back', () => {
     const { container, session } = setup();
-    fireEvent.click(within(layersTree()).getAllByRole('button', { name: /^Esconder Imagem/ })[0]);
+    fireEvent.click(within(layersTree()).getAllByRole('button', { name: /^Esconder Página inteira/ })[0]);
     expect(objectsOf(session).find((object) => object.id === 'overlay')?.hidden).toBe(true);
     expect(hit(container, 'overlay')).toBeNull();
     expect(container.querySelector<HTMLElement>('[data-editorial-root] [data-object-id="overlay"]')!.style.visibility).toBe('hidden');

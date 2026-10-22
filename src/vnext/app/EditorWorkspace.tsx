@@ -2679,9 +2679,9 @@ export function EditorWorkspace({
     const position = where ? ' Agora está na camada ' + where.position + ' de ' + where.count + ' (1 = mais ao fundo).' : '';
     const covering = coveringObjectsAbove(page, objectId)[0];
     setStatusMessage(keptAbove
-      ? 'Enviado para trás, mas continua na frente do fundo da página (' + layerName(keptAbove, document) + ') para não sumir.' + position + ' Para ir atrás do fundo, arraste em Camadas.'
+      ? 'Enviado para trás, mas continua na frente do fundo da página (' + layerName(keptAbove, document, page) + ') para não sumir.' + position + ' Para ir atrás do fundo, arraste em Camadas.'
       : covering
-        ? 'Atenção: agora este objeto está atrás de ' + layerName(covering, document) + ' e pode ficar escondido.' + position + ' Use Desfazer ou Camadas para trazer de volta.'
+        ? 'Atenção: agora este objeto está atrás de ' + layerName(covering, document, page) + ' e pode ficar escondido.' + position + ' Use Desfazer ou Camadas para trazer de volta.'
         : 'Ordem do objeto atualizada.' + position);
   };
 
@@ -3085,7 +3085,7 @@ export function EditorWorkspace({
   };
   const describeLayer = (object: EditorialObject, extra = ''): string => {
     const where = layerPosition(selectedPage, object.id);
-    return 'Selecionado: ' + layerName(object, document)
+    return 'Selecionado: ' + layerName(object, document, selectedPage)
       + (where ? ' (camada ' + where.position + ' de ' + where.count + ', contando do fundo)' : '') + '.' + extra;
   };
   const clearSelection = () => {

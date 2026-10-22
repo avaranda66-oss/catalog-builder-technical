@@ -123,7 +123,7 @@ export function LayersPanel({ page, document, selectedIds, onSelect, onToggleHid
       {layers.length === 0 ? <p className="vnext-layers-empty">Esta página ainda não tem objetos.</p> : (
         <ul ref={listRef} className="vnext-layers-list" role="tree" aria-label="Camadas da página" aria-multiselectable="true">
           {layers.map((object, row) => {
-            const name = layerName(object, document);
+            const name = layerName(object, document, page);
             const isSelected = selected.has(object.id);
             const isGroup = object.type === 'group';
             const open = isGroup && expanded.has(object.id);

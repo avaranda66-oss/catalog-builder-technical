@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mmToU, plainRichText, type EditorialObject, type ImageObject, type Page } from '@/vnext/domain';
 import {
   coveringObjectsAbove, groupRefusal, imageTransparentAt, isPageBackground, layerName, layerPosition, layersTopFirst,
-  nextObjectBelow, objectsAtPoint, objectsInsideRect, resolvePlainClickTarget, sendToBackTarget, type AlphaMask,
+  nextObjectBelow, objectsAtPoint, objectsInsideRect, resolvePlainClickTarget, sendToBackTarget, shortFileName, type AlphaMask,
 } from '@/vnext/editor/object-layers';
 
 const pt = (xMm: number, yMm: number) => ({ xU: mmToU(xMm), yU: mmToU(yMm) });
@@ -82,6 +82,9 @@ describe('Onda 3.5 · layers and hit testing (pure)', () => {
     const doc = { assets: [{ id: 'asset-plate', name: 'hibrido-plate.png' }] } as never;
     const p = cover();
     expect(layerName(p.objects[0], doc)).toBe('Imagem hibrido-plate.png');
+    expect(layerName(p.objects[0], doc, p)).toBe('Página inteira hibrido-plate.png');
+    expect(shortFileName('pcon-hibrido-PCON-HIBRIDO.overlay-300ppi.png')).toBe('…RIDO.overlay-300ppi.png');
+    expect(shortFileName('fotos/logo.png')).toBe('logo.png');
     expect(layerName(p.objects[1], doc)).toBe('Imagem');
     expect(layerName(p.objects[3], doc)).toBe('Texto “PRESYS DOIS MEIOS UMA PLATAFORMA…”');
     expect(layerName({ id: 'g', type: 'group', zIndex: 0, frame: { xMm: 0, yMm: 0, widthMm: 10, heightMm: 10 }, objects: [p.objects[3] as never, p.objects[4] as never] }, doc))

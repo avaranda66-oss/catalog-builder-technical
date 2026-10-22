@@ -120,8 +120,17 @@ function plainWords(text: RichText, limit = 5): string {
   return words.slice(0, limit).join(' ') + (words.length > limit ? '…' : '');
 }
 
-/** A name a person recognizes in "Camadas": the kind of object and its first words or its file name. */
-export function layerName(object: EditorialObject, document: Pick<CatalogDocument, 'assets'>): string {
+/** The end of a long file name is what tells two files apart ("…plate-300ppi.png" / "…overlay-300ppi.png"). */
+export function shortFileName(name: string, max = 24): string {
+  const base = name.split(/[\\/]/).pop() ?? name;
+  return base.length <= max ? base : '…' + base.slice(base.length - (max - 1));
+}
+
+/**
+ * A name a person recognizes in "Camadas": the kind of object and its first words or its file name.
+ * With the page, an image that covers the whole page says so ("Página inteira"): those are backgrounds and overlays.
+ */
+export function layerName(object: EditorialObject, document: Pick<CatalogDocument, 'assets'>, page?: Page): string {
   switch (object.type) {
     case 'text': {
       const words = plainWords(object.text);
@@ -129,7 +138,8 @@ export function layerName(object: EditorialObject, document: Pick<CatalogDocumen
     }
     case 'image': {
       const name = document.assets.find((asset) => asset.id === object.assetId)?.name;
-      return name ? `Imagem ${name}` : 'Imagem';
+      const kind = page && isPageBackground(object, page) ? 'Página inteira' : 'Imagem';
+      return name ? `${kind} ${shortFileName(name)}` : kind;
     }
     case 'table': {
       const title = object.table.title ? plainWords(object.table.title, 4) : '';
