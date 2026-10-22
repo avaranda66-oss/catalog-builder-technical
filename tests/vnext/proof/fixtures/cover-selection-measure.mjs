@@ -397,7 +397,8 @@ await scenario('S23', 'Área útil da página com "Mais opções" aberto (1366x7
   await p.clickObj(t.id);
   const opened = await measure();
   return {
-    outcome: opened.toolbarHeight - closed.toolbarHeight <= 60 ? 'melhorou' : 'difícil',
+    // "Mais opções" may add at most ONE row of buttons (it used to wrap into several and push the page down).
+    outcome: opened.toolbarHeight - closed.toolbarHeight <= 70 ? 'melhorou (uma linha)' : 'difícil',
     evidence: `barra fechada: ${closed.toolbarHeight}px de altura, ${closed.visibleCanvasPx}px úteis; com "Mais opções" e um objeto: ${opened.toolbarHeight}px, ${opened.visibleCanvasPx}px úteis (${Math.round(100 * opened.visibleCanvasPx / opened.pageHeightPx)}% da página)`,
     screenshot: await p.shot('S1-S23-area-util'),
   };

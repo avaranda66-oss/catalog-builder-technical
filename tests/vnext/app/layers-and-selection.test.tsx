@@ -163,6 +163,22 @@ describe('Onda 3.5 · "Camadas" panel', () => {
     expect(hit(container, 'overlay')).not.toBeNull();
   });
 
+  it('dragging a row by its handle reorders the page in one undoable change', () => {
+    const { session } = setup(openDocument());
+    const rows = within(layersTree()).getAllByRole('treeitem');
+    rows.forEach((row, index) => {
+      row.getBoundingClientRect = () => ({ x: 0, y: index * 32, left: 0, top: index * 32, right: 300, bottom: index * 32 + 32, width: 300, height: 32, toJSON: () => ({}) });
+    });
+    const grip = rows[2].querySelector<HTMLElement>('[data-layer-grip]')!;
+    fireEvent.pointerDown(grip, { pointerId: 30, button: 0, clientX: 5, clientY: 80 });
+    fireEvent.pointerMove(grip, { pointerId: 30, clientX: 5, clientY: 10 });
+    fireEvent.pointerUp(grip, { pointerId: 30, clientX: 5, clientY: 10 });
+    const order = () => [...objectsOf(session)].sort((left, right) => left.zIndex - right.zIndex).map((object) => object.id);
+    expect(order()).toEqual(['b', 'c', 'a']);
+    session.undo();
+    expect(order()).toEqual(['a', 'b', 'c']);
+  });
+
   it('Alt+↓ on a row moves the object one layer back as one undoable change', () => {
     const { session } = setup(openDocument());
     const row = within(layersTree()).getAllByRole('treeitem')[0];

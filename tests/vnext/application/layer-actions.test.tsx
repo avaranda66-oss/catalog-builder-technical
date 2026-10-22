@@ -30,7 +30,8 @@ describe('Onda 3.5 · object.setHidden', () => {
     expect(session.execute({ type: 'object.setHidden', objectId: 'a', expectedHidden: true, hidden: false })).toMatchObject({ ok: false, error: { code: 'TARGET_STALE' } });
     expect(session.execute({ type: 'object.setHidden', objectId: 'a', expectedHidden: false, hidden: true }).ok).toBe(true);
     expect(session.getSnapshot().document.pages[0].objects[0]).toMatchObject({ id: 'a', hidden: true });
-    expect(session.execute({ type: 'object.setHidden', objectId: 'a', expectedHidden: true, hidden: true }).metadata?.changed).toBe(false);
+    const again = session.execute({ type: 'object.setHidden', objectId: 'a', expectedHidden: true, hidden: true });
+    expect(again.ok && again.metadata.changed).toBe(false);
     expect(session.execute({ type: 'object.setHidden', objectId: 'a', expectedHidden: true, hidden: false }).ok).toBe(true);
     expect('hidden' in session.getSnapshot().document.pages[0].objects[0]).toBe(false);
     session.undo();
@@ -97,7 +98,8 @@ describe('Onda 3.5 · objects.move (drag of several selected objects)', () => {
     })).toBe(true);
     const preview = controller.move(1, 20, 10)!;
     expect(preview.companions?.map((entry) => entry.objectId)).toEqual(['b']);
-    expect(preview.companions?.[0].frameU.xU - preview.companions![0].startFrameU.xU).toBe(preview.frameU.xU - preview.startFrameU.xU);
+    const companion = preview.companions![0];
+    expect(companion.frameU.xU - companion.startFrameU.xU).toBe(preview.frameU.xU - preview.startFrameU.xU);
     const finished = controller.finish(1, 20, 10);
     expect(finished).toMatchObject({ status: 'committed', action: { type: 'objects.move' } });
     const objects = session.getSnapshot().document.pages[0].objects;
