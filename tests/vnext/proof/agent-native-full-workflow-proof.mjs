@@ -146,7 +146,11 @@ try{
   assert.equal(afterReopen.tableCount,4);
   assert.equal(createHash('sha256').update(JSON.stringify(afterReopen.document)).digest('hex'),snapshotHash);
   await page.getByRole('button',{name:'Abrir assistente de edição'}).click();
-  const dialogueCount=Number(await page.getByLabel('Quantidade de mensagens').textContent());
+  // C1 (chat): o contador de mensagens saiu do cabeçalho. A conversa guardada volta inteira como mensagens da
+  // própria conversa (pedidos à direita, respostas à esquerda); cada uma é um <article class="ai-chat-turn">.
+  const thread=page.getByRole('log',{name:'Conversa com o assistente'});
+  await thread.locator('article.ai-chat-turn').first().waitFor();
+  const dialogueCount=await thread.locator('article.ai-chat-turn').count();
   assert.equal(dialogueCount,12,'Conversation history must survive catalog reopen');
   assert.equal(afterReopen.modelRequests,4,'Reopen cannot silently call a provider again');
   assert.deepEqual(errors,[]);
