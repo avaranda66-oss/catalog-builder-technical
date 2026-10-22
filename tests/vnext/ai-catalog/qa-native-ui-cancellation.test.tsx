@@ -282,14 +282,16 @@ describe('Independent ownership of overlapping composer requests', () => {
     expect(f.session.getSnapshot().document).toEqual(f.before);
     if (order === 'while-current-pending') {
       expect(screen.getByRole('status')).toHaveTextContent('Gemini está preparando');
-      expect(screen.getByRole('button', { name: 'Preparando…' })).toBeDisabled();
+      // While a request is answered, the send button becomes "Cancelar pedido" (one request at a time).
+      expect(screen.queryByRole('button', { name: /Enviar ao Gemini/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Cancelar pedido' })).toBeEnabled();
       expect(screen.queryByRole('group', { name: 'Proposta de páginas' })).not.toBeInTheDocument();
       await act(async () => { next.resolve(editorialReply('atual')); });
     }
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toHaveTextContent('Conteúdo editorial atual');
     expect(f.session.getSnapshot().document).toEqual(f.before);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     const approved = structuredClone(f.session.getSnapshot().document);
     expect(approved.pages).toHaveLength(f.before.pages.length + 1);
     expect(JSON.stringify(approved)).toContain('Conteúdo editorial atual');

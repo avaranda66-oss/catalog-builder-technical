@@ -47,7 +47,19 @@ async function send(text = 'Crie um catálogo com capa e tabela comparativa prof
 }
 async function sendAndWaitProposal() {
   await send();
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Aplicar' })).toBeInTheDocument());
+}
+/** The names in the options menu of the assistant (opened and closed again). */
+function optionNames(): string[] {
+  const trigger = screen.getByRole('button', { name: 'Opções do assistente' });
+  fireEvent.click(trigger);
+  const names = screen.queryAllByRole('menuitem').map((item) => item.textContent ?? '');
+  fireEvent.click(trigger);
+  return names;
+}
+function chooseOption(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
+  fireEvent.click(screen.getByRole('menuitem', { name }));
 }
 
 describe('Gemini conversational creation, confirmation and native editor action boundary', () => {
@@ -64,7 +76,7 @@ describe('Gemini conversational creation, confirmation and native editor action 
     expect(name).toBe('vnext-catalog-composer');
     expect(options.body.task).toBe('compose_scaffold');
     expect(options.body).not.toHaveProperty('credential');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     await waitFor(() => expect(f.session.getSnapshot().document.pages).toHaveLength(2));
     expect(f.session.getSnapshot().document.pages[0].id).toBe(baseline.pages[0].id);
     expect(f.session.getSnapshot().document.pages[0].objects.length).toBeGreaterThan(0);
@@ -77,7 +89,7 @@ describe('Gemini conversational creation, confirmation and native editor action 
     await sendAndWaitProposal();
     act(() => { expect(f.session.execute({ type: 'page.add' }).ok).toBe(true); });
     const before = structuredClone(f.session.getSnapshot().document);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     expect(f.session.getSnapshot().document).toEqual(before);
     expect(screen.getByRole('alert')).toHaveTextContent('desatualizada');
   });
@@ -95,11 +107,13 @@ describe('Gemini conversational creation, confirmation and native editor action 
     await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('Quais modelos devem aparecer'));
     expect(f.session.getSnapshot().document.pages).toHaveLength(1);
   });
-  it('uses a personal key only from "Avançado", keeps it after the panel closes, and can go back to the server key', async () => {
+  it('uses a personal key only from the options menu, keeps it after the panel closes, and can go back to the server key', async () => {
     const f = make();
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Avançado (chave própria)' }));
+    chooseOption('Usar minha própria chave');
+    expect(screen.getByRole('region', { name: 'Usar minha própria chave' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Desbloquear chave de teste' }));
+    expect(screen.queryByRole('region', { name: 'Usar minha própria chave' })).toBeNull();
     expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
     await sendAndWaitProposal();
     expect(f.generationCalls()[0][1].body.credential).toEqual({ provider: 'gemini', apiKey: 'temporary-test-only-key' });
@@ -107,8 +121,8 @@ describe('Gemini conversational creation, confirmation and native editor action 
     // Closing the assistant panel unmounts the composer; the unlocked key survives.
     f.ui.unmount();
     render(f.element);
-    expect(screen.getByRole('button', { name: 'Voltar a usar a IA do servidor' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Voltar a usar a IA do servidor' }));
+    expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
+    chooseOption('Voltar a usar a IA do servidor');
     await send('Crie mais uma página de apresentação para o catálogo.');
     await waitFor(() => expect(f.generationCalls()).toHaveLength(2));
     expect(f.generationCalls()[1][1].body).not.toHaveProperty('credential');
@@ -141,18 +155,19 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     const f = makeWith(async (_name, options) => options.body.task === 'status'
       ? httpFailure(400, { code: 'INVALID_REQUEST' }) : { data: { reply: plan }, error: null });
     await waitFor(() => expect(screen.getByText('IA disponível.')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    expect(optionNames()).toContain('Usar minha própria chave');
     await sendAndWaitProposal();
     expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
   });
 
-  it('offers "Avançado (chave própria)" only when the server accepts a personal key, and no "↗" on the send button', async () => {
+  it('offers "Usar minha própria chave" only when the server accepts a personal key, and no "↗" on the send button', async () => {
     makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
     // Do not flash an unusable key option before the server has reported its capability.
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(optionNames()).not.toContain('Usar minha própria chave');
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    // The server says byok: false, so the key option remains hidden.
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    // The server says byok: false, so the key option remains hidden; no always-visible key buttons either.
+    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(screen.queryByRole('button', { name: /Avançado|chave própria|IA do servidor/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeInTheDocument();
     expect(screen.queryByText(/↗/)).toBeNull();
   });
@@ -160,7 +175,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
   it('C-05: with the daily limit already known, switches "Enviar" off with the reason beside it and keeps the typed request', async () => {
     const f = makeWith(async () => httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' }));
     await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(optionNames()).not.toContain('Usar minha própria chave');
     const box = screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
     fireEvent.change(box, { target: { value: 'Crie uma capa para o catálogo de calibradores.' } });
     const sendButton = screen.getByRole('button', { name: 'Enviar ao Gemini' });
@@ -201,7 +216,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, writable: true, value: scrollTo });
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const top = this.matches('.ai-compose-proposal') ? 640 : this.matches('.ai-chat-log') ? 200 : 0;
+      const top = this.matches('.ai-chat-card') ? 640 : this.matches('.ai-chat-thread') ? 200 : 0;
       return { top, bottom: top + 100, left: 0, right: 300, width: 300, height: 100, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
     });
     try {
@@ -223,14 +238,14 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     ['FORBIDDEN', 403],
   ])('keeps personal-key controls hidden when readiness is blocked by %s', async (code, status) => {
     const f = makeWith(async () => httpFailure(status, { code }));
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(optionNames()).not.toContain('Usar minha própria chave');
     await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(optionNames()).not.toContain('Usar minha própria chave');
     await send('Crie uma capa para o catálogo de calibradores.');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O catálogo não foi alterado.'));
     expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Crie uma capa para o catálogo de calibradores.');
     expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Crie uma capa para o catálogo de calibradores.');
-    expect(screen.getByRole('alert')).not.toHaveTextContent('Avançado');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('chave própria');
     expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
     expect(f.session.getSnapshot().document).toEqual(f.doc);
   });
@@ -242,9 +257,9 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     const f = makeWith(async (_name, options) => options.body.task === 'status'
       ? checking : { data: { reply: plan }, error: null });
     expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    expect(optionNames()).toContain('Voltar a usar a IA do servidor');
     await act(async () => { resolveStatus(httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' })); });
-    expect(screen.getByRole('button', { name: 'Voltar a usar a IA do servidor' })).toBeInTheDocument();
+    expect(optionNames()).toContain('Voltar a usar a IA do servidor');
     await sendAndWaitProposal();
     expect(f.generationCalls()[0][1].body.credential).toEqual({ provider: 'gemini', apiKey: 'temporary-test-only-key' });
   });
@@ -254,7 +269,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     render(<CatalogNativeComposer documentId={doc.id} session={createDocumentSession(doc, { createId: id })}
       ownerScope="user:01" onBeforeMutation={() => true} />);
     expect(screen.getByText('A IA não está disponível nesta tela.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(optionNames()).not.toContain('Usar minha própria chave');
   });
 
   it('keeps the first suggestions in view and only follows the conversation once it starts', async () => {
@@ -263,7 +278,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     try {
       makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
       await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-      expect(screen.getByRole('button', { name: /Crie uma capa e uma apresentação/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Criar uma capa e uma apresentação' })).toBeInTheDocument();
       expect(scrollTo).not.toHaveBeenCalled();
       await sendAndWaitProposal();
       expect(scrollTo).toHaveBeenCalled();
@@ -282,7 +297,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Crie uma capa para o catálogo de calibradores.');
     expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Crie uma capa para o catálogo de calibradores.');
     // Nothing was stored as sent.
-    expect(screen.getByLabelText('Quantidade de mensagens')).toHaveTextContent('0');
+    expect(screen.getByRole('log').querySelectorAll('.ai-chat-turn')).toHaveLength(0);
     expect(f.session.getSnapshot().document).toEqual(f.doc);
   });
 
@@ -315,7 +330,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     await send('Crie uma capa e uma apresentação para o catálogo de manômetros.');
     await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('Deseja incluir uma tabela comparativa'));
     await send('Sim');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Aplicar' })).toBeInTheDocument());
     const second = f.generationCalls()[1][1].body;
     expect(second.message).toBe('Resposta do usuário à pergunta anterior: Sim');
     expect(second.history).toHaveLength(2);
@@ -329,7 +344,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     await sendAndWaitProposal();
     fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Depois quero uma página de contato.' } });
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     await waitFor(() => expect(f.session.getSnapshot().document.pages).toHaveLength(2));
     expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Depois quero uma página de contato.');
   });

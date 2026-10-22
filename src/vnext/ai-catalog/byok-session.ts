@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Personal Gemini key ("Avançado (chave própria)") unlocked for this tab.
+ * Personal Gemini key ("Usar minha própria chave" in the assistant menu) unlocked for this tab.
  *
  * It lives in module memory, outside the assistant panel, so closing and
  * reopening the panel does not lock it again. It is never written to storage,

@@ -18,6 +18,7 @@ import { STAGE_UNZOOM_CSS_VARIABLE, STAGE_ZOOM_CSS_VARIABLE, resetStageZoomStore
 
 const STYLES = readFileSync(resolve(process.cwd(), 'src/vnext/app/styles.css'), 'utf8');
 const PRIMITIVES = readFileSync(resolve(process.cwd(), 'src/vnext/app/product-primitives.css'), 'utf8');
+const CHAT = readFileSync(resolve(process.cwd(), 'src/vnext/ai-catalog/chat/assistant-chat.css'), 'utf8');
 const SCALE_START = 'FR-16b:escala-60:inicio';
 const SCALE_END = 'FR-16b:escala-60:fim';
 const SIMPLE = '.vnext-shell[data-simple-by-default="true"]';
@@ -63,7 +64,7 @@ function shapeDocument(): CatalogDocument {
 }
 
 function renderEditor() {
-  for (const css of [PRIMITIVES, STYLES]) {
+  for (const css of [PRIMITIVES, STYLES, CHAT]) {
     const style = document.createElement('style');
     style.setAttribute('data-test-css', '');
     style.textContent = css;
@@ -166,7 +167,8 @@ describe('FR-16b escala 60+ (só a interface)', () => {
     const body = (selector: string) => scale.find((rule) => rule.selector === selector)?.body ?? '';
     expect(body(`${SIMPLE} .vnext-editor-notice button`)).toMatch(/min-height:\s*44px/);
     expect(body(`${SIMPLE} .vnext-catalog-title-error`)).toMatch(/font-size:\s*13px/);
-    expect(STYLES.match(/\.vnext-assistant-dock-controls button\s*\{([^}]*)\}/)?.[1]).toMatch(/min-height:\s*44px/);
+    // The assistant's header buttons ("Fechar" among them) are 44 px high (assistant-chat.css).
+    expect(CHAT.match(/\.ai-chat-tool\s*\{([^}]*)\}/)?.[1]).toMatch(/min-height:\s*44px/);
 
     renderEditor();
     fireEvent.click(within(screen.getByRole('tablist', { name: 'Painel da direita' })).getByRole('tab', { name: 'Assistente' }));

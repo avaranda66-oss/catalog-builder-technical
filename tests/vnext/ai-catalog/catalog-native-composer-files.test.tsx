@@ -42,12 +42,13 @@ async function send(text: string) {
 }
 
 describe('FR-64 the assistant takes files', () => {
-  it('shows the drop zone above the conversation and says the files stay on this computer', () => {
+  it('offers the paperclip and, while the conversation is empty, the drop hint; says the files stay on this computer', () => {
     make(async () => ({ data: { reply: plan('Capa') }, error: null }));
     const section = screen.getByRole('region', { name: 'Assistente de criação do catálogo' });
     expect(section).toContainElement(screen.getByRole('button', { name: DROP_ZONE_TEXT }));
-    expect(screen.getByRole('region', { name: 'Arquivos para o catálogo' })).toBeInTheDocument();
-    expect(screen.getByText(/Os arquivos soltos acima são lidos aqui no computador e não vão para a IA/)).toBeInTheDocument();
+    expect(section).toContainElement(screen.getByRole('button', { name: 'Anexar arquivos' }));
+    expect(screen.getByLabelText('Escolher arquivos')).toHaveAttribute('type', 'file');
+    expect(screen.getByText(/Os arquivos são lidos aqui no computador e não vão para a IA/)).toBeInTheDocument();
     expect(screen.queryByText(/Ela não lê PDFs/)).toBeNull();
   });
 
@@ -60,10 +61,11 @@ describe('FR-64 the assistant takes files', () => {
     const list = await screen.findByRole('list', { name: 'Arquivos enviados' });
     await waitFor(() => expect(within(list).getByText('Pronto')).toBeInTheDocument());
     expect(within(list).getAllByRole('listitem')).toHaveLength(1);
-    // A drop on the files section itself is taken there once, not twice.
-    const section = screen.getByRole('region', { name: 'Arquivos para o catálogo' });
-    fireEvent.drop(section, { dataTransfer: { types: ['Files'], files: [new File(['Modelo;Faixa\nB;2\n'], 'b.csv')] } });
+    expect(screen.getByRole('log')).toHaveTextContent('Li 1 arquivo: lista.csv.');
+    // A drop on the conversation is taken once, not twice, and becomes its own short message.
+    fireEvent.drop(screen.getByRole('log'), { dataTransfer: { types: ['Files'], files: [new File(['Modelo;Faixa\nB;2\n'], 'b.csv')] } });
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Arquivos lidos' })).toHaveLength(2));
   });
 });
 
@@ -90,7 +92,7 @@ describe('one AI proposal on screen at a time', () => {
     fireEvent.click(screen.getByRole('button', { name: /Pedir reescrita ao Gemini/ }));
     await waitFor(() => expect(screen.getByRole('group', { name: 'Revisão de texto selecionado' })).toBeInTheDocument());
     expect(screen.queryByRole('group', { name: 'Proposta de páginas' })).toBeNull();
-    expect(screen.getAllByRole('button', { name: /^Confirmar/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Aplicar' })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Voltar a criar páginas' }));
     await send('Crie uma capa para o TA-25N.');
@@ -112,7 +114,7 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O serviço de IA não respondeu agora.'));
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toHaveTextContent('Capa do TA-25N');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar e inserir no catálogo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
     await waitFor(() => expect(f.session.getSnapshot().document.pages[0].objects.length).toBeGreaterThan(0));
     expect(screen.queryByRole('group', { name: 'Proposta de páginas' })).toBeNull();
   });
@@ -127,26 +129,28 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     expect(screen.getAllByRole('group', { name: 'Proposta de páginas' })).toHaveLength(1);
   });
 
-  it('PROVIDER_NOT_CONFIGURED names "Avançado" only where a personal key can be used', async () => {
+  it('PROVIDER_NOT_CONFIGURED names "Usar minha própria chave" only where a personal key can be used', async () => {
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: false }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     await send('Crie uma capa.');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(
       'A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado.'));
-    expect(screen.getByRole('alert')).not.toHaveTextContent('Avançado');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('chave própria');
     cleanup();
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: true }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     await send('Crie uma capa.');
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('“Avançado (chave própria)”'));
-    expect(screen.getByRole('button', { name: 'Avançado (chave própria)' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('“Usar minha própria chave”'));
+    fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
+    expect(screen.getByRole('menuitem', { name: 'Usar minha própria chave' })).toBeInTheDocument();
   });
 
-  it('the readiness line says the server AI is not configured without pointing to a missing "Avançado"', async () => {
+  it('the readiness line says the server AI is not configured without pointing to a missing key option', async () => {
     make(async () => ({ data: { reply: plan('Capa') }, error: null }), status({ serverKey: false, byok: false }));
     await waitFor(() => expect(screen.getByText(/A IA do servidor ainda não foi configurada/)).toBeInTheDocument());
-    expect(screen.getByText(/A IA do servidor ainda não foi configurada/)).not.toHaveTextContent('Avançado');
-    expect(screen.queryByRole('button', { name: 'Avançado (chave própria)' })).toBeNull();
+    expect(screen.getByText(/A IA do servidor ainda não foi configurada/)).not.toHaveTextContent('chave própria');
+    fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
+    expect(screen.queryByRole('menuitem', { name: 'Usar minha própria chave' })).toBeNull();
   });
 });
 
