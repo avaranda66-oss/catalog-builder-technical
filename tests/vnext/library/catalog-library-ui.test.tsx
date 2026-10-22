@@ -4,6 +4,7 @@ import { CatalogLibrary } from '@/vnext/app/CatalogLibrary';
 import {
   CatalogLibraryService,
   createDefaultCatalogStarterRegistry,
+  type CatalogLibraryQuery,
   type CatalogLibraryResult,
 } from '@/vnext/library';
 import {
@@ -340,6 +341,193 @@ describe('W3.E CatalogLibrary UI coordination', () => {
     fireEvent.click(getByRole('button', { name: 'Novo catálogo' }));
     fireEvent.click(getByRole('button', { name: /Em branco/ }));
     await waitFor(() => expect(createBlank).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('FR-02/04/05 biblioteca completa', () => {
+  it('opens the active card with pointer, Enter and Space without opening it from its actions', async () => {
+    const source = item('Calibrador de temperatura', '701');
+    const onOpen = vi.fn();
+    const service = serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source] }));
+    const view = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+    const card = await view.findByRole('link', { name: 'Abrir catálogo Calibrador de temperatura' });
+    fireEvent.click(view.getByRole('heading', { name: source.title }));
+    fireEvent.click(card.closest('[data-library-catalog-id]') as HTMLElement);
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(onOpen.mock.calls).toEqual([[source.catalogId], [source.catalogId], [source.catalogId], [source.catalogId]]);
+    expect(card.querySelector('button')).toBeNull();
+
+    onOpen.mockClear();
+    fireEvent.click(view.getByRole('button', { name: `Mais ações de ${source.title}` }));
+    for (const action of ['Duplicar', 'Renomear', 'Usar como modelo', 'Arquivar']) {
+      expect(view.getByRole('menuitem', { name: action })).toBeInTheDocument();
+    }
+    fireEvent.click(view.getByRole('menuitem', { name: 'Renomear' }));
+    expect(view.getByRole('dialog', { name: 'Renomear catálogo' })).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.keyDown(view.getByRole('textbox', { name: 'Nome do catálogo' }), { key: 'Escape' });
+    expect(view.getByRole('button', { name: `Mais ações de ${source.title}` })).toHaveFocus();
+    fireEvent.keyDown(view.getByRole('button', { name: 'Abrir' }), { key: 'Enter' });
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole('button', { name: 'Abrir' }));
+    expect(onOpen.mock.calls).toEqual([[source.catalogId]]);
+  });
+
+  it('keeps the entire card inert while creation needs verification', async () => {
+    const source = item('Aguardando confirmação', '702');
+    const service = {
+      ...serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source] })),
+      getCreateState: () => 'pending-verification',
+    } as unknown as CatalogLibraryService;
+    const onOpen = vi.fn();
+    const view = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+    const card = await view.findByRole('link', { name: `Abrir catálogo ${source.title}` });
+    expect(card).toHaveAttribute('aria-disabled', 'true');
+    expect(card).not.toHaveAttribute('tabindex');
+    fireEvent.click(view.getByText(source.title));
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('asks for the new model name and opens only the independent copy', async () => {
+    const source = item('TA-25N', '703');
+    const copy = validEnvelope(testUuid(704), 'TA-50N');
+    const useAsModel = vi.fn().mockResolvedValue({ ok: true, value: copy });
+    const rename = vi.fn();
+    const service = {
+      ...serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source] })),
+      useAsModel,
+      rename,
+    } as unknown as CatalogLibraryService;
+    const onOpen = vi.fn();
+    const view = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+    const trigger = await view.findByRole('button', { name: 'Mais ações de TA-25N' });
+    fireEvent.click(trigger);
+    fireEvent.click(view.getByRole('menuitem', { name: 'Usar como modelo' }));
+    const dialog = view.getByRole('dialog', { name: 'Usar como modelo' });
+    const name = within(dialog).getByRole('textbox', { name: 'Nome do novo catálogo' });
+    expect(name).toHaveFocus();
+    expect(name).toHaveValue('Modelo de TA-25N');
+    fireEvent.change(name, { target: { value: '   ' } });
+    expect(within(dialog).getByRole('button', { name: 'Criar e abrir catálogo' })).toBeDisabled();
+    fireEvent.change(name, { target: { value: '  TA-50N  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Criar e abrir catálogo' }));
+    await waitFor(() => expect(onOpen.mock.calls).toEqual([[copy.catalogId]]));
+    expect(useAsModel.mock.calls).toEqual([[source.catalogId, 'TA-50N']]);
+    expect(rename).not.toHaveBeenCalled();
+    expect(source.title).toBe('TA-25N');
+  });
+
+  it('verifies an ambiguous model copy before opening the same copy', async () => {
+    const source = item('Modelo base', '705');
+    const copy = { ...validEnvelope(testUuid(706), 'Novo produto'), origin: { originKind: 'duplicate', originId: source.catalogId, originRevision: 1 } };
+    let pending = false;
+    const useAsModel = vi.fn(async () => {
+      pending = true;
+      return { ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } };
+    });
+    const verifyPendingCreate = vi.fn(async () => {
+      pending = false;
+      return { ok: true, value: copy };
+    });
+    const service = {
+      ...serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source] })),
+      getCreateState: () => pending ? 'pending-verification' : 'idle',
+      useAsModel,
+      verifyPendingCreate,
+    } as unknown as CatalogLibraryService;
+    const onOpen = vi.fn();
+    const view = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+    fireEvent.click(await view.findByRole('button', { name: `Mais ações de ${source.title}` }));
+    fireEvent.click(view.getByRole('menuitem', { name: 'Usar como modelo' }));
+    fireEvent.change(view.getByRole('textbox', { name: 'Nome do novo catálogo' }), { target: { value: 'Novo produto' } });
+    fireEvent.click(view.getByRole('button', { name: 'Criar e abrir catálogo' }));
+    await waitFor(() => expect(view.queryByRole('dialog', { name: 'Usar como modelo' })).toBeNull());
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.click(view.getAllByRole('button', { name: 'Verificar criação' })[0]);
+    await waitFor(() => expect(onOpen.mock.calls).toEqual([[copy.catalogId]]));
+    expect(useAsModel).toHaveBeenCalledTimes(1);
+    expect(verifyPendingCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores only after confirmation and shows the same catalog among active items', async () => {
+    const source = item('Catálogo guardado', '707', true);
+    let archived = true;
+    const restore = vi.fn(async () => {
+      archived = false;
+      return { ok: true, value: { ...source, archivedAt: null, remoteRevision: 2 } };
+    });
+    const duplicate = vi.fn();
+    const list = vi.fn(async ({ view }: CatalogLibraryQuery = {}) => ({
+      ok: true as const,
+      value: (view === 'archived') === archived ? [{ ...source, archivedAt: archived ? source.archivedAt : null }] : [],
+    }));
+    const service = { ...serviceWithList(list), restore, duplicate } as unknown as CatalogLibraryService;
+    const onOpen = vi.fn();
+    const view = render(<CatalogLibrary service={service} onOpen={onOpen} />);
+    await view.findByText('Comece seu primeiro catálogo');
+    fireEvent.click(view.getByRole('tab', { name: 'Arquivados' }));
+    const trigger = await view.findByRole('button', { name: 'Restaurar' });
+    fireEvent.click(trigger);
+    const dialog = view.getByRole('dialog', { name: `Restaurar “${source.title}”?` });
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveFocus();
+    expect(restore).not.toHaveBeenCalled();
+    fireEvent.keyDown(within(dialog).getByRole('button', { name: 'Cancelar' }), { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    fireEvent.click(view.getByRole('button', { name: 'Restaurar catálogo' }));
+    await waitFor(() => expect(view.getByRole('tab', { name: 'Ativos' })).toHaveAttribute('aria-selected', 'true'));
+    const card = await view.findByRole('link', { name: `Abrir catálogo ${source.title}` });
+    expect(card.closest('[data-library-catalog-id]')).toHaveAttribute('data-library-catalog-id', source.catalogId);
+    expect(view.getByText(`Catálogo restaurado: “${source.title}”. Ele voltou para Ativos.`)).toBeInTheDocument();
+    expect(restore.mock.calls).toEqual([[source.catalogId]]);
+    expect(duplicate).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('preserves the archived catalog and reports a restore revision conflict', async () => {
+    const source = item('Conferir revisão', '708', true);
+    const restore = vi.fn().mockResolvedValue({ ok: false, error: { code: 'CONFLICT' } });
+    const service = {
+      ...serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source] })),
+      restore,
+    } as unknown as CatalogLibraryService;
+    const view = render(<CatalogLibrary service={service} onOpen={vi.fn()} />);
+    await waitFor(() => expect(view.queryByRole('status', { name: 'Carregando catálogos…' })).toBeNull());
+    fireEvent.click(view.getByRole('tab', { name: 'Arquivados' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Restaurar' }));
+    fireEvent.click(view.getByRole('button', { name: 'Restaurar catálogo' }));
+    await waitFor(() => expect(view.getByRole('alert')).toHaveTextContent('O catálogo mudou em outro lugar antes desta ação. A versão atual foi preservada.'));
+    expect(view.getByRole('tab', { name: 'Arquivados' })).toHaveAttribute('aria-selected', 'true');
+    expect(view.getByText(source.title)).toBeInTheDocument();
+  });
+
+  it('shows relative editing time and a friendly name without exposing user identifiers', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-22T12:00:00Z'));
+    try {
+      const source = item('Produto atualizado', '709', false, { updatedAt: '2026-10-22T10:00:00Z', updatedByName: 'João Alves', updatedBy: testUuid(999) });
+      const missingName = item('Produto sem perfil', '710', false, { updatedAt: '2026-10-22T11:59:55Z', updatedByName: testUuid(999) });
+      const view = render(<CatalogLibrary service={serviceWithList(vi.fn().mockResolvedValue({ ok: true, value: [source, missingName] }))} onOpen={vi.fn()} />);
+      expect(await view.findByText('Editado há 2 horas por João Alves')).toBeInTheDocument();
+      expect(view.getByText('Editado agora por um colaborador')).toBeInTheDocument();
+      expect(view.container.textContent).not.toContain(testUuid(999));
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('searches and sorts loaded catalogs locally without a request per keystroke', async () => {
+    const list = vi.fn().mockResolvedValue({ ok: true, value: [item('Bomba Alpha', '711'), item('Sensor Beta', '712')] });
+    const view = render(<CatalogLibrary service={serviceWithList(list)} onOpen={vi.fn()} />);
+    await view.findByText('Bomba Alpha');
+    const search = view.getByRole('searchbox', { name: 'Buscar catálogos' });
+    fireEvent.change(search, { target: { value: 'S' } });
+    fireEvent.change(search, { target: { value: 'Sensor' } });
+    await waitFor(() => expect(view.queryByText('Bomba Alpha')).toBeNull());
+    expect(view.getByText('Sensor Beta')).toBeInTheDocument();
+    fireEvent.change(view.getByRole('combobox', { name: 'Ordenar catálogos' }), { target: { value: 'title-asc' } });
+    expect(list).toHaveBeenCalledTimes(1);
   });
 });
 
