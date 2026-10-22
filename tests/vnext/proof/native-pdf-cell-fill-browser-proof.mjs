@@ -71,7 +71,7 @@ try{
   ]);
   await page.locator('[data-editor-object-id="'+original.objectId+'"]').click();
   await page.getByRole('button',{name:'Abrir assistente de edição'}).click();
-  await page.getByRole('tab',{name:'Criar com Gemini'}).waitFor();
+  await page.getByRole('textbox',{name:'Seu pedido ao Gemini'}).waitFor();
   await page.getByText('Preencher tabela com PDFs (revisão técnica)').click();
   await page.getByLabel('PDFs originais para validação')
     .setInputFiles(sources.map(source=>source.path));

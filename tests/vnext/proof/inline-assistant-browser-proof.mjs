@@ -33,8 +33,9 @@ try {
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
   const dock = page.locator('[data-vnext-assistant="open"]');
   await dock.waitFor();
-  await page.getByRole('tab', { name: 'Ferramentas' }).click();
-  await page.getByRole('textbox', { name: 'Peça uma alteração' }).waitFor();
+  // C1: one assistant, like a chat app; quick actions run from short requests or the options menu, without the AI.
+  await page.getByRole('textbox', { name: 'Seu pedido ao Gemini' }).waitFor();
+  assert.equal(await dock.getByRole('tab').count(), 0, 'No "Criar com Gemini" / "Ferramentas" tabs inside the assistant');
   const geometry = await page.evaluate(() => {
     const stage = document.querySelector('.vnext-page-stage')?.getBoundingClientRect();
     const dock = document.querySelector('.vnext-assistant-dock')?.getBoundingClientRect();
@@ -46,11 +47,10 @@ try {
     'On desktop the assistant must not cover the A4 sheet');
   assert(geometry.dock.right <= 1701);
   await page.screenshot({ path: resolve(evidence, 'assistant-at-right-of-real-editor-desktop.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Deixe as tabelas mais compactas' }).click();
-  const field = page.getByRole('textbox', { name: 'Peça uma alteração' });
-  assert.equal(await field.inputValue(), 'Deixe as tabelas mais compactas');
+  const field = page.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
+  await field.fill('Deixe as tabelas mais compactas');
   await field.press('Enter');
-  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
+  await page.getByRole('log', { name: 'Conversa com o assistente' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
   const after = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
   assert(after.revision > initial.revision);
   assert.equal(after.pages, initial.pages);
@@ -61,7 +61,7 @@ try {
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Abrir assistente de edição',
     'Closing the assistant must give the focus back to the top bar button');
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
-  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
+  await page.getByRole('log', { name: 'Conversa com o assistente' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
   // FR-17: on a laptop (1366 and 1440 px) the assistant is the "Assistente" tab of the right column, in the place of
   // "Propriedades". It no longer covers the page panel, the properties or the A4 sheet.
   for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }]) {
@@ -91,7 +91,7 @@ try {
   assert.equal(await page.locator('[data-vnext-assistant="open"]').count(), 0);
   await page.getByRole('complementary', { name: 'Propriedades do objeto' }).waitFor();
   await page.getByRole('tab', { name: 'Assistente', exact: true }).click();
-  await page.getByRole('log', { name: 'Histórico do catálogo' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
+  await page.getByRole('log', { name: 'Conversa com o assistente' }).getByText('Compactei as tabelas', { exact: false }).waitFor();
   // Only below 900 px the assistant covers the screen, with its own "Fechar".
   await page.setViewportSize({ width: 860, height: 800 });
   await page.screenshot({ path: resolve(evidence, 'assistant-mobile-overlay-with-close-button.png'), fullPage: false });
@@ -101,7 +101,7 @@ try {
       closeVisible: !!el.querySelector('[aria-label="Fechar painel do assistente"]') };
   });
   assert(mobile.fixed, 'Below 900 px the assistant must be a panel over the screen');
-  assert(mobile.width > 300 && mobile.width <= 400 && mobile.closeVisible);
+  assert(mobile.width > 300 && mobile.width <= 440 && mobile.closeVisible);
   assert(mobile.right <= mobile.viewport + 1);
   await page.getByRole('button', { name: 'Fechar painel do assistente' }).click();
   await page.getByRole('button', { name: 'Abrir assistente de edição' }).click();
@@ -109,18 +109,17 @@ try {
   // deterministic edit shortcuts. The provider here is a FAKE authenticated
   // functions adapter; no Google invocation or production catalog is touched.
   await page.setViewportSize({ width: 1700, height: 920 });
-  await page.getByRole('tab', { name: 'Criar com Gemini' }).click();
   // Server key by default (FR-60): no personal key, password or vault step.
   await page.getByText('IA pronta.', { exact: true }).waitFor();
   await page.getByRole('textbox', { name: 'Seu pedido ao Gemini' })
     .fill('Crie uma nova capa e uma comparação técnica em duas páginas.');
   await page.getByRole('button', { name: /Enviar ao Gemini/ }).click();
-  await page.getByRole('button', { name: 'Confirmar e inserir no catálogo' }).waitFor();
+  await page.getByRole('group', { name: 'Proposta de páginas' }).getByRole('button', { name: 'Aplicar', exact: true }).waitFor();
   const beforeApproval = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
   assert.equal(beforeApproval.pages, after.pages, 'Proposal must never modify the editor before approval');
   await page.screenshot({ path: resolve(evidence, 'gemini-scaffold-proposal-before-approval.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Confirmar e inserir no catálogo' }).click();
-  await page.getByRole('log', { name: 'Histórico de criação do catálogo' })
+  await page.getByRole('group', { name: 'Proposta de páginas' }).getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await page.getByRole('log', { name: 'Conversa com o assistente' })
     .getByText('Apliquei 2 página(s)', { exact: false }).waitFor();
   const afterCompose = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
   assert.equal(afterCompose.pages, after.pages + 2);
@@ -140,11 +139,11 @@ try {
   await page.getByRole('textbox', { name: 'Como deseja reescrever o texto selecionado?' })
     .fill('Reescreva o texto de apresentação em linguagem editorial profissional.');
   await page.getByRole('button', { name: /Pedir reescrita ao Gemini/ }).click();
-  await page.getByRole('button', { name: 'Confirmar reescrita selecionada' }).waitFor();
+  await page.getByRole('group', { name: 'Revisão de texto selecionado' }).getByRole('button', { name: 'Aplicar', exact: true }).waitFor();
   const beforeRewrite = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
   await page.screenshot({ path: resolve(evidence, 'gemini-selected-text-before-approval.png'), fullPage: false });
-  await page.getByRole('button', { name: 'Confirmar reescrita selecionada' }).click();
-  await page.getByRole('log', { name: 'Histórico de criação do catálogo' })
+  await page.getByRole('group', { name: 'Revisão de texto selecionado' }).getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await page.getByRole('log', { name: 'Conversa com o assistente' })
     .getByText('Reescrevi o texto editorial selecionado', { exact: false }).waitFor();
   const afterRewrite = await page.evaluate(() => window.__INLINE_ASSISTANT_PROOF__?.snapshot());
   assert(afterRewrite.revision > beforeRewrite.revision);

@@ -1,5 +1,4 @@
 import React from 'react';
-import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
 import { assistantRequested, forgetAssistantRequest } from '../ai-catalog/intake/assistant-link';
 import { CatalogTitleButton } from './editor/CatalogTitleButton';
@@ -153,7 +152,7 @@ import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
 import { TextEditToolbar } from './editor/TextEditToolbar';
 import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
-import { AssistantDock } from './editor/AssistantDock';
+import { AssistantDock, assistantSelectionLabel, useAssistantWide } from './editor/AssistantDock';
 import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
@@ -341,7 +340,7 @@ export function EditorWorkspace({
   // FR-64: "Criar com IA a partir de arquivos" opens the catalog with `assistente=1`, so the files can be dropped at once.
   const [assistantOpen, setAssistantOpen] = React.useState(() => Boolean(simpleByDefault) && assistantRequested());
   React.useEffect(() => { forgetAssistantRequest(); }, []);
-  const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
+  const [assistantWide, setAssistantWide] = useAssistantWide();
   const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_DEFAULT_PAGE_MODEL_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
@@ -3881,6 +3880,7 @@ export function EditorWorkspace({
       data-vnext-shell=""
       data-simple-by-default={simpleByDefault ? 'true' : undefined}
       data-assistant-open={assistantOpen ? 'true' : undefined}
+      data-assistant-wide={assistantOpen && assistantWide ? 'true' : undefined}
       data-active-page-id={selectedPage.id}
       data-editor-mode={editorState.mode}
       onPointerDownCapture={handleTextEditPointerDownCapture}
@@ -4723,9 +4723,8 @@ export function EditorWorkspace({
           </>}
         </aside>
         {simpleByDefault && (
-          <AssistantDock open={assistantOpen} onClose={() => setAssistantOpen(false)} mode={assistantMode} onModeChange={setAssistantMode}
-            selection={{ count: editorState.selectedObjectIds.length, type: selectedObject?.type }}>
-            {assistantMode === 'gemini' ? <CatalogNativeComposer
+          <AssistantDock open={assistantOpen} onClose={() => setAssistantOpen(false)}>
+            <CatalogNativeComposer
               key={document.id + ':gemini'} session={session} documentId={document.id}
               ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
               client={composerClient}
@@ -4735,23 +4734,18 @@ export function EditorWorkspace({
               selectedTable={selectedTableObject && !selectedTableObject.locked
                 ? { pageId: selectedPage.id, objectId: selectedTableObject.id }
                 : undefined}
+              selectionLabel={editorState.selectedObjectIds.length
+                ? assistantSelectionLabel({ count: editorState.selectedObjectIds.length, type: selectedObject?.type }) : undefined}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
               measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
               onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
-            /> : <CatalogWorkbenchChat
-              key={document.id}
-              compactMode
-              documentId={document.id}
-              session={session}
-              ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
+              onClose={() => setAssistantOpen(false)} wide={assistantWide} onWideChange={setAssistantWide}
               canPublish={Boolean(onRequestPublication) && (!persistence || (!persistence.runtime.workspace.getSnapshot().dirty &&
                 persistence.save.phase === 'idle' && !conflictResolutionBusy))}
-              onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
-              onPublication={() => {
-                if (prepareAuthoringForContextChangeRef.current()) onRequestPublication?.();
-              }}
-              onEditor={() => setAssistantOpen(false)}
-            />}
+              onPublication={onRequestPublication ? () => {
+                if (prepareAuthoringForContextChangeRef.current()) onRequestPublication();
+              } : undefined}
+            />
           </AssistantDock>
         )}
         </SidePanelColumn>

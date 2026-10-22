@@ -40,7 +40,10 @@ describe('FR-64 the editor opened by "Criar com IA a partir de arquivos"', () =>
     fireEvent.change(within(panel).getByLabelText('Escolher arquivos'), {
       target: { files: [new File(['Modelo;Faixa;Exatidão\nPCON-Y17;0 a 20 bar;0,025 %FS\n'], 'lista.csv')] },
     });
-    fireEvent.click(await within(panel).findByRole('button', { name: 'Escolher colunas — Tabela do arquivo' }));
+    // One short message per batch of files; the tables are one click away, behind "Ver detalhes".
+    await waitFor(() => expect(within(panel).getByRole('log')).toHaveTextContent('Li 1 arquivo: lista.csv. Encontrei 1 tabela.'));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Ver detalhes' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Escolher colunas — Tabela do arquivo' }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Inserir como tabela' }));
     const page = session.getSnapshot().document.pages[0];
     expect(page.id).toBe(before.pages[0].id);
@@ -58,7 +61,7 @@ describe('FR-64 the dropped files stay when the assistant closes', () => {
   const assistant = () => screen.getByRole('complementary', { name: 'Assistente do catálogo atual' });
   const fileList = () => within(assistant()).getByRole('list', { name: 'Arquivos enviados' });
 
-  it('after "Fechar" and opening again, and after "Ferramentas" and back, the files are still there', async () => {
+  it('after "Fechar" and opening again, and after "Nova conversa", the files are still there', async () => {
     renderEditor('/v2?catalog=cat-1&assistente=1');
     dropCsv(assistant());
     await waitFor(() => expect(within(fileList()).getByText('Pronto')).toBeInTheDocument());
@@ -69,16 +72,22 @@ describe('FR-64 the dropped files stay when the assistant closes', () => {
     expect(within(fileList()).getByText('lista.csv')).toBeInTheDocument();
     expect(within(fileList()).getByText('Pronto')).toBeInTheDocument();
 
-    fireEvent.click(within(assistant()).getByRole('tab', { name: 'Ferramentas' }));
-    expect(within(assistant()).queryByRole('list', { name: 'Arquivos enviados' })).toBeNull();
-    fireEvent.click(within(assistant()).getByRole('tab', { name: 'Criar com Gemini' }));
-    expect(within(fileList()).getByText('lista.csv')).toBeInTheDocument();
+    // No "Ferramentas" tab any more: the quick actions are in the options menu.
+    expect(within(assistant()).queryByRole('tab', { name: 'Ferramentas' })).toBeNull();
+    fireEvent.click(within(assistant()).getByRole('button', { name: 'Ver detalhes' }));
     expect(within(assistant()).getByRole('region', { name: 'O que encontrei em lista.csv' })).toBeInTheDocument();
+    fireEvent.click(within(assistant()).getByRole('button', { name: 'Opções do assistente' }));
+    fireEvent.click(within(assistant()).getByRole('menuitem', { name: 'Deixar as tabelas mais compactas' }));
+    fireEvent.click(within(assistant()).getByRole('button', { name: 'Nova conversa' }));
+    // A new conversation starts empty; the catalog's files stay above the text box.
+    expect(within(assistant()).getByRole('log')).not.toHaveTextContent('Li 1 arquivo');
+    expect(within(fileList()).getByText('lista.csv')).toBeInTheDocument();
   });
 
   it('Esc in "Escolher colunas" goes back to the files and keeps the assistant open; Esc again closes it, files kept', async () => {
     renderEditor('/v2?catalog=cat-1&assistente=1');
     dropCsv(assistant());
+    fireEvent.click(await within(assistant()).findByRole('button', { name: 'Ver detalhes' }));
     fireEvent.click(await within(assistant()).findByRole('button', { name: 'Escolher colunas — Tabela do arquivo' }));
     const chooser = within(assistant()).getByRole('group', { name: 'Escolher colunas — Tabela do arquivo' });
     fireEvent.keyDown(within(chooser).getAllByRole('checkbox')[0], { key: 'Escape' });

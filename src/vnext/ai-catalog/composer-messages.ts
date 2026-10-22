@@ -15,8 +15,8 @@ const MESSAGES: Record<ComposerClientCode, string> = {
   PAYLOAD_TOO_LARGE: 'O pedido ficou grande demais. Escreva um pedido mais curto e tente de novo.',
   TOKEN_BUDGET_EXCEEDED: 'O pedido e a conversa ficaram longos demais. Escreva um pedido mais curto e peça menos páginas de cada vez.',
   INVALID_REQUEST: 'A IA não aceitou o pedido desse jeito. Escreva com outras palavras e tente de novo.',
-  BYOK_DISABLED: 'O uso de chave própria está desligado no servidor. Clique em “Voltar a usar a IA do servidor” e tente de novo.',
-  PROVIDER_NOT_CONFIGURED: 'A IA do servidor ainda não foi configurada. Fale com o administrador. Se você tiver uma chave própria do Gemini, use “Avançado (chave própria)”.',
+  BYOK_DISABLED: 'O uso de chave própria está desligado no servidor. Escolha “Voltar a usar a IA do servidor” no menu de opções (⚙) e tente de novo.',
+  PROVIDER_NOT_CONFIGURED: 'A IA do servidor ainda não foi configurada. Fale com o administrador. Se você tiver uma chave própria do Gemini, use “Usar minha própria chave” no menu de opções do assistente (⚙).',
   AGENT_DAILY_BUDGET_EXCEEDED: 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.',
   PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.',
   PROVIDER_REJECTED_KEY: 'O Google recusou a chave da IA do servidor. Fale com o administrador.',
@@ -34,7 +34,7 @@ export function composerErrorMessage(error: unknown, context: { usingOwnKey: boo
   let message = MESSAGES[failure.code];
   if (failure.code === 'PROVIDER_UNAVAILABLE' && failure.httpStatus === 429) message = MESSAGES.PROVIDER_RATE_LIMIT;
   if (failure.code === 'PROVIDER_REJECTED_KEY' && context.usingOwnKey) {
-    message = 'O Google recusou a sua chave própria. Confira a chave em “Avançado (chave própria)” ou volte a usar a IA do servidor.';
+    message = 'O Google recusou a sua chave própria. Confira a chave em “Usar minha própria chave” no menu de opções (⚙) ou volte a usar a IA do servidor.';
   }
   if (failure.code === 'INVALID_PROVIDER_RESPONSE' && failure.reason === 'MAX_TOKENS') {
     message = 'A resposta da IA ficou longa demais. Peça menos páginas de cada vez (por exemplo, uma capa e uma tabela) e tente de novo.';
