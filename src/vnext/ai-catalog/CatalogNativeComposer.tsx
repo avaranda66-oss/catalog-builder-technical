@@ -37,6 +37,9 @@ import { ChatThread } from './chat/ChatThread';
 import { ChatComposerBox } from './chat/ChatComposerBox';
 import { ChatCard } from './chat/ChatCard';
 import type { ChatMenuSection } from './chat/ChatMenu';
+import type { SpecTableGateway } from './spec-table/spec-table-gateway';
+import { specTableActionLabel, specTablePdfs, useSpecTableDraft } from './spec-table/useSpecTableDraft';
+import { SpecTableMessages } from './spec-table/SpecTableMessages';
 import './chat/assistant-chat.css';
 
 interface Props {
@@ -68,6 +71,11 @@ interface Props {
   onPublication?: () => void;
   /** What is selected on the page, in plain words ("Selecionado na página: tabela"). */
   selectionLabel?: string;
+  /**
+   * J2-lite: reads a dropped PDF with the AI (server key) to build a verified specification table. Without it the
+   * assistant never sends a file anywhere. Injectable so a proof harness can answer with a controlled provider.
+   */
+  factExtraction?: SpecTableGateway;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -106,6 +114,9 @@ export const DAILY_LIMIT_SEND_EXPLANATION = 'O envio está desligado até amanh�
 export const CONVERSATION_FULL_EXPLANATION = 'Esta conversa chegou ao limite de mensagens. Use “Nova conversa” para continuar.';
 const NOT_KEPT = 'Não foi possível guardar a conversa neste navegador. Use “Exportar esta conversa” no menu de opções e tente de novo.';
 const FOOTNOTE = 'Os arquivos são lidos aqui no computador e não vão para a IA. A IA não inventa valores técnicos.';
+/** With J2-lite a PDF goes to the AI only after “Ler estas páginas”. */
+const FOOTNOTE_WITH_PDF_READING = 'Os arquivos são lidos aqui no computador. Só vai para a IA o PDF que você mandar ler para '
+  + 'montar uma tabela. A IA não inventa valores técnicos.';
 
 /** C-05: the server already said today's AI budget is used up (when the panel opened, or on the last request). */
 function dailyLimitKnown(readiness: ComposerReadiness | undefined): boolean {
@@ -136,7 +147,7 @@ const bump = (value: number) => value + 1;
  */
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
-  canPublish, onPublication, selectionLabel }: Props) {
+  canPublish, onPublication, selectionLabel, factExtraction }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -379,6 +390,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setError('O texto mudou ou não era seguro alterar. Nenhuma reescrita foi aprovada.');
     }
   };
+  // J2-lite: a verified specification table from a dropped PDF, as cards in this conversation.
+  const specTable = useSpecTableDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowTable,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'spec-table');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
   const undoFromConversation = (entryId: string) => {
     if (undoable.get(entryId) !== session.getSnapshot().localSequence || !session.getSnapshot().canUndo) return;
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -425,11 +445,26 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     if (!inActive(batch)) continue;
     const entries = batchEntries(batch, files.entries);
     if (!entries.length) continue;
+    const pdfs = specTable.available ? specTablePdfs(entries) : [];
+    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking';
     items.push({
-      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text,
+      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text + pdfs.length,
       node: <IntakeBatchMessage key={batch.id} batch={batch} entries={entries} working={working}
         onInsert={insertion.insert} onReread={files.reread} onBeforeChange={insertion.dismissNotice}
-        onInserted={() => { focusNotice.current = true; }} />,
+        onInserted={() => { focusNotice.current = true; }}
+        actions={pdfs.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
+          <button type="button" data-spec-table-start="" disabled={working || specBusy}
+            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>
+        </div> : undefined} />,
+    });
+  }
+  const shownSpecTable = inActive(specTable.flow) ? specTable.flow : undefined;
+  if (shownSpecTable) {
+    items.push({
+      key: `spec-table:${shownSpecTable.at}`, at: shownSpecTable.at, order: 2,
+      tail: `spec-table:${shownSpecTable.id}:${shownSpecTable.stage.kind}`,
+      node: <SpecTableMessages key={`spec-table:${shownSpecTable.at}`} controller={specTable} document={snapshot.document}
+        activePageId={activePageId} onShowTable={onShowTable} />,
     });
   }
   if (insertion.notice && noticeAt) {
@@ -514,6 +549,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     });
   }
   const empty = items.length === 0;
+  // The spec-table preview is not revealed from its top: the conversation follows to its end, where "Aplicar" is.
   const revealKey = shownPending ? `pages:${shownPending.requestSequence}`
     : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}` : '';
 
@@ -628,7 +664,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       busy={Boolean(busy)} onCancel={cancel}
       onAttach={() => filePicker.current?.click()} attachDisabled={working}
       files={files.entries} onRemoveFile={files.remove}
-      context={selectionContext} footnote={FOOTNOTE} />
+      context={selectionContext} footnote={factExtraction ? FOOTNOTE_WITH_PDF_READING : FOOTNOTE} />
     <input ref={filePicker} type="file" multiple accept={INTAKE_ACCEPT} hidden aria-label="Escolher arquivos" tabIndex={-1}
       disabled={working}
       onChange={(event) => {

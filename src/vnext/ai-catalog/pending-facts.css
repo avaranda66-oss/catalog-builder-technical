@@ -1,0 +1,42 @@
+/* FR-68 "Pendências (N)": same navy/white look and 60+ text scale as the assistant files (intake.css). */
+.ai-pending { color: #24384e; font-size: 15px; line-height: 1.5; }
+.ai-pending *, .ai-pending *::before, .ai-pending *::after { box-sizing: border-box; }
+.ai-pending h4 { margin: 14px 0 6px; font-size: 16px; font-weight: 700; color: #122c49; }
+.ai-pending p { margin: 6px 0; }
+.ai-pending button {
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid #c9d7e3;
+  border-radius: 7px;
+  background: #fff;
+  color: #2f536f;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.ai-pending button:hover:not(:disabled) { border-color: #003f78; background: #eef6fc; }
+.ai-pending button:focus-visible { outline: 3px solid rgb(0 114 206 / .35); outline-offset: 1px; }
+.ai-pending .vnext-btn-primary { background: #003f78; border-color: #003f78; color: #fff; }
+.ai-pending .vnext-btn-primary:hover:not(:disabled) { background: #002f59; border-color: #002f59; color: #fff; }
+.ai-pending-intro, .ai-pending-note, .ai-pending-where { color: #5f7287; font-size: 13px; }
+.ai-pending-list { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 10px; }
+.ai-pending-item { padding: 8px 10px; border: 1px solid #e1e9f0; border-left: 4px solid #c58a00; border-radius: 8px; background: #fff; }
+.ai-pending-item[data-status="CONFLICT"] { border-left-color: #b3261e; }
+.ai-pending-item[data-resolved="true"] { border-left-color: #2e7d32; }
+.ai-pending-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.ai-pending-title { color: #1d3a5a; overflow-wrap: anywhere; }
+.ai-pending .ai-pending-locate { display: inline-flex; flex-direction: column; gap: 0; padding: 6px 10px; color: #1d3a5a; }
+.ai-pending-locate-hint { font-size: 13px; font-weight: 600; color: #2f6f9f; }
+.ai-pending-badge { padding: 2px 8px; border-radius: 999px; background: #f4efe1; color: #6b4e00; font-size: 13px; font-weight: 700; }
+.ai-pending-item[data-status="CONFLICT"] .ai-pending-badge { background: #fbeaea; color: #8c1d18; }
+.ai-pending-item[data-resolved="true"] .ai-pending-badge { background: #e8f3e9; color: #1e5b22; }
+.ai-pending-sources { list-style: none; margin: 6px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.ai-pending-source { display: grid; gap: 4px; align-content: start; padding: 6px 8px; border: 1px solid #edf1f4; border-radius: 6px; background: #f7fafc; }
+.ai-pending-source[data-picked="true"] { border-color: #003f78; background: #eef6fc; }
+.ai-pending-value { font-size: 16px; font-weight: 700; color: #122c49; overflow-wrap: anywhere; }
+.ai-pending-quote { margin: 0; padding: 4px 8px; border-left: 3px solid #9db8d1; font-size: 13px; color: #3d5368; white-space: pre-line; overflow-wrap: anywhere; }
+.ai-pending-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.ai-pending-chosen { font-weight: 700; color: #1e5b22; }

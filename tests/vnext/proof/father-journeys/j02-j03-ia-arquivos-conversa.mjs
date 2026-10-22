@@ -166,8 +166,9 @@ try {
   const boundary = dock().locator('.ai-boundary');
   texts.limiteDoPainel = (await boundary.innerText()).replace(/\s+/g, ' ').trim();
   measures.limiteDoPainel = await measure(boundary);
-  j.step('J2-E o painel explica que a leitura dos arquivos é local e não os envia à IA',
-    /arquivos.*lidos aqui no computador.*não vão para a IA/i.test(texts.limiteDoPainel), texts.limiteDoPainel);
+  // 3B (J2-lite): um PDF só vai para a IA quando o pai manda montar a tabela de especificações com ele.
+  j.step('J2-E o painel explica que a leitura dos arquivos é local e que só vai para a IA o PDF que o pai mandar ler',
+    /arquivos.*lidos aqui no computador.*(não vão para a IA|Só vai para a IA o PDF que você mandar ler)/i.test(texts.limiteDoPainel), texts.limiteDoPainel);
   j.step('J2-E a explicação usa letras de pelo menos 13 px', measures.limiteDoPainel.fontPx >= MIN_BODY_FONT_PX,
     JSON.stringify(measures.limiteDoPainel));
   j.addEvidence(await shot(page, 'j02-02-arquivos-lidos-erro-isolado'));

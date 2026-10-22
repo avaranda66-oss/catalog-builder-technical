@@ -4,6 +4,7 @@ import { assistantRequested, forgetAssistantRequest } from '../ai-catalog/intake
 import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
+import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
 import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
@@ -301,6 +302,7 @@ export function EditorWorkspace({
   session,
   persistence,
   composerClient,
+  factExtraction,
   onRequestLibrary,
   onRequestTranslation,
   onRequestPublication,
@@ -310,6 +312,8 @@ export function EditorWorkspace({
 }: {
   session: DocumentSession;
   composerClient?: NativeComposeFunctionsClient;
+  /** J2-lite: reading a PDF with the AI to build a verified specification table (server key). */
+  factExtraction?: SpecTableGateway;
   demoAssets?: boolean;
   simpleByDefault?: boolean;
   persistence?: EditorWorkspacePersistenceProps;
@@ -4728,6 +4732,7 @@ export function EditorWorkspace({
               key={document.id + ':gemini'} session={session} documentId={document.id}
               ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
               client={composerClient}
+              factExtraction={factExtraction}
               selected={selectedObject?.type === 'text'
                 ? { objectId: selectedObject.id, text: selectedObject.text, locked: selectedObject.locked }
                 : undefined}
