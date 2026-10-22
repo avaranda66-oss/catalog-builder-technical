@@ -33,7 +33,8 @@ import { pageAfterTableRun } from './intake/source-table-insert';
  * Nothing is invented: a value cell holds a candidate of its own fact, and
  * only when that candidate is VERIFIED_TEXT / VERIFIED_CELL (alone, or chosen
  * by the person between verified candidates of a conflict — FR-68). Every
- * other value position stays an empty cell and is listed as pending.
+ * other value position stays an empty cell and is listed as pending, except
+ * the "—" of a model-specific row (see `resolvePosition`).
  *
  * Why this module exists (IDS: ADAPT of composition.ts + CREATE): the old
  * generator fixed 8 rows per page, forced "Unidade"/"Condição" columns and
@@ -207,13 +208,22 @@ export function recordChoice(set: DraftFactSet, positionId: string, choice: numb
 
 export type PositionResolution =
   | { readonly state: 'verified' | 'chosen'; readonly candidate: number }
-  | { readonly state: 'pending' | 'blank' };
-/** Which candidate fills a position, if any. A stale or forged choice is ignored (the position stays pending). */
+  | { readonly state: 'pending' | 'blank' | 'notApplicable' };
+/** Literal text of a cell that does not apply to its model (never a number, never a pending item). */
+export const NOT_APPLICABLE_TEXT = '—';
+const holdsVerifiedValue = (position: DraftPosition) =>
+  (position.status === 'VERIFIED_TEXT' || position.status === 'VERIFIED_CELL')
+  && Boolean(position.candidates[position.selected ?? -1]) && isVerifiedStatus(position.candidates[position.selected ?? -1].status);
+/**
+ * Which candidate fills a position, if any. A stale or forged choice is ignored (the position stays pending).
+ * Model-specific row (J2-lite): a value with NO candidate at all, in a row where another model has a verified value,
+ * is "notApplicable" ("—", not pending); any candidate, or a row with no verified value, stays empty and pending.
+ */
 export function resolvePosition(set: DraftFactSet, position: DraftPosition): PositionResolution {
-  if (position.status === 'VERIFIED_TEXT' || position.status === 'VERIFIED_CELL') {
-    const index = position.selected ?? -1;
-    return position.candidates[index] && isVerifiedStatus(position.candidates[index].status)
-      ? { state: 'verified', candidate: index } : { state: 'pending' };
+  if (holdsVerifiedValue(position)) return { state: 'verified', candidate: position.selected! };
+  if (position.kind === 'value' && position.status === 'MISSING' && position.candidates.length === 0
+    && set.positions.some(other => other.kind === 'value' && other.rowRef === position.rowRef && holdsVerifiedValue(other))) {
+    return { state: 'notApplicable' };
   }
   if (position.status !== 'CONFLICT') return { state: 'pending' };
   const choice = set.choices[position.id];
@@ -280,7 +290,7 @@ export function pendingFacts(set: DraftFactSet): PendingFact[] {
   const rows = new Map(set.rows.map(row => [row.ref, row]));
   const order = new Map(set.rows.map((row, index) => [row.ref, index]));
   return set.positions
-    .filter(position => rows.has(position.rowRef) && resolvePosition(set, position).state !== 'verified')
+    .filter(position => rows.has(position.rowRef) && !['verified', 'notApplicable'].includes(resolvePosition(set, position).state))
     .sort((a, b) => (order.get(a.rowRef)! - order.get(b.rowRef)!) || (a.modelIndex - b.modelIndex))
     .map(position => {
       const row = rows.get(position.rowRef)!;
@@ -396,7 +406,7 @@ function buildGrid(set: DraftFactSet, layout: DraftLayout, pendingText: string):
         const position = valueOf.get(`${row.ref}#${model}`);
         const resolution = position ? resolvePosition(set, position) : { state: 'pending' as const };
         const candidate = 'candidate' in resolution && position ? position.candidates[resolution.candidate] : undefined;
-        cells.push(candidate ? valueDisplayText(candidate.value, candidate.unit) : pendingText);
+        cells.push(candidate ? valueDisplayText(candidate.value, candidate.unit) : resolution.state === 'notApplicable' ? NOT_APPLICABLE_TEXT : pendingText);
         if (position) trace[model + 1] = { position, resolution };
       }
       grid.cells.push(cells); grid.roles.push('body'); grid.trace.push(trace);
@@ -565,10 +575,11 @@ export function draftIntegrityProblems(set: DraftFactSet, draft: CompiledDraft, 
       ? content.value.paragraphs.map(paragraph => paragraph.inlines.map(inline => inline.kind === 'text' ? inline.text : '\n').join('')).join('\n') : '';
     if (cell.kind === 'condition') continue;
     const resolution = resolvePosition(set, position);
-    const expected = 'candidate' in resolution
-      ? (isVerifiedStatus(position.candidates[resolution.candidate].status)
-        ? valueDisplayText(position.candidates[resolution.candidate].value, position.candidates[resolution.candidate].unit) : undefined)
-      : pendingCellText;
+    const expected = resolution.state === 'notApplicable' ? NOT_APPLICABLE_TEXT
+      : 'candidate' in resolution
+        ? (isVerifiedStatus(position.candidates[resolution.candidate].status)
+          ? valueDisplayText(position.candidates[resolution.candidate].value, position.candidates[resolution.candidate].unit) : undefined)
+        : pendingCellText;
     if (expected === undefined || text !== expected) problems.push(`${cell.factId}: célula “${text}” não confere com o fato`);
   }
   const traced = new Set(draft.cells.filter(cell => cell.kind === 'value').map(cell => cell.factId));

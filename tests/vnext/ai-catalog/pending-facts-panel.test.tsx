@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { compileDraftDocument, factSetFromReport, type DraftCellTarget, type DraftFactSet } from '@/vnext/ai-catalog/draft-compiler';
 import { PendingFactsPanel } from '@/vnext/ai-catalog/PendingFactsPanel';
-import { folderReport, manualReport, twoFiles } from './draft-compiler-fixture';
+import { folderReport, manualReport, noCandidate, twoFiles, withCoolingRow } from './draft-compiler-fixture';
 
 afterEach(cleanup);
 
@@ -32,6 +32,18 @@ describe('PendingFactsPanel (FR-68)', () => {
     expect(first.getByText('A célula fica em branco. Confira no arquivo e digite o valor na tabela.')).toBeTruthy();
     // Nothing to choose for a value that is not verified.
     expect(first.queryByRole('button')).toBeNull();
+  });
+
+  it('does not list the "—" cells of a model-specific row (no candidate for those models) as pending', async () => {
+    const set = await withCoolingRow(position => position.modelIndex === 0 ? position : noCandidate(position));
+    render(<Harness initial={set} />);
+    expect(screen.getByRole('heading', { name: 'Pendências (3)' })).toBeTruthy();
+    expect(screen.queryByText('TA-35N · Cooling Time')).toBeNull();
+    expect(screen.queryByText('TA-50N · Cooling Time')).toBeNull();
+    cleanup();
+    render(<Harness initial={await withCoolingRow(noCandidate)} />);
+    expect(screen.getByRole('heading', { name: 'Pendências (6)' })).toBeTruthy();
+    expect(screen.getByText('TA-35N · Cooling Time')).toBeTruthy();
   });
 
   it('shows the 140 x 155 °C conflict side by side and records one explicit choice before applying', async () => {

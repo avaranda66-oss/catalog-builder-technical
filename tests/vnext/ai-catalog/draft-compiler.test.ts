@@ -4,13 +4,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession } from '@/vnext/application';
 import { CatalogDocumentSchema, type CatalogDocument, type TableModel, type TableObject } from '@/vnext/domain';
 import {
-  DRAFT_PAGE_REF_PREFIX, LABEL_HEADER, applyCompiledDraft, choosableCandidates, compileDraft, compileDraftDocument,
+  DRAFT_PAGE_REF_PREFIX, LABEL_HEADER, NOT_APPLICABLE_TEXT, applyCompiledDraft, choosableCandidates, compileDraft, compileDraftDocument,
   conditionPositionId, draftIntegrityProblems, factSetFromReport, openPendingCount, pendingFacts, recordChoice,
-  type DraftFactSet, type DraftPosition,
+  type CompiledDraft, type DraftFactSet, type DraftPosition,
 } from '@/vnext/ai-catalog/draft-compiler';
 import type { FactVerificationReport } from '@/vnext/ai-catalog/fact-verifier';
 import { CONTINUATION_LABEL } from '@/vnext/editor/table-split-authoring';
-import { TA, folderReport, twoFiles } from './draft-compiler-fixture';
+import { draftPreview } from '@/vnext/ai-catalog/spec-table/draft-preview';
+import { TA, folderReport, noCandidate, twoFiles, withCoolingRow } from './draft-compiler-fixture';
 import { cellText, richPlain } from '../editor/table-split-fixtures';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
@@ -94,6 +95,70 @@ describe('compileDraft: T1 "Comparativo de modelos" from the verified TA folder'
     const [{ object }] = tables(compileDraftDocument(colon).document);
     expect(object.table.annotations.map(note => richPlain(note.text))).toEqual(['Operating Range: ambient temperature: 23 °C']);
     expect(matrix(object.table)[1][0]).toBe('Operating Range:');
+  });
+});
+
+describe('J2-lite model-specific rows: "—" where the extraction has no candidate at all', () => {
+  const only25 = (position: DraftPosition) => position.modelIndex === 0 ? position : noCandidate(position);
+  const coolingRow = (document: CatalogDocument) => matrix(tables(document)[0].object.table)[5];
+  const coolingCells = (draft: CompiledDraft) => draft.cells.filter(cell => cell.factId.startsWith('specs/cooling/'));
+  const reading = (value: string, status: 'UNVERIFIED' | 'VERIFIED_TEXT') => ({ value, unit: 'kg', status,
+    source: { sourceId: 'ta-folder', page: 1, quote: `Cooling ${value}` } });
+
+  it('shows "—" for the models with no candidate when another model has a verified value, and lists no pending item for them', async () => {
+    const set = await withCoolingRow(only25);
+    const { document, draft } = compileDraftDocument(set);
+    expect(coolingRow(document)).toEqual(['Cooling Time', '10.5 kg', NOT_APPLICABLE_TEXT, NOT_APPLICABLE_TEXT]);
+    expect(NOT_APPLICABLE_TEXT).toBe('—');
+    expect(pendingFacts(set).map(item => item.id)).toEqual(['specs/resolution/0', 'specs/resolution/1', 'specs/resolution/2']);
+    expect(openPendingCount(draft.pending)).toBe(3);
+    expect(coolingCells(draft).map(cell => [cell.state, cell.text]))
+      .toEqual([['verified', '10.5 kg'], ['notApplicable', '—'], ['notApplicable', '—']]);
+    expect(draftIntegrityProblems(set, draft)).toEqual([]);
+    expect(draftPreview(draft)).toMatchObject({ filled: 10, blank: 3 });
+    // The empty-cell convention for real pending cells is unchanged; only the "—" is literal text.
+    const marked = compileDraftDocument(set, { pendingCellText: 'A COMPLETAR' });
+    expect(coolingRow(marked.document)).toEqual(['Cooling Time', '10.5 kg', '—', '—']);
+    expect(matrix(tables(marked.document)[0].object.table)[2]).toEqual(['Resolution', 'A COMPLETAR', 'A COMPLETAR', 'A COMPLETAR']);
+    expect(draftIntegrityProblems(set, marked.draft, 'A COMPLETAR')).toEqual([]);
+    // A set that no longer matches the compiled "—" (the position now has a candidate) is caught by the integrity check.
+    const altered = { ...set, positions: set.positions.map(position =>
+      position.id === 'specs/cooling/1' ? { ...position, status: 'UNVERIFIED' as const, candidates: [reading('99', 'UNVERIFIED')] } : position) };
+    expect(draftIntegrityProblems(altered, draft)).toHaveLength(1);
+  });
+
+  it('keeps a cell with any unverified, visual-only or conflicting candidate empty and pending, even beside a verified model', async () => {
+    const set = await withCoolingRow(position => {
+      if (position.modelIndex === 0) return position;
+      if (position.modelIndex === 1) return { ...position, status: 'UNVERIFIED', candidates: [reading('99', 'UNVERIFIED')], selected: undefined };
+      return { ...position, status: 'CONFLICT', candidates: [reading('8', 'VERIFIED_TEXT'), reading('9', 'VERIFIED_TEXT')], selected: undefined };
+    });
+    const { document, draft } = compileDraftDocument(set);
+    expect(coolingRow(document)).toEqual(['Cooling Time', '10.5 kg', '', '']);
+    expect(pendingFacts(set).filter(item => item.id.startsWith('specs/cooling/')).map(item => [item.id, item.status, item.resolved]))
+      .toEqual([['specs/cooling/1', 'UNVERIFIED', false], ['specs/cooling/2', 'CONFLICT', false]]);
+    expect(coolingCells(draft).map(cell => cell.state)).toEqual(['verified', 'pending', 'pending']);
+    expect(draftIntegrityProblems(set, draft)).toEqual([]);
+    // A model with NO candidate in that same row is still "—"; the model with a candidate is not.
+    const mixed = await withCoolingRow(position => position.modelIndex === 2 ? noCandidate(position)
+      : position.modelIndex === 1 ? { ...position, status: 'UNVERIFIED', candidates: [reading('99', 'UNVERIFIED')], selected: undefined } : position);
+    expect(coolingRow(compileDraftDocument(mixed).document)).toEqual(['Cooling Time', '10.5 kg', '', '—']);
+    expect(pendingFacts(mixed).filter(item => item.id.startsWith('specs/cooling/')).map(item => item.id)).toEqual(['specs/cooling/1']);
+  });
+
+  it('a row where no model has a verified value stays empty and pending, as before', async () => {
+    const none = await withCoolingRow(noCandidate);
+    const { document, draft } = compileDraftDocument(none);
+    expect(coolingRow(document)).toEqual(['Cooling Time', '', '', '']);
+    expect(pendingFacts(none).filter(item => item.id.startsWith('specs/cooling/')).map(item => [item.id, item.status]))
+      .toEqual([['specs/cooling/0', 'MISSING'], ['specs/cooling/1', 'MISSING'], ['specs/cooling/2', 'MISSING']]);
+    expect(coolingCells(draft).map(cell => cell.state)).toEqual(['pending', 'pending', 'pending']);
+    expect(draftIntegrityProblems(none, draft)).toEqual([]);
+    // Nothing verified in the row, only an unverified reading for one model: the other models stay pending too.
+    const unverified = await withCoolingRow(position => position.modelIndex === 0
+      ? { ...position, status: 'UNVERIFIED', candidates: [{ ...position.candidates[0], status: 'UNVERIFIED' }], selected: undefined } : noCandidate(position));
+    expect(coolingRow(compileDraftDocument(unverified).document)).toEqual(['Cooling Time', '', '', '']);
+    expect(pendingFacts(unverified).filter(item => item.id.startsWith('specs/cooling/'))).toHaveLength(3);
   });
 });
 

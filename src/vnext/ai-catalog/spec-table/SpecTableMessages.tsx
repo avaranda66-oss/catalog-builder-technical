@@ -152,7 +152,7 @@ export function SpecTableMessages({ controller, document, activePageId, onShowTa
             <tbody>{part.rows.map((row, rowIndex) => <tr key={rowIndex} data-row-role={row.role}>
               {row.cells.map((cell, cellIndex) => {
                 const Tag = row.role === 'header' ? 'th' : 'td';
-                const empty = cell.state && cell.state !== 'verified' && cell.state !== 'chosen';
+                const empty = cell.state === 'pending' || cell.state === 'blank';
                 return <Tag key={cellIndex} data-cell-state={cell.state}>
                   {empty ? <span className="ai-spec-blank">{cell.toChoose ? 'a escolher' : 'em branco'}</span> : cell.text}
                 </Tag>;

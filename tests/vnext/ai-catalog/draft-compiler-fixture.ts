@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import type { FactProposal } from '@/vnext/ai-catalog/contracts';
-import { factSetFromReport, withSourceDivergences } from '@/vnext/ai-catalog/draft-compiler';
+import { factSetFromReport, withSourceDivergences, type DraftFactSet, type DraftPosition } from '@/vnext/ai-catalog/draft-compiler';
 import { findSourceDivergences, sourceFactValues } from '@/vnext/ai-catalog/fact-extraction';
 import { pdfEvidenceSource, verifyFactProposal, type FactVerificationReport } from '@/vnext/ai-catalog/fact-verifier';
 import { extractPdfText, type ExtractedPdf } from '@/vnext/ai-catalog/pdf-intake';
@@ -84,3 +84,20 @@ export async function twoFiles() {
     divergences, folder.report.sourceNames);
   return { set, divergences };
 }
+
+/**
+ * The folder table plus a "Cooling Time" row copied from "Weight" (all three models verified); `change` rewrites
+ * each model's position, e.g. to MISSING (no candidate at all) for the models the row does not apply to.
+ */
+export async function withCoolingRow(change: (position: DraftPosition) => DraftPosition, overrides: Readonly<Record<string, readonly string[]>> = {}) {
+  const set = factSetFromReport((await folderReport(overrides)).report);
+  const weight = set.rows.find(row => row.rowId === 'weight')!;
+  const row = { ...weight, ref: 'specs/cooling', rowId: 'cooling', key: 'cooling', label: 'Cooling Time' };
+  const positions = set.positions.filter(position => position.rowRef === weight.ref)
+    .map(position => change({ ...position, id: `specs/cooling/${position.modelIndex}`, rowRef: row.ref }));
+  return { ...set, rows: [...set.rows, row], positions: [...set.positions, ...positions] } satisfies DraftFactSet;
+}
+export const noCandidate = (position: DraftPosition): DraftPosition => ({
+  id: position.id, kind: 'value', rowRef: position.rowRef, modelIndex: position.modelIndex, status: 'MISSING', candidates: [],
+  missingReason: 'Não informado nas fontes.',
+});

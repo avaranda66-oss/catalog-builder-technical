@@ -8,7 +8,7 @@ import type { CompiledDraft, DraftCellTrace } from '../draft-compiler';
  */
 export interface DraftPreviewCell {
   readonly text: string;
-  /** Only for cells that hold a fact: 'verified' / 'chosen' are filled, the others stay for the person. */
+  /** Only for cells that hold a fact: 'verified' / 'chosen' are filled, 'notApplicable' shows "—", the others stay for the person. */
   readonly state?: DraftCellTrace['state'];
   /** The files disagree here and the person has not chosen yet ("a escolher"). */
   readonly toChoose?: true;
@@ -63,5 +63,6 @@ export function draftPreview(draft: CompiledDraft): DraftPreview {
   }
   const values = draft.cells.filter(cell => cell.kind === 'value');
   const filled = values.filter(cell => cell.state === 'verified' || cell.state === 'chosen').length;
-  return { parts, filled, blank: values.length - filled };
+  const blank = values.filter(cell => cell.state === 'pending' || cell.state === 'blank').length;
+  return { parts, filled, blank };
 }
