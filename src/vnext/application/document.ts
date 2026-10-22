@@ -368,7 +368,11 @@ function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator
         id,
         frame: { ...seed.frame },
         points: seed.points.map((point) => ({ ...point })),
-        style: structuredClone(seed.style),
+        style: {
+          ...seed.style,
+          ...(seed.style.fill ? { fill: { ...seed.style.fill } } : {}),
+          ...(seed.style.stroke ? { stroke: { ...seed.style.stroke } } : {}),
+        },
       };
     case 'line':
     case 'icon':
