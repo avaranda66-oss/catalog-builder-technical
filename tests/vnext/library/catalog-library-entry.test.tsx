@@ -187,8 +187,14 @@ describe('FR-04 archive is one step away and an archived catalog can come back',
 
     fireEvent.click(more);
     expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(view.getAllByRole('menuitem').map((entry) => entry.textContent?.trim()))
+      .toEqual(['Duplicar', 'Renomear', 'Usar como modelo', 'Arquivar']);
+    // Keyboard: the menu opens on its first entry, End reaches Arquivar, and Escape closes it with focus back on "Mais".
+    const first = view.getByRole('menuitem', { name: 'Duplicar' });
+    await waitFor(() => expect(document.activeElement).toBe(first));
+    fireEvent.keyDown(first, { key: 'End' });
     const archive = view.getByRole('menuitem', { name: 'Arquivar' });
-    await waitFor(() => expect(document.activeElement).toBe(archive));
+    expect(document.activeElement).toBe(archive);
     fireEvent.keyDown(archive, { key: 'Escape' });
     expect(view.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(more);
@@ -196,10 +202,10 @@ describe('FR-04 archive is one step away and an archived catalog can come back',
     fireEvent.click(more);
     fireEvent.click(view.getByRole('menuitem', { name: 'Arquivar' }));
     const dialog = view.getByRole('dialog', { name: 'Arquivar “TA-25N”?' });
-    expect(dialog).toHaveTextContent('clique em “Duplicar”');
+    expect(dialog).toHaveTextContent('clique em “Restaurar”');
   });
 
-  it('archived rows offer Duplicar; the active copy is shown in Ativos with a notice', async () => {
+  it('archived rows offer Restaurar and Duplicar; the active copy is shown in Ativos with a notice', async () => {
     const archived = item('TA-25N antigo', '61', true);
     const copy = item('Cópia de TA-25N antigo', '62');
     const list = vi.fn(async (query?: { view?: string }) => ({
@@ -218,7 +224,8 @@ describe('FR-04 archive is one step away and an archived catalog can come back',
     const row = (await waitFor(() => view.getByText('TA-25N antigo'))).closest('[data-library-catalog-id]') as HTMLElement;
     expect(within(row).getByText('Arquivado')).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: 'Abrir' })).toBeNull();
-    expect(view.getByText(/Para voltar a usar um deles, clique em “Duplicar”/)).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Restaurar' })).toBeInTheDocument();
+    expect(view.getByText(/Para voltar a editar um catálogo, clique em “Restaurar”\. Para criar uma cópia separada, clique em “Duplicar”\./)).toBeInTheDocument();
 
     fireEvent.click(within(row).getByRole('button', { name: 'Duplicar' }));
     await waitFor(() => expect(service.duplicate).toHaveBeenCalledWith(archived.catalogId));
