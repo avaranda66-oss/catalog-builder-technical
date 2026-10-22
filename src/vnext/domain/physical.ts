@@ -58,6 +58,15 @@ function scaledDecimal(value:number,shift:number,multiplier:number,denominator:n
 }
 export const mmToU = (mm:number):PhysicalLengthU => scaledDecimal(mm,4,1,1);
 export const pxToQ = (px:number):PhysicalPixelQ => scaledDecimal(px,0,64,1);
+/**
+ * Browser layout snaps to 1/64 of a device pixel. At devicePixelRatio 1 that is exactly one Q, so measured geometry
+ * must equal the plan. Under browser zoom or OS display scaling each edge snaps to the device grid instead; the
+ * accepted drift is one device pixel plus the half-Q rounding of each compared value. Anything larger is real.
+ */
+export function deviceSnapToleranceQ(devicePixelRatio:number):PhysicalPixelQ {
+  if(!Number.isFinite(devicePixelRatio)||devicePixelRatio<=0||Math.abs(devicePixelRatio-1)<1e-6) return 0;
+  return Math.ceil(64/devicePixelRatio)+1;
+}
 export function roundRatio(numerator:number,denominator:number):number {
   safe(numerator); safe(denominator);
   if(denominator<=0) throw new VNextError('PHYSICAL_LENGTH_INVALID');
