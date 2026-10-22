@@ -21,7 +21,7 @@ import type {
  */
 
 export const TO_FILL = 'A COMPLETAR';
-const toFill = (label: string) => `${label} (${TO_FILL})`;
+export const toFill = (label: string) => `${label} (${TO_FILL})`;
 
 /** Blueprint §3 tokens. Margins are the layout grid; the safe area is the printer-safe frame. */
 export const PRESYS_PAGE_TOKENS = Object.freeze({
@@ -250,7 +250,7 @@ class PageBuilder {
   }
 }
 
-function richParagraphs(id: string, value: string): RichText {
+export function richParagraphs(id: string, value: string): RichText {
   return {
     paragraphs: value.split('\n').map((line, index) => ({
       id: `${id}:p${index}`,

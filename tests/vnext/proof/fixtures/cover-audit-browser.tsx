@@ -26,6 +26,8 @@ import {
   type AssetRecord,
   type AssetRepository,
 } from '@/vnext/asset';
+import { createPresysPageTemplateRegistry } from '@/vnext/library/presys-ta25n-starter';
+import { bindPresysPageReuse, DefaultStarterDependencyPreparer } from '@/vnext/library/starter-dependencies';
 import '@fontsource/noto-sans/400.css';
 import '@fontsource/noto-sans/700.css';
 
@@ -99,7 +101,9 @@ async function boot() {
   for (const a of doc.assets) {
     assets.records.set(a.id, { ...a, version: '1' as const, storageBucket: 'product-assets', storagePath: `${dir}/assets/${a.name}`, fileSize: 1, createdAt: '2026-10-22T00:00:00Z' });
   }
-  const dependencies: ApplicationExecutionDependencies = { createId: () => crypto.randomUUID() };
+  // Onda 3.5 (S3): "Usar modelo…" offers the PRESYS page models (P1–P9 and the native PCON cover), as in production.
+  const templates = createPresysPageTemplateRegistry();
+  const dependencies: ApplicationExecutionDependencies = { createId: () => crypto.randomUUID(), templateRegistry: templates };
   const session = createDocumentSession(doc, dependencies);
   let runtime: VNextPersistenceRuntime;
   const bridge = new DefaultAssetPersistenceBridge(assets, { getActiveLineage: () => {
@@ -110,6 +114,11 @@ async function boot() {
       catalogId: snap.binding.kind === 'PERSISTED' ? snap.binding.catalogId : doc.id,
     } as never;
   } });
+  bindPresysPageReuse(session, {
+    templates, preparer: new DefaultStarterDependencyPreparer(bridge),
+    getLineage: () => ({ authLineage: 'cover-audit', authorityScopeId: 'cover-audit:harness', openSessionId: 'cover-audit', catalogId: doc.id }),
+    isCurrent: () => true, installRuntimeAsset: () => undefined,
+  });
   runtime = new VNextPersistenceRuntime({
     session, repository, applicationDependencies: dependencies,
     createMutationId: () => crypto.randomUUID(), createOpenSessionId: () => crypto.randomUUID(),

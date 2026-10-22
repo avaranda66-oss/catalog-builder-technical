@@ -33,9 +33,26 @@ export function rectContainsPoint(rect: RectU, point: PointU): boolean {
   return point.xU >= rect.xU && point.yU >= rect.yU && point.xU <= rect.xU + rect.widthU && point.yU <= rect.yU + rect.heightU;
 }
 
-/** Visible top-level objects whose box contains the point, the one on top first. */
+/**
+ * Onda 3.5 (S3): a polygon is under the pointer only inside its own shape (even-odd rule), never in the empty corners
+ * of its box, so the two halves of a diagonal background that share one box are told apart, as on screen.
+ */
+export function polygonContainsPoint(object: Extract<EditorialObject, { type: 'polygon' }>, point: PointU): boolean {
+  const f = frameU(object);
+  if (f.widthU <= 0 || f.heightU <= 0) return false;
+  const x = (point.xU - f.xU) / f.widthU, y = (point.yU - f.yU) / f.heightU;
+  let inside = false;
+  for (let i = 0, j = object.points.length - 1; i < object.points.length; j = i++) {
+    const a = object.points[i], b = object.points[j];
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** Visible top-level objects under the point (box, or shape for a polygon), the one on top first. */
 export function objectsAtPoint(page: Page, point: PointU): EditorialObject[] {
-  return layersTopFirst(page).filter((object) => !object.hidden && rectContainsPoint(frameU(object), point));
+  return layersTopFirst(page).filter((object) => !object.hidden && rectContainsPoint(frameU(object), point)
+    && (object.type !== 'polygon' || polygonContainsPoint(object, point)));
 }
 
 /** True when the object paints nothing at that point (only images can say so: transparent pixels or letterbox). */
@@ -74,14 +91,19 @@ export function objectsInsideRect(page: Page, rect: RectU): string[] {
     .map((object) => object.id);
 }
 
-/** An image or shape covering at least 90% of the page: the page background (plates, full-page overlays). */
+/**
+ * The page background: an image or shape covering at least 90% of the page (plates, full-page overlays), or a
+ * background band (Onda 3.5, S3): an image, shape or polygon running edge to edge across the page and at least half
+ * of its height, like the two halves of a diagonal cover background.
+ */
 export function isPageBackground(object: EditorialObject, page: Page): boolean {
-  if (object.type !== 'image' && object.type !== 'shape') return false;
+  if (object.type !== 'image' && object.type !== 'shape' && object.type !== 'polygon') return false;
   const f = object.frame;
   const left = Math.max(0, f.xMm), top = Math.max(0, f.yMm);
   const right = Math.min(page.widthMm, f.xMm + f.widthMm), bottom = Math.min(page.heightMm, f.yMm + f.heightMm);
   const covered = Math.max(0, right - left) * Math.max(0, bottom - top);
-  return covered >= 0.9 * page.widthMm * page.heightMm;
+  if (object.type !== 'polygon' && covered >= 0.9 * page.widthMm * page.heightMm) return true;
+  return left <= 1 && right >= page.widthMm - 1 && bottom - top >= 0.5 * page.heightMm;
 }
 
 /**
@@ -136,7 +158,9 @@ export function layerName(object: EditorialObject, document: Pick<CatalogDocumen
   switch (object.type) {
     case 'text': {
       const words = plainWords(object.text);
-      return words ? `Texto “${words}”` : 'Texto vazio';
+      // Onda 3.5 (S3): a text with its own background is a "Selo", one with a pointer a "Chamada".
+      const kind = object.box ? 'Selo' : object.leader ? 'Chamada' : 'Texto';
+      return words ? `${kind} “${words}”` : `${kind} vazio`;
     }
     case 'image': {
       const name = document.assets.find((asset) => asset.id === object.assetId)?.name;
@@ -151,6 +175,11 @@ export function layerName(object: EditorialObject, document: Pick<CatalogDocumen
       return object.shape === 'ellipse' ? 'Forma (elipse)' : 'Forma (retângulo)';
     case 'line':
       return object.axis === 'vertical' ? 'Linha vertical' : 'Linha horizontal';
+    case 'polygon': {
+      const fill = object.style.fill;
+      const shape = object.points.length === 3 ? 'Triângulo' : 'Forma livre';
+      return fill?.kind === 'pattern' ? `${shape} com padrão` : fill?.kind === 'linear' ? `${shape} com degradê` : shape;
+    }
     case 'icon':
       return 'Ícone';
     case 'group':

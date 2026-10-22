@@ -143,13 +143,15 @@ describe('"Usar modelo…" gallery (FR-80/FR-18)', () => {
     const gallery = screen.getByRole('group', { name: 'Modelo de página PRESYS' });
     const radios = within(gallery).getAllByRole('radio');
     expect(radios.map((radio) => radio.getAttribute('value'))).toEqual([
-      ...PRESYS_ARCHETYPES.map((archetype) => archetype.templateId), 'presys-ta25n-presentation-a4', 'presys-ta25n-specifications-a4',
+      // Onda 3.5 (S3): the native "Capa de produto — PCON" follows the archetypes.
+      ...PRESYS_ARCHETYPES.map((archetype) => archetype.templateId), 'presys-capa-produto-pcon', 'presys-ta25n-presentation-a4', 'presys-ta25n-specifications-a4',
     ]);
+    expect(within(gallery).getByRole('radio', { name: 'Capa de produto — PCON' })).toHaveAccessibleDescription(/Tudo editável/);
     expect(within(gallery).getByRole('radio', { name: 'Capa' })).toBeChecked();
     expect(within(gallery).getByRole('radio', { name: 'Código de pedido' })).toHaveAccessibleDescription('Estrutura do código, tabela de opções por campo e um exemplo de pedido.');
     fireEvent.click(within(gallery).getByRole('radio', { name: 'Contracapa' }));
     expect(onChange).toHaveBeenCalledWith('presys-p9-contracapa');
-    await waitFor(() => expect(hosts().filter((host) => host.getAttribute('data-thumbnail-state') === 'rendered')).toHaveLength(11));
+    await waitFor(() => expect(hosts().filter((host) => host.getAttribute('data-thumbnail-state') === 'rendered')).toHaveLength(12));
   });
 });
 

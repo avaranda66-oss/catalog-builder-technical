@@ -1,0 +1,1502 @@
+{
+  "schemaVersion": 1,
+  "id": "presys-capa-pcon-hibrido",
+  "title": "PCON HÍBRIDO — capa nativa",
+  "locale": "pt-BR",
+  "style": {
+    "fonts": [
+      {
+        "family": "Noto Sans",
+        "revision": "5.3.0",
+        "weight": 400,
+        "style": "normal"
+      },
+      {
+        "family": "Noto Sans",
+        "revision": "5.3.0",
+        "weight": 700,
+        "style": "normal"
+      }
+    ],
+    "defaultText": {
+      "fontFamily": "Noto Sans",
+      "fontSizePt": 9,
+      "lineHeight": 1.2,
+      "fontWeight": 400,
+      "color": "#20364C"
+    },
+    "palette": [
+      "#092D4D",
+      "#8A642B",
+      "#20364C",
+      "#536778",
+      "#EDF3F7",
+      "#FFFFFF",
+      "#CDD9E1"
+    ]
+  },
+  "pages": [
+    {
+      "id": "capa-pcon-hibrido",
+      "widthMm": 210,
+      "heightMm": 297,
+      "safeArea": {
+        "topMm": 8,
+        "rightMm": 8,
+        "bottomMm": 8,
+        "leftMm": 8
+      },
+      "objects": [
+        {
+          "id": "capa-pcon-hibrido-fundo-azul",
+          "frame": {
+            "xMm": 0,
+            "yMm": 0,
+            "widthMm": 210,
+            "heightMm": 196
+          },
+          "zIndex": 0,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 0.6095,
+              "y": 0
+            },
+            {
+              "x": 0.3914,
+              "y": 1
+            },
+            {
+              "x": 0,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "linear",
+              "from": "#173F65",
+              "to": "#0C2640",
+              "angleDeg": 90
+            }
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-fundo-azul-padrao",
+          "frame": {
+            "xMm": 0,
+            "yMm": 0,
+            "widthMm": 210,
+            "heightMm": 196
+          },
+          "zIndex": 1,
+          "locked": true,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 0.6095,
+              "y": 0
+            },
+            {
+              "x": 0.3914,
+              "y": 1
+            },
+            {
+              "x": 0,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "pattern",
+              "pattern": "dots",
+              "color": "#FFFFFF",
+              "spacingMm": 3.2
+            },
+            "opacity": 0.16
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-fundo-dourado",
+          "frame": {
+            "xMm": 0,
+            "yMm": 0,
+            "widthMm": 210,
+            "heightMm": 196
+          },
+          "zIndex": 2,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0.6095,
+              "y": 0
+            },
+            {
+              "x": 1,
+              "y": 0
+            },
+            {
+              "x": 1,
+              "y": 1
+            },
+            {
+              "x": 0.3914,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "linear",
+              "from": "#996F32",
+              "to": "#644516",
+              "angleDeg": 90
+            }
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-fundo-dourado-padrao",
+          "frame": {
+            "xMm": 0,
+            "yMm": 0,
+            "widthMm": 210,
+            "heightMm": 196
+          },
+          "zIndex": 3,
+          "locked": true,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0.6095,
+              "y": 0
+            },
+            {
+              "x": 1,
+              "y": 0
+            },
+            {
+              "x": 1,
+              "y": 1
+            },
+            {
+              "x": 0.3914,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "pattern",
+              "pattern": "waves",
+              "color": "#E9CC92",
+              "spacingMm": 4.2
+            },
+            "opacity": 0.32
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-divisa",
+          "frame": {
+            "xMm": 81.9,
+            "yMm": 0,
+            "widthMm": 46.400000000000006,
+            "heightMm": 196
+          },
+          "zIndex": 4,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0.9881,
+              "y": 0
+            },
+            {
+              "x": 0.9989,
+              "y": 0
+            },
+            {
+              "x": 0.0119,
+              "y": 1
+            },
+            {
+              "x": 0.0011,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "solid",
+              "color": "#FFFFFF"
+            },
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-sombra",
+          "frame": {
+            "xMm": 64,
+            "yMm": 166.5,
+            "widthMm": 100,
+            "heightMm": 10
+          },
+          "zIndex": 5,
+          "type": "group",
+          "objects": [
+            {
+              "id": "capa-pcon-hibrido-sombra-1",
+              "frame": {
+                "xMm": 0,
+                "yMm": 0,
+                "widthMm": 100,
+                "heightMm": 10
+              },
+              "zIndex": 0,
+              "type": "shape",
+              "shape": "ellipse",
+              "style": {
+                "fill": "#000000",
+                "opacity": 0.07
+              }
+            },
+            {
+              "id": "capa-pcon-hibrido-sombra-2",
+              "frame": {
+                "xMm": 8,
+                "yMm": 1.5,
+                "widthMm": 84,
+                "heightMm": 7
+              },
+              "zIndex": 1,
+              "type": "shape",
+              "shape": "ellipse",
+              "style": {
+                "fill": "#000000",
+                "opacity": 0.09
+              }
+            },
+            {
+              "id": "capa-pcon-hibrido-sombra-3",
+              "frame": {
+                "xMm": 16,
+                "yMm": 3,
+                "widthMm": 68,
+                "heightMm": 4.5
+              },
+              "zIndex": 2,
+              "type": "shape",
+              "shape": "ellipse",
+              "style": {
+                "fill": "#000000",
+                "opacity": 0.12
+              }
+            }
+          ]
+        },
+        {
+          "id": "capa-pcon-hibrido-foto",
+          "frame": {
+            "xMm": 46,
+            "yMm": 58,
+            "widthMm": 120,
+            "heightMm": 116.494
+          },
+          "zIndex": 6,
+          "type": "image",
+          "assetId": "7e8ad13e-8bd3-5709-8e89-98870ee157bf",
+          "fit": "contain"
+        },
+        {
+          "id": "capa-pcon-hibrido-marca",
+          "frame": {
+            "xMm": 14,
+            "yMm": 14,
+            "widthMm": 70,
+            "heightMm": 10.859
+          },
+          "zIndex": 7,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-marca-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-marca-rich:t0",
+                    "text": "PRESYS",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 19,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-frase-topo",
+          "frame": {
+            "xMm": 120,
+            "yMm": 18,
+            "widthMm": 76,
+            "heightMm": 4.448
+          },
+          "zIndex": 8,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-frase-topo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-frase-topo-rich:t0",
+                    "text": "DOIS MEIOS · UMA PLATAFORMA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 7.2,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#F3DDB8",
+            "textAlign": "right"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-lado-a-titulo",
+          "frame": {
+            "xMm": 14,
+            "yMm": 34,
+            "widthMm": 70,
+            "heightMm": 8.573
+          },
+          "zIndex": 9,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-lado-a-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-lado-a-titulo-rich:t0",
+                    "text": "PNEUMÁTICA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 15,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-lado-b-titulo",
+          "frame": {
+            "xMm": 126,
+            "yMm": 34,
+            "widthMm": 70,
+            "heightMm": 8.573
+          },
+          "zIndex": 10,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-lado-b-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-lado-b-titulo-rich:t0",
+                    "text": "HIDRÁULICA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 15,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "right"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-lado-a-legenda",
+          "frame": {
+            "xMm": 14,
+            "yMm": 42.5,
+            "widthMm": 64,
+            "heightMm": 4.448
+          },
+          "zIndex": 11,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-lado-a-legenda-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-lado-a-legenda-rich:t0",
+                    "text": "exemplos publicados: 0–250 e 0–360 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 7.2,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#B7CDE2"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-lado-b-legenda",
+          "frame": {
+            "xMm": 136,
+            "yMm": 42.5,
+            "widthMm": 60,
+            "heightMm": 7.496
+          },
+          "zIndex": 12,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-lado-b-legenda-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-lado-b-legenda-rich:t0",
+                    "text": "exemplos publicados: 100–1500 a 100–10000",
+                    "marks": []
+                  }
+                ]
+              },
+              {
+                "id": "capa-pcon-hibrido-lado-b-legenda-rich:p1",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-lado-b-legenda-rich:t1",
+                    "text": "psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 7.2,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#F3DDB8",
+            "textAlign": "right"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-chamada-1",
+          "frame": {
+            "xMm": 14,
+            "yMm": 158,
+            "widthMm": 36,
+            "heightMm": 7.496
+          },
+          "zIndex": 13,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-chamada-1-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-chamada-1-rich:t0",
+                    "text": "Saída pneumática",
+                    "marks": []
+                  }
+                ]
+              },
+              {
+                "id": "capa-pcon-hibrido-chamada-1-rich:p1",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-chamada-1-rich:t1",
+                    "text": "(PNEUMATIC OUTPUT)",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 7.2,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "right"
+          },
+          "leader": {
+            "anchorXMm": 57.4,
+            "anchorYMm": -22.6,
+            "head": "dot",
+            "elbow": false,
+            "color": "#FFFFFF",
+            "thicknessPt": 0.6
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-chamada-2",
+          "frame": {
+            "xMm": 14,
+            "yMm": 172,
+            "widthMm": 36,
+            "heightMm": 7.496
+          },
+          "zIndex": 14,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-chamada-2-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-chamada-2-rich:t0",
+                    "text": "BAROM. REF, como",
+                    "marks": []
+                  }
+                ]
+              },
+              {
+                "id": "capa-pcon-hibrido-chamada-2-rich:p1",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-chamada-2-rich:t1",
+                    "text": "impresso no painel",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 7.2,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "right"
+          },
+          "leader": {
+            "anchorXMm": 70.6,
+            "anchorYMm": -37.1,
+            "head": "dot",
+            "elbow": false,
+            "color": "#FFFFFF",
+            "thicknessPt": 0.6
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-titulo",
+          "frame": {
+            "xMm": 14,
+            "yMm": 202,
+            "widthMm": 182,
+            "heightMm": 16.003
+          },
+          "zIndex": 15,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-titulo-rich:t0",
+                    "text": "PCON HÍBRIDO",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 28,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#092D4D"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-subtitulo",
+          "frame": {
+            "xMm": 14,
+            "yMm": 215.5,
+            "widthMm": 182,
+            "heightMm": 6.001
+          },
+          "zIndex": 16,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-subtitulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-subtitulo-rich:t0",
+                    "text": "Calibrador de pressão com pressurizador hidráulico e pneumático",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 10.5,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#20364C"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-destaque",
+          "frame": {
+            "xMm": 14,
+            "yMm": 221.5,
+            "widthMm": 182,
+            "heightMm": 5.21
+          },
+          "zIndex": 17,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-destaque-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-destaque-rich:t0",
+                    "text": "Pressurização pneumática e hidráulica em um equipamento",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 9,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#8A642B"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilulas-a-titulo",
+          "frame": {
+            "xMm": 14,
+            "yMm": 230,
+            "widthMm": 70,
+            "heightMm": 4.194
+          },
+          "zIndex": 18,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilulas-a-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilulas-a-titulo-rich:t0",
+                    "text": "PNEUMÁTICA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-a1",
+          "frame": {
+            "xMm": 14,
+            "yMm": 235.2,
+            "widthMm": 16.85,
+            "heightMm": 6.6
+          },
+          "zIndex": 19,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-a1-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-a1-rich:t0",
+                    "text": "0 a 250 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#173F66",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-a2",
+          "frame": {
+            "xMm": 32.65,
+            "yMm": 235.2,
+            "widthMm": 16.85,
+            "heightMm": 6.6
+          },
+          "zIndex": 20,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-a2-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-a2-rich:t0",
+                    "text": "0 a 360 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#173F66",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilulas-b-titulo",
+          "frame": {
+            "xMm": 84,
+            "yMm": 230,
+            "widthMm": 112,
+            "heightMm": 4.194
+          },
+          "zIndex": 21,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilulas-b-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilulas-b-titulo-rich:t0",
+                    "text": "HIDRÁULICA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-b1",
+          "frame": {
+            "xMm": 84,
+            "yMm": 235.2,
+            "widthMm": 21.5,
+            "heightMm": 6.6
+          },
+          "zIndex": 22,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-b1-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-b1-rich:t0",
+                    "text": "100 a 1500 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#8A642B",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-b2",
+          "frame": {
+            "xMm": 107.3,
+            "yMm": 235.2,
+            "widthMm": 21.5,
+            "heightMm": 6.6
+          },
+          "zIndex": 23,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-b2-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-b2-rich:t0",
+                    "text": "100 a 3000 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#8A642B",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-b3",
+          "frame": {
+            "xMm": 130.6,
+            "yMm": 235.2,
+            "widthMm": 21.5,
+            "heightMm": 6.6
+          },
+          "zIndex": 24,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-b3-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-b3-rich:t0",
+                    "text": "100 a 6000 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#8A642B",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-pilula-b4",
+          "frame": {
+            "xMm": 153.9,
+            "yMm": 235.2,
+            "widthMm": 23.05,
+            "heightMm": 6.6
+          },
+          "zIndex": 25,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-pilula-b4-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-pilula-b4-rich:t0",
+                    "text": "100 a 10000 psi",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#8A642B",
+            "paddingMm": 1.1,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-nota",
+          "frame": {
+            "xMm": 14,
+            "yMm": 245,
+            "widthMm": 182,
+            "heightMm": 7.158
+          },
+          "zIndex": 26,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-nota-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-nota-rich:t0",
+                    "text": "Exatidão publicada ±0,025% FS (±0,05% FS na faixa 100–10000 psi). Valores do folder EF1038-01, que não detalha o desempenho de outras",
+                    "marks": []
+                  }
+                ]
+              },
+              {
+                "id": "capa-pcon-hibrido-nota-rich:p1",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-nota-rich:t1",
+                    "text": "faixas.",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.8,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#536778"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-barra-modelos-titulo",
+          "frame": {
+            "xMm": 14,
+            "yMm": 259.4,
+            "widthMm": 60,
+            "heightMm": 4.11
+          },
+          "zIndex": 27,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-barra-modelos-titulo-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-barra-modelos-titulo-rich:t0",
+                    "text": "FAMÍLIA PCON",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.4,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-1",
+          "frame": {
+            "xMm": 14,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 28,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-1-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-1-rich:t0",
+                    "text": "KOMPRESSOR-Y18",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#FFFFFF",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#CDD9E1"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-2",
+          "frame": {
+            "xMm": 44.5834,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 29,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-2-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-2-rich:t0",
+                    "text": "Y18-BP",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#FFFFFF",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#CDD9E1"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-3",
+          "frame": {
+            "xMm": 75.1668,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 30,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-3-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-3-rich:t0",
+                    "text": "Y18-LP",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#FFFFFF",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#CDD9E1"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-4",
+          "frame": {
+            "xMm": 105.7502,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 31,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-4-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-4-rich:t0",
+                    "text": "Y17",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#FFFFFF",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#CDD9E1"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-5",
+          "frame": {
+            "xMm": 136.3336,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 32,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-5-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-5-rich:t0",
+                    "text": "DT",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#536778",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#FFFFFF",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#CDD9E1"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-6",
+          "frame": {
+            "xMm": 166.917,
+            "yMm": 265,
+            "widthMm": 29.083,
+            "heightMm": 7.8
+          },
+          "zIndex": 33,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-modelo-6-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-modelo-6-rich:t0",
+                    "text": "HÍBRIDO",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.6,
+            "lineHeight": 1.2,
+            "fontWeight": 700,
+            "color": "#FFFFFF",
+            "textAlign": "center"
+          },
+          "box": {
+            "fill": "#8A642B",
+            "stroke": {
+              "pattern": "solid",
+              "thicknessPt": 0.75,
+              "color": "#8A642B"
+            },
+            "cornerRadiusMm": 1.2,
+            "paddingMm": 2.2,
+            "fitText": true
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-modelo-atual-seta",
+          "frame": {
+            "xMm": 179.9585,
+            "yMm": 264.2,
+            "widthMm": 3,
+            "heightMm": 1.8
+          },
+          "zIndex": 34,
+          "type": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 1,
+              "y": 0
+            },
+            {
+              "x": 0.5,
+              "y": 1
+            }
+          ],
+          "style": {
+            "fill": {
+              "kind": "solid",
+              "color": "#092D4D"
+            }
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-regua",
+          "frame": {
+            "xMm": 14,
+            "yMm": 278,
+            "widthMm": 182,
+            "heightMm": 0.3
+          },
+          "zIndex": 35,
+          "type": "line",
+          "axis": "horizontal",
+          "color": "#CDD9E1",
+          "thicknessPt": 0.75
+        },
+        {
+          "id": "capa-pcon-hibrido-rodape-1",
+          "frame": {
+            "xMm": 14,
+            "yMm": 280.4,
+            "widthMm": 182,
+            "heightMm": 4.279
+          },
+          "zIndex": 36,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-rodape-1-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-rodape-1-rich:t0",
+                    "text": "Fotografia oficial PRESYS · arte gráfica vetorial desenhada por código, sem imagens de IA",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.8,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#536778"
+          }
+        },
+        {
+          "id": "capa-pcon-hibrido-rodape-2",
+          "frame": {
+            "xMm": 14,
+            "yMm": 284.4,
+            "widthMm": 182,
+            "heightMm": 4.279
+          },
+          "zIndex": 37,
+          "type": "text",
+          "text": {
+            "paragraphs": [
+              {
+                "id": "capa-pcon-hibrido-rodape-2-rich:p0",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "id": "capa-pcon-hibrido-rodape-2-rich:t0",
+                    "text": "PCON-HIBRIDO · Coleção experimental 22.10.2026 · rascunho para revisão técnica e comercial",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "style": {
+            "fontFamily": "Noto Sans",
+            "fontSizePt": 6.8,
+            "lineHeight": 1.2,
+            "fontWeight": 400,
+            "color": "#536778"
+          }
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "7e8ad13e-8bd3-5709-8e89-98870ee157bf",
+      "version": "1",
+      "sha256": "992f424b9238a3701ead99d2dba91d73c617d85d296f186f57657ab99c9f9a8a",
+      "mime": "image/png",
+      "widthPx": 445,
+      "heightPx": 432,
+      "name": "pcon-hibrido-hybrid-official-trim.png",
+      "alt": "Fotografia oficial PRESYS PCON-HIBRIDO, recortada nas margens transparentes"
+    }
+  ]
+}
