@@ -19,16 +19,19 @@ async function setup({ simpleByDefault = true } = {}) {
 }
 function openAssistant() {
   fireEvent.click(screen.getByRole('button', { name: 'Abrir assistente de edição' }));
-  // The new creation agent is the default, while the existing deterministic
-  // commands remain under the explicitly labeled secondary tools tab.
-  expect(screen.getByRole('tab', { name: 'Criar com Gemini' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Ferramentas' }));
+  // One assistant, like a chat app: no "Criar com Gemini" / "Ferramentas" tabs; the quick actions are in its menu.
+  expect(screen.queryByRole('tab', { name: 'Criar com Gemini' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Ferramentas' })).toBeNull();
 }
 function send(command: string) {
-  fireEvent.change(screen.getByRole('textbox', { name: 'Peça uma alteração' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), {
     target: { value: command },
   });
-  fireEvent.click(screen.getByRole('button', { name: /Enviar pedido/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enviar ao Gemini' }));
+}
+function chooseOption(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
+  fireEvent.click(screen.getByRole('menuitem', { name }));
 }
 
 describe('Father-ready access: assistant inside the actual /v2 editor', () => {
@@ -41,7 +44,7 @@ describe('Father-ready access: assistant inside the actual /v2 editor', () => {
     openAssistant();
     const panel = screen.getByRole('complementary', { name: 'Assistente do catálogo atual' });
     expect(panel).toBeVisible();
-    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' })).toHaveFocus();
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveFocus();
     expect(ui.container.querySelector('.vnext-document-preview')).not.toBeNull();
     expect(ui.container.querySelector('[data-editorial-root]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Fechar assistente de edição' }))
@@ -55,16 +58,14 @@ describe('Father-ready access: assistant inside the actual /v2 editor', () => {
     const { session } = await setup();
     const original = structuredClone(session.getSnapshot().document);
     openAssistant();
-    fireEvent.click(screen.getByRole('button', { name: 'Deixe as tabelas mais compactas' }));
-    expect(screen.getByRole('textbox', { name: 'Peça uma alteração' }))
-      .toHaveValue('Deixe as tabelas mais compactas');
-    fireEvent.click(screen.getByRole('button', { name: /Enviar pedido/ }));
+    // A quick action from the menu, without the AI; "Desfaça" / "Refaça" typed in the box also run here.
+    chooseOption('Deixar as tabelas mais compactas');
     await waitFor(() => expect(session.getSnapshot().document).not.toEqual(original));
     const revised = session.getSnapshot().document;
     expect(revised.pages).toHaveLength(original.pages.length);
     expect(revised.pages.map(page => page.objects.length))
       .toEqual(original.pages.map(page => page.objects.length));
-    expect(screen.getByRole('log', { name: 'Histórico do catálogo' })).toHaveTextContent('Compactei as tabelas');
+    expect(screen.getByRole('log', { name: 'Conversa com o assistente' })).toHaveTextContent('Compactei as tabelas');
     send('Desfaça');
     await waitFor(() => expect(session.getSnapshot().document).toEqual(original));
     send('Refaça');
@@ -77,7 +78,9 @@ describe('Father-ready access: assistant inside the actual /v2 editor', () => {
     openAssistant();
     send('Altere exatidão para 0,001 e esconda as notas');
     expect(session.getSnapshot().document).toEqual(original);
-    expect(screen.getByRole('log')).toHaveTextContent('Não alterei o catálogo');
+    // Not a quick action: it would go to the AI, which is not on this screen; the request stays in the box.
+    expect(screen.getByRole('alert')).toHaveTextContent('A IA não está disponível nesta tela. Continue editando manualmente.');
+    expect(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' })).toHaveValue('Altere exatidão para 0,001 e esconda as notas');
   });
 
   it('preserves dialogue after panel close/open without leaving the editor', async () => {

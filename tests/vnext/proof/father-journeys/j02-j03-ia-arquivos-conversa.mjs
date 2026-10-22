@@ -2,6 +2,8 @@
 // O intake integrado é exercitado pela interface com PDF sintético válido, CSV e foto locais. Persistência e
 // respostas Gemini usam o harness offline. A criação completa com fontes, pendências e ajustes antes/depois
 // continua pendente das Ondas 3/4 e de aceite real; os checks de arquivos não são mais pendências da Onda 2.
+// C1 (chat): os arquivos viram chips acima da caixa e UMA mensagem curta por envio ("Li 3 arquivos: …") com
+// "Ver detalhes"; não há mais aba "Ferramentas" (as ações rápidas ficam no menu ⚙ e em pedidos curtos no chat).
 //   BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j02-j03-ia-arquivos-conversa.mjs
 //   VP=1280 BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j02-j03-ia-arquivos-conversa.mjs
 import { readFile } from 'node:fs/promises';
@@ -39,6 +41,13 @@ const CSV_NAME = 'TA-25N-especificacoes.csv';
 const CSV_BYTES = Buffer.from('Modelo;Faixa;Exatidão\nTA-25N;-25 a 140 °C;±0,1 °C\nTA-50N;-10 a 155 °C;±0,02 % FE\n', 'utf8');
 const dockText = async () => ((await dock().innerText().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
 const pagesCount = async () => (await state(page)).runtime.document.pages.length;
+/** Os chips dos arquivos (acima da caixa de texto). */
+const CHIPS = '[data-vnext-assistant="open"] .ai-chat-files > li';
+/** Abre todos os "Ver detalhes" das mensagens de arquivos. */
+async function openAllDetails() {
+  const more = dock().getByRole('button', { name: 'Ver detalhes', exact: true });
+  for (let guard = 0; guard < 10 && (await more.count()) > 0; guard++) await more.first().click();
+}
 const tablesJson = async () => JSON.stringify((await state(page)).runtime.document.pages.flatMap((p) => p.objects.filter((o) => o.type === 'table')));
 
 /** Nomes acessíveis dos botões/links/abas visíveis dentro de um locator (ou da página). */
@@ -105,7 +114,7 @@ try {
   const st0 = await state(page);
   j.step('J2-B o cartão abre o catálogo salvo e o assistente',
     st0.runtime.title === CATALOG && st0.runtime.saveLabel === 'Saved' && await dock().isVisible());
-  const intake = dock().getByRole('region', { name: 'Arquivos para o catálogo', exact: true });
+  const intake = dock();
   const inputFiles = intake.locator('input[type=file][aria-label="Escolher arquivos"]');
   const photoBytes = await readFile(resolve(HERE, 'fixtures/photos/celular-retrato-exif6.jpg'));
   const beforeIntake = JSON.stringify(st0.runtime.document), beforeUrl = page.url();
@@ -116,13 +125,20 @@ try {
   ]);
   const drop = await dropPdfOn('[data-vnext-assistant="open"] [data-source-intake]');
   await page.waitForFunction(() => {
-    const rows = [...document.querySelectorAll('.ai-intake-files > li')];
+    const rows = [...document.querySelectorAll('[data-vnext-assistant="open"] .ai-chat-files > li')];
     return rows.length === 3 && rows.every((row) => ['ready', 'needs-help', 'error'].includes(row.getAttribute('data-intake-state')));
   }, null, { timeout: 30000 });
   timings.leituraArquivosOfflineMs = Date.now() - readingStarted;
-  observations.intake = await intake.locator('.ai-intake-files > li').evaluateAll((rows) => rows.map((row) => ({
+  observations.intake = await page.locator(CHIPS).evaluateAll((rows) => rows.map((row) => ({
     state: row.getAttribute('data-intake-state'), text: row.innerText,
   })));
+  observations.mensagensDeArquivos = (await dock().getByRole('article', { name: 'Arquivos lidos' }).allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  j.step('J2-C1 C1: cada envio de arquivos vira UMA mensagem curta na conversa ("Li 2 arquivos: …"), sem listas longas',
+    observations.mensagensDeArquivos.length === 2 && /^Li 2 arquivos: TA-25N-especificacoes\.csv e foto-local\.jpg\./.test(observations.mensagensDeArquivos[0])
+      && /^Li 1 arquivo: TA-25N-exemplo-local\.pdf\./.test(observations.mensagensDeArquivos[1])
+      && (await dock().locator('.ai-intake-review').count()) === 0,
+    JSON.stringify(observations.mensagensDeArquivos));
+  await openAllDetails();
   j.step('J2-C CSV, foto local e PDF sintético aparecem lidos individualmente, sem estado de erro',
     observations.intake.length === 3 && observations.intake.every((entry) => ['ready', 'needs-help'].includes(entry.state)),
     JSON.stringify(observations.intake));
@@ -134,16 +150,18 @@ try {
       && await intake.getByRole('region', { name: `O que encontrei em ${PDF_NAME}`, exact: true }).isVisible()
       && await intake.getByRole('img', { name: 'Foto foto-local.jpg', exact: true }).isVisible());
   await dropPdfOn('[data-vnext-assistant="open"] [data-source-intake]');
-  await intake.locator('.ai-intake-files > li[data-intake-state="duplicate"]').waitFor({ state: 'visible' });
+  await page.locator(`${CHIPS}[data-intake-state="duplicate"]`).waitFor({ state: 'visible' });
   j.step('J2-D repetir o PDF é identificado sem reler nem duplicar os resultados',
-    await intake.locator('.ai-intake-files > li[data-intake-state="duplicate"]').count() === 1
+    await page.locator(`${CHIPS}[data-intake-state="duplicate"]`).count() === 1
+      && /é repetido e não foi lido de novo/.test(await dockText())
       && await intake.getByRole('region', { name: `O que encontrei em ${PDF_NAME}`, exact: true }).count() === 1);
   await inputFiles.setInputFiles({ name: 'arquivo-invalido.pdf', mimeType: 'application/pdf', buffer: Buffer.from('Este arquivo nao e um PDF.') });
-  const invalidFile = intake.locator('.ai-intake-files > li').filter({ hasText: 'arquivo-invalido.pdf' });
-  await page.waitForFunction(() => [...document.querySelectorAll('.ai-intake-files > li')]
+  const invalidFile = page.locator(CHIPS).filter({ hasText: 'arquivo-invalido.pdf' });
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-vnext-assistant="open"] .ai-chat-files > li')]
     .some((row) => row.textContent.includes('arquivo-invalido.pdf') && row.getAttribute('data-intake-state') === 'error'), null, { timeout: 15000 });
   j.step('J2-D um arquivo ruim recebe explicação e não derruba os três arquivos válidos',
-    await invalidFile.isVisible() && await intake.locator('.ai-intake-review > .ai-intake-group').count() === 3,
+    await invalidFile.isVisible() && await intake.locator('.ai-intake-review > .ai-intake-group').count() === 3
+      && /Não consegui ler arquivo-invalido\.pdf\./.test(await dockText()),
     await invalidFile.innerText());
   const boundary = dock().locator('.ai-boundary');
   texts.limiteDoPainel = (await boundary.innerText()).replace(/\s+/g, ' ').trim();
@@ -154,18 +172,20 @@ try {
     JSON.stringify(measures.limiteDoPainel));
   j.addEvidence(await shot(page, 'j02-02-arquivos-lidos-erro-isolado'));
 
-  // Ferramentas é um modo de comandos locais: retornar ao modo de arquivos deve preservar a leitura.
-  await clicks.click('abrir Ferramentas', dock().getByRole('tab', { name: 'Ferramentas', exact: true }));
-  texts.abaFerramentas = await dockText();
-  j.step('J2-F Ferramentas explica que os comandos não usam IA', /não usam IA/.test(texts.abaFerramentas));
-  await clicks.click('voltar aos arquivos', dock().getByRole('tab', { name: 'Criar com Gemini', exact: true }));
-  j.step('J2-F voltar de Ferramentas mantém os arquivos e seus resultados',
-    await intake.locator('.ai-intake-files > li').count() === 5 && await intake.locator('.ai-intake-review > .ai-intake-group').count() === 3);
+  // C1: sem aba "Ferramentas"; as ações rápidas (sem IA) ficam no menu de opções e não mexem nos arquivos.
+  j.step('J2-F C1: não há aba "Ferramentas" no assistente', (await dock().getByRole('tab').count()) === 0);
+  await clicks.click('abrir o menu de opções', dock().getByRole('button', { name: 'Opções do assistente', exact: true }));
+  texts.menuOpcoes = ((await dock().getByRole('menu', { name: 'Opções do assistente' }).innerText()) ?? '').replace(/\s+/g, ' ').trim();
+  await page.keyboard.press('Escape');
+  j.step('J2-F o menu de opções explica que as ações rápidas não usam IA', /Ações rápidas \(sem IA\)/.test(texts.menuOpcoes)
+    && /Deixar as tabelas mais compactas/.test(texts.menuOpcoes), texts.menuOpcoes);
+  j.step('J2-F abrir e fechar o menu mantém os arquivos e seus resultados',
+    await page.locator(CHIPS).count() === 5 && await intake.locator('.ai-intake-review > .ai-intake-group').count() === 3);
   await dock().getByRole('button', { name: 'Fechar painel do assistente', exact: true }).click();
   await page.locator('[data-side-tab="assistant"]').click();
   await dock().waitFor({ state: 'visible' });
   j.step('J2-F fechar e reabrir o assistente também mantém os arquivos nesta aba',
-    await intake.locator('.ai-intake-files > li').count() === 5);
+    await page.locator(CHIPS).count() === 5);
 
   // Inserção da planilha pelo mesmo painel fornece uma tabela real para a conversa de Ferramentas.
   const csvReview = intake.getByRole('region', { name: `O que encontrei em ${CSV_NAME}`, exact: true });
@@ -195,39 +215,45 @@ try {
   texts.respostaGeminiFoto = await dockText();
   const composerTasks = (await state(page)).composerCalls.map((c) => c.task);
   observations.gotFotoCapa = { proposta: (await proposal.count()) > 0, alerta: (await alertG.count()) > 0, tarefasEnviadas: composerTasks };
-  pendingStep(j, 'J3-A "aumente a foto da capa" mostra um cartão antes/depois com Aplicar / Ajustar / Descartar',
+  pendingStep(j, 'J3-A "aumente a foto da capa" mostra um cartão antes/depois da foto com Aplicar / Ajustar / Descartar',
     `pendente Onda 4 (4B: ajustar por conversa) — hoje o pedido vai pelo mesmo caminho de "criar páginas" (tarefa ${composerTasks.filter((t) => t !== 'status').join(', ') || '-'}); no harness volta uma proposta FALSA de páginas novas (a resposta real do Gemini a este pedido NÃO foi verificada aqui). O painel nunca mexe na foto: ${observations.gotFotoCapa.proposta ? 'veio "Proposta para revisar" de páginas novas' : 'veio aviso'}`);
   if (await proposal.count()) {
-    await clicks.click('rejeitar proposta', proposal.getByRole('button', { name: 'Rejeitar proposta' }));
+    await clicks.click('descartar proposta', proposal.getByRole('button', { name: 'Descartar', exact: true }));
     await page.waitForTimeout(200);
   }
-  j.step('J3-A1 nada muda no catálogo sem o pai confirmar (páginas iguais, "Rejeitar proposta" descarta)', (await pagesCount()) === pagesBeforeJ3 && (await proposal.count()) === 0,
+  j.step('J3-A1 nada muda no catálogo sem o pai aplicar (páginas iguais, "Descartar" tira o cartão)', (await pagesCount()) === pagesBeforeJ3 && (await proposal.count()) === 0,
     `páginas: ${pagesBeforeJ3} → ${await pagesCount()}`);
   j.addEvidence(await shot(page, 'j03-01-gemini-foto-da-capa'));
 
-  // ------------------------------------------------------------------ J3-B os três pedidos na aba "Ferramentas"
-  await clicks.click('abrir Ferramentas', dock().getByRole('tab', { name: 'Ferramentas' }));
-  const toolsBox = dock().getByRole('textbox', { name: 'Peça uma alteração' });
-  await toolsBox.waitFor({ timeout: 5000 });
+  // ------------------------------------------------------------------ J3-B ações rápidas (sem IA) no mesmo chat (C1)
+  const toolsBox = dock().getByRole('textbox', { name: 'Seu pedido ao Gemini' });
+  const lastReply = async () => {
+    const m = await measure(dock().locator('.ai-chat-turn.ai-chat-assistant').last());
+    const reply = ((await dock().locator('.ai-chat-turn.ai-chat-assistant').last().innerText().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
+    return { reply, visivelSemRolar: m.fullyVisible, fontPx: m.fontPx };
+  };
   const ask = async (text, task) => {
     const before = (await dock().locator('.ai-chat-turn').count());
     await toolsBox.fill(text);
-    await clicks.click(task, dock().getByRole('button', { name: /^Enviar pedido/ }));
+    await clicks.click(task, dock().getByRole('button', { name: 'Enviar ao Gemini', exact: true }));
     const ms = await waitMs(async () => (await dock().locator('.ai-chat-turn').count()) >= before + 2, { timeout: 5000 });
-    const reply = ((await dock().locator('.ai-chat-turn.ai-chat-assistant').last().innerText().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim();
-    const m = await measure(dock().locator('.ai-chat-turn.ai-chat-assistant').last());
-    return { reply, ms, visivelSemRolar: m.fullyVisible, fontPx: m.fontPx };
+    return { ...(await lastReply()), ms };
+  };
+  const option = async (name, task) => {
+    const before = (await dock().locator('.ai-chat-turn').count());
+    await dock().getByRole('button', { name: 'Opções do assistente', exact: true }).click();
+    await clicks.click(task, dock().getByRole('menuitem', { name, exact: true }));
+    const ms = await waitMs(async () => (await dock().locator('.ai-chat-turn').count()) >= before + 2, { timeout: 5000 });
+    return { ...(await lastReply()), ms };
   };
   const tableBefore = await tablesJson();
-  const r1 = await ask('Aumente a foto da capa', 'pedir (Ferramentas) foto da capa');
-  texts.ferramentasFotoCapa = r1.reply;
-  j.step('J3-B1 em "Ferramentas", "aumente a foto da capa" recebe uma resposta honesta em português dizendo o que ela consegue fazer e que não alterou o catálogo',
-    /Ainda não consigo fazer esse ajuste por aqui/.test(r1.reply) && /Não alterei o catálogo/.test(r1.reply) && scanJargon(r1.reply, { allow: ALLOW }).length === 0,
-    `"${r1.reply}" · em ${r1.ms} ms · visível sem rolar: ${r1.visivelSemRolar}`);
-  const r2 = await ask('Deixe a tabela mais compacta', 'pedir (Ferramentas) tabela compacta');
+  const callsBefore = (await state(page)).composerCalls.length;
+  const r2 = await ask('Deixe a tabela mais compacta', 'pedir (chat) tabela compacta');
   texts.ferramentasTabelaCompacta = r2.reply;
   const tableAfter = await tablesJson();
   observations.tabelaMudou = tableAfter !== tableBefore;
+  j.step('J3-B1 C1: um pedido curto de ação rápida no chat roda aqui, sem chamar a IA',
+    (await state(page)).composerCalls.length === callsBefore, `chamadas à IA: ${callsBefore} → ${(await state(page)).composerCalls.length}`);
   if (tableObj) {
     j.step('J3-B2 "deixe a tabela mais compacta" é atendido na hora (a tabela muda e a resposta explica)',
       /Compactei as tabelas/.test(r2.reply) && observations.tabelaMudou, `"${r2.reply}" · tabela mudou: ${observations.tabelaMudou} · em ${r2.ms} ms`);
@@ -242,24 +268,24 @@ try {
     }
     observations.desfazerCompactar = { caminho: undoPath, ms: undone };
     j.step('J3-B3 Desfazer volta a tabela ao que era', undone >= 0, `caminho: ${undoPath} · ${undone} ms`);
+    const r3 = await option('Refazer a alteração desfeita', 'refazer (menu de opções)');
+    texts.ferramentasRefazer = r3.reply;
+    j.step('J3-B4 "Refazer a alteração desfeita" no menu de opções compacta de novo e explica',
+      /Executei Refazer/.test(r3.reply) && (await tablesJson()) === tableAfter, `"${r3.reply}"`);
+    measures.respostas = { tabelaCompacta: r2, refazer: r3 };
   } else {
     j.step('J3-B2 sem tabela no modelo, "deixe a tabela mais compacta" explica que não há tabela', /Ainda não há tabelas/.test(r2.reply), r2.reply);
+    measures.respostas = { tabelaCompacta: r2 };
   }
-  const r3 = await ask('Separe as especificações elétricas', 'pedir (Ferramentas) separar elétricas');
-  texts.ferramentasSepararEletricas = r3.reply;
-  j.step('J3-B4 "separe as especificações elétricas" recebe a resposta honesta (não consegue por aqui) sem mexer no catálogo',
-    /Ainda não consigo fazer esse ajuste por aqui/.test(r3.reply) && (await pagesCount()) === pagesBeforeJ3, `"${r3.reply}"`);
-  pendingStep(j, 'J3-C cada pedido mostra um cartão antes/depois com Aplicar / Ajustar / Descartar',
-    'pendente Onda 4 (4B) — hoje: "Ferramentas" aplica na hora (sem prévia) só "compactar tabelas", e responde "Ainda não consigo…" para foto e para separar seções; a aba Gemini só cria páginas novas');
+  pendingStep(j, 'J3-C cada pedido de ajuste mostra um cartão antes/depois com Aplicar / Ajustar / Descartar',
+    'pendente Onda 4 (4B) — hoje: as ações rápidas aplicam na hora (sem prévia) e o cartão de proposta do Gemini só cria páginas novas');
   const ferramentasJargon = scanJargon(await dockText(), { allow: ALLOW });
-  j.step('J3-D as respostas das Ferramentas estão em português, sem jargão', ferramentasJargon.length === 0, ferramentasJargon.map((h) => `${h.term} («${h.context}»)`).join(' | ') || '-');
-  measures.respostas = { fotoCapa: r1, tabelaCompacta: r2, separarEletricas: r3 };
+  j.step('J3-D as respostas no chat estão em português, sem jargão', ferramentasJargon.length === 0, ferramentasJargon.map((h) => `${h.term} («${h.context}»)`).join(' | ') || '-');
   j.addEvidence(await shot(page, 'j03-02-ferramentas-respostas'));
 
   // ------------------------------------------------------------------ J3-E foto da capa selecionada: o painel oferece algo?
   const imageObj = st0.runtime.document.pages[0].objects.find((o) => o.type === 'image');
   if (imageObj) {
-    await clicks.click('voltar à aba Gemini', dock().getByRole('tab', { name: 'Criar com Gemini' }));
     await page.getByRole('button', { name: 'Página 1', exact: true }).click().catch(() => {});
     await page.waitForTimeout(300);
     const img = page.locator(`[data-editor-object-id="${imageObj.id}"]`).first();

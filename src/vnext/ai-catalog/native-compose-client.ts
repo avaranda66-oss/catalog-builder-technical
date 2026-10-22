@@ -74,7 +74,7 @@ async function invokeComposer(client: NativeComposeFunctionsClient, body: Compos
 /**
  * Invoke only through the authenticated, budgeted Supabase function. Without
  * a credential the server key is used (default); a personal key is sent only
- * when the author unlocked one in "Avançado (chave própria)".
+ * when the author unlocked one with "Usar minha própria chave".
  */
 export function nativeComposeGateway(client: NativeComposeFunctionsClient, credential?: string): NativeComposeGateway {
   const apiKey = checkedCredential(credential);
