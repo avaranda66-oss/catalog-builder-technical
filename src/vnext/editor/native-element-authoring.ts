@@ -189,6 +189,14 @@ export function polygonFillOfKind(style: PolygonStyle, kind: Paint['kind'], pale
   return { ...style, fill };
 }
 
+/**
+ * The click area of a polygon is its shape, not its box: two halves of a diagonal share one box, and a click on
+ * the blue half must pick the blue polygon (CSS clip-path also clips pointer hits).
+ */
+export function polygonHitClipPath(points: readonly PolygonPoint[]): string {
+  return `polygon(${points.map((point) => `${Math.round(point.x * 10000) / 100}% ${Math.round(point.y * 10000) / 100}%`).join(', ')})`;
+}
+
 /** Polygon vertices shown in mm from the box's top-left corner (what the person types), and back. */
 export const pointToMm = (point: PolygonPoint, frame: { widthMm: number; heightMm: number }) =>
   ({ xMm: Math.round(point.x * frame.widthMm * 100) / 100, yMm: Math.round(point.y * frame.heightMm * 100) / 100 });

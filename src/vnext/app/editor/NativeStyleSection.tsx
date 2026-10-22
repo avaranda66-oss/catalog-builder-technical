@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ApplicationAction, DocumentSession } from '../../application';
-import type { Border, LineObject, PolygonObject, PolygonStyle, ShapeObject, ShapeStyle, StrokeDash } from '../../domain';
+import type { LineObject, PolygonObject, PolygonPoint, PolygonStyle, ShapeObject, ShapeStyle, StrokeDash } from '../../domain';
+import type { Border } from '../../domain/editorial-model';
 import {
   DASH_OPTIONS,
   PATTERN_OPTIONS,
@@ -184,7 +185,7 @@ function LineControls({ line, palette, advanced, disabled, change }: {
 
 function PolygonControls({ polygon, palette, advanced, disabled, change, changePoints }: {
   polygon: PolygonObject; palette: readonly string[]; advanced: boolean; disabled: boolean;
-  change(next: (style: PolygonStyle) => PolygonStyle): void; changePoints(points: PolygonObject['points']): void;
+  change(next: (style: PolygonStyle) => PolygonStyle): void; changePoints(points: readonly PolygonPoint[]): void;
 }) {
   const style = polygon.style, fill = style.fill;
   const kind = fill?.kind ?? 'solid';

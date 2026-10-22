@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { plainRichText, type CatalogDocument, type EditorialObject } from '@/vnext/domain';
 import { createCatalogDocument } from '@/vnext/application';
 import { compilePlans, DocumentRenderer } from '@/vnext/rendering';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { gradientVector, leaderGeometry, svgDashArray } from '@/vnext/rendering/native-paint';
 
 function ids(prefix = 'generated') {
@@ -108,6 +110,13 @@ describe('Onda 3.5 native paint (screen and PDF share this DOM)', () => {
     expect(markup).toContain('background-image:url(&quot;blob:fundo&quot;)');
     expect(markup).toContain('background-size:cover');
     expect(markup).not.toContain('data-object-id');
+  });
+});
+
+describe('Onda 3.5 page stacking', () => {
+  it('the page is its own stacking context, so a band behind everything (negative zIndex) is still painted on the page', () => {
+    const css = readFileSync(resolve(__dirname, '../../../src/vnext/rendering/styles.css'), 'utf8');
+    expect(css).toMatch(/\.editorial-page \{[^}]*isolation:isolate/);
   });
 });
 

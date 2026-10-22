@@ -154,6 +154,7 @@ import { TextInspectorSection } from './editor/TextInspectorSection';
 import { NativeStyleSection } from './editor/NativeStyleSection';
 import { PageBackgroundSection } from './editor/PageBackgroundSection';
 import { ElementInsertButtons } from './editor/ElementInsertButtons';
+import { polygonHitClipPath } from '../editor/native-element-authoring';
 import { TextEditToolbar } from './editor/TextEditToolbar';
 import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
 import { AssistantDock, assistantSelectionLabel, useAssistantWide } from './editor/AssistantDock';
@@ -4178,7 +4179,8 @@ export function EditorWorkspace({
                       data-editor-object-id={object.id}
                       data-selected={selected ? 'true' : 'false'}
                       data-editor-preview={preview?.objectId === object.id ? 'true' : undefined}
-                      style={{ ...frameStyle(displayedFrame), zIndex: selected ? Number.MAX_SAFE_INTEGER : object.zIndex }}
+                      style={{ ...frameStyle(displayedFrame), zIndex: selected ? Number.MAX_SAFE_INTEGER : object.zIndex,
+                        ...(object.type === 'polygon' && !selected ? { clipPath: polygonHitClipPath(object.points) } : {}) }}
                       onPointerDown={(event) => beginGesture(event, object, { type: 'move' })}
                       onDoubleClick={() => {
                         if (object.type === 'text') startTextEdit(object);
