@@ -1,0 +1,230 @@
+{
+  "group": "D-assistente-conflito",
+  "at": "2026-10-17T15:45:00-03:00",
+  "base": "wt-equipe-b/main (equipe-b/usabilidade sobre 33cd5df + fundação 8586cf4..08761a0), harness father-journeys em http://127.0.0.1:5190 (IA falsa, localStorage como servidor)",
+  "viewports": ["1366x768", "1280x720"],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "journeys": [
+    {
+      "id": "J-IA1",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs",
+      "results": ["scratch/father-journeys/results/jia1-assistente.json", "scratch/father-journeys/results/jia1-assistente@1280.json"],
+      "steps": { "ok": 26, "fail": 0, "findings": 4, "pending": 4 },
+      "reason": "Critério de pronto cumprido no essencial (1366 e 1280): 'Assistente IA' na barra de cima → painel abre em ~230 ms dizendo 'IA pronta.' sem chave nem senha, cursor já na caixa; pedido 'Crie a capa e as especificações do TA-25N' → 'Proposta para revisar' (capa + 'Ficha técnica: 3 colunas × 5 linhas, dados ainda vazios' + notas) em ~95 ms (IA falsa); 'Confirmar e inserir no catálogo' cria 3 páginas com a tabela datasheet (5×3, estilo base/rowRoles/annotation) em ~36 ms, 'Páginas 4' aparece, volta a 'Salvo' em 2,3 s; UM Ctrl+Z logo depois de Confirmar desfaz as 3 páginas em ~30 ms e 'Refazer' fica disponível; 3 cliques + digitar. Limite diário (?ia=limite): 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova. O catálogo não foi alterado.' visível sem rolar, pedido volta para a caixa como 'não enviado'. Servidor sem IA (?ia=off): aviso em português, sem pedir chave. Texto do painel sem jargão (palavras usadas: 'propõe', 'estrutura', 'páginas A4', 'inserir', 'confirma'; nunca 'esqueleto' nem 'versão'; 'Gemini' 4× e 'IA' 4× na mesma tela). PENDENTE Onda 2 (2C): FR-17 — o painel (position: fixed, 400 px) cobre 100% da barra 'Propriedades' em 1366 e 1280 (8–10% da página); FR-16b — letras de 10–12 px no painel (botão 'Assistente IA' 12 px, 'IA pronta.' 12 px, aviso-limite 10 px, mensagem de erro 12 px, botões da proposta 12 px; alvos ≥ 36 px OK). ACHADOS: D-06 (P2) 'Avançado (chave própria)' aparece quando o limite diário é atingido e pede chave + senha; D-04 (P2) a mensagem 'servidor sem IA' cita um botão que não existe; D-03 (P2) Esc na caixa fecha o painel e apaga o pedido digitado; D-01 (P3) 'Avançado' pisca no DOM ao abrir; D-07 (P3) o título da proposta fica cortado pela rolagem (passo B7 adicionado depois da execução, ver notes)."
+    },
+    {
+      "id": "J2",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j02-j03-ia-arquivos-conversa.mjs",
+      "results": ["scratch/father-journeys/results/j02-j03-ia-arquivos-conversa.json", "scratch/father-journeys/results/j02-j03-ia-arquivos-conversa@1280.json"],
+      "steps": { "ok": 13, "fail": 0, "findings": 0, "pending": 10 },
+      "reason": "pendente Onda 2 (2E: zona de soltar + 'Criar com IA a partir de arquivos', FR-64; 2F: servidor de extração, FR-66) e Onda 4 (4A: Pendências). O que o pai VÊ hoje ao procurar onde soltar PDF/planilha: biblioteca com 6 botões/abas (Novo catálogo · Ativos · Arquivados · Buscar catálogos · Ordenar · Criar novo catálogo), nenhum fala de IA/arquivo; diálogo 'Novo catálogo' só com Em branco / Ficha técnica essencial / PRESYS · TA-25N; no editor, barra + 'Mais opções' (34 botões) só têm 'Colar tabela do Excel', 'Publicar / PDF', 'Imagem', 'Substituir imagem'/'Enviar imagem' (fotos) — nada para PDF/planilha; soltar um PDF sobre a página ou sobre o painel do assistente não faz nada (sem dica ao arrastar, sem mensagem, sem navegar para o arquivo — e sem quebrar nada); o painel do assistente diz honestamente, em português e sem rolar, 'Ela não lê PDFs, não trata fotos e não inventa valores técnicos' (mas em 10 px); a aba 'Ferramentas' não tem campo de arquivo e diz 'Estes ajustes não usam IA'; o ÚNICO caminho de PDF que existe aparece só com a tabela selecionada: 'Preencher tabela com PDFs (revisão técnica)', que exige 'Manifesto JSON contendo `sources` e `proposal`' e fala de 'textos literais de PDFs pesquisáveis' — incompreensível para o pai (conhecido: [ai] P1 manifesto JSON; substituído pela 2E). 1 clique até a explicação honesta (abrir o assistente). Zero erros de console."
+    },
+    {
+      "id": "J3",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j02-j03-ia-arquivos-conversa.mjs",
+      "results": ["scratch/father-journeys/results/j02-j03-ia-arquivos-conversa.json", "scratch/father-journeys/results/j02-j03-ia-arquivos-conversa@1280.json"],
+      "steps": { "ok": 13, "fail": 0, "findings": 0, "pending": 10 },
+      "reason": "pendente Onda 4 (4B: ajustar por conversa com cartão antes/depois e Aplicar / Ajustar / Descartar). Hoje: na aba 'Criar com Gemini', 'Aumente a foto da capa' vai pelo mesmo caminho de criar páginas (tarefa compose_scaffold) e volta uma 'Proposta para revisar' de páginas NOVAS (no harness a resposta é falsa; a resposta real do Gemini a esse pedido NÃO foi verificada) — 'Rejeitar proposta' não muda nada no catálogo; na aba 'Ferramentas' (sem IA) a resposta é honesta, em português, 16 px, visível sem rolar: 'Ainda não consigo fazer esse ajuste por aqui. Posso compactar tabelas, desfazer, refazer, abrir o editor ou a revisão do PDF. Para criar páginas, use a aba \"Criar com Gemini\"; valores, fotos, capa e títulos se ajustam no editor. Não alterei o catálogo.' (mesma resposta para 'Separe as especificações elétricas'); 'Deixe a tabela mais compacta' É atendido na hora ('Compactei as tabelas no catálogo aberto…'), a tabela muda de verdade e Ctrl+Z (com o foco ainda na caixa do painel) desfaz em ~25 ms com o aviso 'Alteração desfeita.' — sem prévia antes/depois. O modelo 'Ficha técnica essencial' não tem foto na capa (p1: texto + tabela), então não havia foto para o pedido apontar. Zero erros de console."
+    },
+    {
+      "id": "J10",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j10-dois-funcionarios.mjs",
+      "results": ["scratch/father-journeys/results/j10-dois-funcionarios.json", "scratch/father-journeys/results/j10-dois-funcionarios@1280.json"],
+      "steps": { "ok": 18, "fail": 0, "findings": 1, "pending": 3 },
+      "reason": "Texto seguro da Onda 1 (FR-43) VERIFICADO em 1366 e 1280 com duas abas (?user=A e ?user=B, mesmo ?db e ?catalog): a aba 2 abre o mesmo catálogo em ~740 ms sem nenhum aviso de que outra pessoa está nele; a aba 1 edita o título (dois cliques) e volta a 'Salvo' em ~1,25 s; a aba 2 edita e em ~1,23 s vê a faixa amarela (role=alert, acima da página, 100% visível sem rolar, título 15 px, texto 13 px, botões 40 px) 'Este catálogo foi salvo em outro lugar enquanto você editava. Suas alterações continuam nesta tela…', status 'Conflito' na barra; 'Salvar meu trabalho como cópia' vem primeiro e é o botão principal; 'Abrir versão mais recente' diz 'descarta as alterações desta tela'. Um clique em 'Salvar meu trabalho como cópia' cria e abre 'Cópia de PCON-Y18 — Catálogo 2026' em ~10 ms, 'Salvo', aviso some; NADA se perde: a cópia tem o texto da aba 2 e o original guarda o da aba 1; a biblioteca passa a ter os dois. 'Abrir versão mais recente' pergunta 'Tem certeza?' com 'Sim, descartar minhas alterações' / 'Não, voltar'; 'Não, voltar' devolve as duas opções com o texto intacto; só depois do 'Sim' a aba 2 mostra a versão da aba 1 (~14 ms, 'Salvo'); a aba 1 nunca é incomodada. Sem jargão. PENDENTE Onda 2 (2G): diálogo bloqueante (hoje é faixa e o editor continua clicável), URL atualizada (continua ?catalog=<original>; F5 reabre o ORIGINAL, não a cópia — a cópia segue na biblioteca, nada perdido), aviso ao abrir com outra pessoa editando (também 4D/FR-05). ACHADOS: D-05 (P3) 'em outro lugar' não diz que foi outra pessoa; D-08 (P3) no 'Tem certeza?' o botão destacado é o que descarta (passo 18b adicionado depois da execução, ver notes)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "D-06",
+      "journey": "J-IA1",
+      "severity": "P2",
+      "title": "Com o limite diário da IA atingido, aparece o botão 'Avançado (chave própria)' ao lado de 'Enviar ao Gemini' — e ele pede 'Chave API do provedor', 'Senha de proteção do cofre' e 'Salvar chave criptografada', embora o servidor nunca tenha dito que aceita chave própria (FR-60 continua falhando neste caso).",
+      "steps": [
+        "Abrir um catálogo no editor com o limite diário da IA atingido (harness: ?ia=limite; produção: orçamento do dia esgotado, HTTP 429 também na consulta de status)",
+        "Clicar em 'Assistente IA' na barra de cima",
+        "Olhar a linha de prontidão ('O limite diário de uso da IA foi atingido…') e os botões abaixo da caixa 'Seu pedido ao Gemini': aparece 'Avançado (chave própria)' (12 px)",
+        "Clicar em 'Avançado (chave própria)': abre 'Usar minha própria chave' com 2 campos de senha ('Chave API do provedor', 'Senha de proteção do cofre') e o botão 'Salvar chave criptografada'"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-05-limite-diario.png",
+      "impact": "Justamente no dia em que a IA acaba, o pai vê um botão novo e azul-claro que o leva a 'chave API', 'cofre' e 'criptografada' — o caminho de chave pessoal + senha que o FR-60 tirou dele. Ele pode achar que precisa disso para a IA voltar, pedir ajuda ou digitar algo errado; a mensagem certa ('amanhã o limite renova') fica em 12 px vermelho embaixo.",
+      "proposedFix": "src/vnext/ai-catalog/CatalogNativeComposer.tsx:76 — `ownKeyOffered` só quando o servidor respondeu `byok: true` (ou já há chave própria desbloqueada); nunca por 'readiness ainda não é ready' ou 'blocked'. Complemento no servidor: a tarefa `status` deve responder (com `byok`) mesmo com o orçamento esgotado, em vez de 429. CatalogNativeComposer.tsx está em PROIBIDOS (Equipe A) → registrar em _state/PROPOSTAS.md; a função supabase/functions/vnext-catalog-composer não está na lista, mas esta equipe não edita src/.",
+      "knownFR": "FR-60",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs"
+    },
+    {
+      "id": "D-04",
+      "journey": "J-IA1",
+      "severity": "P2",
+      "title": "Com o servidor sem IA, a mensagem manda usar 'Avançado (chave própria)', mas esse botão não existe na tela (está escondido porque o servidor respondeu byok: false).",
+      "steps": [
+        "Abrir um catálogo com o servidor sem chave de IA (harness: ?ia=off; produção: PROVIDER_NOT_CONFIGURED)",
+        "Clicar em 'Assistente IA'",
+        "Ler a linha de prontidão: 'A IA do servidor ainda não foi configurada. Fale com o administrador. Se você tiver uma chave própria do Gemini, use “Avançado (chave própria)”.'",
+        "Procurar o botão 'Avançado (chave própria)' no painel: não existe (0 botões)",
+        "Digitar um pedido e 'Enviar ao Gemini': o mesmo texto aparece em vermelho como aviso"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1280-06-sem-ia.png",
+      "impact": "O pai procura um botão que a própria tela mandou usar e não acha; perde tempo e conclui que o programa está quebrado. A parte útil ('Fale com o administrador') fica diluída.",
+      "proposedFix": "src/vnext/ai-catalog/composer-messages.ts:19 — PROVIDER_NOT_CONFIGURED sem a frase da chave própria quando `readiness.byok` é false (passar a prontidão para a função de mensagem, ou duas variantes). O arquivo não está em PROIBIDOS, mas esta equipe não edita src/ → registrar em _state/PROPOSTAS.md.",
+      "knownFR": "FR-60",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs"
+    },
+    {
+      "id": "D-03",
+      "journey": "J-IA1",
+      "severity": "P2",
+      "title": "Esc com o cursor na caixa 'Seu pedido ao Gemini' fecha o painel inteiro e apaga o pedido que o pai estava escrevendo.",
+      "steps": [
+        "Abrir 'Assistente IA' (o cursor já fica na caixa 'Seu pedido ao Gemini')",
+        "Digitar um pedido longo, sem enviar",
+        "Apertar Esc (gesto de 'cancelar a seleção' / 'sair da caixa' do Word)",
+        "O painel fecha. Clicar em 'Assistente IA' de novo: a caixa volta vazia (texto perdido)"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-01-painel-pronto.png",
+      "impact": "Perda de trabalho pequena mas irritante: o pai redige o pedido com cuidado, aperta Esc por hábito e perde tudo; no Word Esc nunca apaga texto. Relacionado ao achado conhecido [editor-ux] 'Escape joga fora o que foi digitado', mas aqui é no painel do assistente, não em caixa de texto/célula.",
+      "proposedFix": "src/vnext/app/EditorWorkspace.tsx (tratador de Esc que fecha o painel do assistente, PROIBIDO) — não fechar o painel quando o foco está num textarea com texto (só tirar o foco), ou guardar o rascunho como 'não enviado' e restaurá-lo ao reabrir (CatalogNativeComposer.tsx já tem o estado `unsent`, PROIBIDO) → _state/PROPOSTAS.md.",
+      "knownFR": null,
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs"
+    },
+    {
+      "id": "D-07",
+      "journey": "J-IA1",
+      "severity": "P3",
+      "title": "Quando a proposta chega, a conversa rola até os botões e corta o título 'Proposta para revisar' e a 'Página 1: Capa': em 1366 o pai vê a proposta começando em 'Página 2'; em 1280 só 'Página 3' e os botões.",
+      "steps": [
+        "Abrir 'Assistente IA' num catálogo de 1 página",
+        "Pedir 'Crie a capa e as especificações do TA-25N' e enviar",
+        "Olhar o painel sem rolar: a caixa da proposta mostra só os últimos itens e 'Confirmar e inserir no catálogo' / 'Rejeitar proposta'; o título 'Proposta para revisar', o resumo e 'Página 1: Catálogo técnico PRESYS · Capa' estão acima, fora da área rolável"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-02-proposta.png",
+      "impact": "O pai confirma sem ver o que a proposta é nem a capa; em 1280 praticamente só vê os botões. Vai contra 'revise a proposta antes de aplicar'.",
+      "proposedFix": "src/vnext/ai-catalog/CatalogNativeComposer.tsx (~linha 86, efeito que faz `scrollTo({ top: scrollHeight })` a cada turno; PROIBIDO) — quando há `pending` (proposta), rolar até o topo do grupo da proposta (`scrollIntoView` do h4) em vez do fim, ou dar à proposta uma área própria fora do histórico. Também muda com a 2C (FR-17: painel como aba). → _state/PROPOSTAS.md. Passo B7 da prova mede o corte (adicionado após a última execução; ver notes).",
+      "knownFR": null,
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs"
+    },
+    {
+      "id": "D-01",
+      "journey": "J-IA1",
+      "severity": "P3",
+      "title": "Ao abrir o painel, 'Avançado (chave própria)' aparece enquanto a linha diz 'Verificando a IA…' e some em 'IA pronta.' (no harness fica 1–2 ms no DOM; em produção dura o tempo da consulta de status ao servidor).",
+      "steps": [
+        "Abrir um catálogo e clicar em 'Assistente IA' pela primeira vez na página",
+        "Observar os botões abaixo da caixa enquanto a linha mostra 'Verificando a IA…': 'Avançado (chave própria)' está lá",
+        "Quando chega 'IA pronta.' (byok: false), o botão some"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-01-painel-pronto.png",
+      "impact": "Um botão que pisca e some faz o pai desconfiar da tela ('tinha um botão aqui'). Baixo impacto no harness (imperceptível); em produção depende da latência da consulta.",
+      "proposedFix": "Mesma raiz do D-06: src/vnext/ai-catalog/CatalogNativeComposer.tsx:76 — não oferecer chave própria enquanto `readiness` é undefined (PROIBIDO → _state/PROPOSTAS.md).",
+      "knownFR": "FR-60",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/jia1-assistente.mjs"
+    },
+    {
+      "id": "D-05",
+      "journey": "J10",
+      "severity": "P3",
+      "title": "O aviso de conflito diz 'Este catálogo foi salvo em outro lugar enquanto você editava' — não diz que foi OUTRA PESSOA (nem quem), que é o que o pai precisa saber para escolher entre cópia e versão mais recente.",
+      "steps": [
+        "Aba 1 (?user=A) e aba 2 (?user=B) abertas no mesmo catálogo",
+        "Aba 1: dois cliques no título, alterar, 'Concluir', esperar 'Salvo'",
+        "Aba 2: dois cliques no título, alterar, 'Concluir'",
+        "Em ~1,2 s aparece a faixa amarela acima da página com o título 'Este catálogo foi salvo em outro lugar enquanto você editava.'"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j10-dois-funcionarios-1366-01-aviso-de-conflito.png",
+      "impact": "'Em outro lugar' soa como defeito do programa ou do computador, não como 'o Carlos também está mexendo nesse catálogo'; o pai fica sem saber se deve ligar para alguém ou se o programa falhou. O resto do texto é claro e seguro.",
+      "proposedFix": "src/vnext/app/editor/EditorNotices.tsx (ConflictNotice, PROIBIDO — src/vnext/app/editor/**) — título 'Outra pessoa salvou este catálogo enquanto você editava.' e, quando a 4D trouxer `updatedBy`/perfil (FR-05), 'Fulano salvou este catálogo às HH:MM'. Cabe na 2G (diálogo bloqueante) → _state/PROPOSTAS.md.",
+      "knownFR": "FR-43",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j10-dois-funcionarios.mjs"
+    },
+    {
+      "id": "D-08",
+      "journey": "J10",
+      "severity": "P3",
+      "title": "No 'Tem certeza?' de 'Abrir versão mais recente', o botão destacado (azul, à esquerda) é 'Sim, descartar minhas alterações'; o seguro, 'Não, voltar', fica apagado.",
+      "steps": [
+        "Provocar o conflito (passos do D-05)",
+        "Clicar em 'Abrir versão mais recente' (botão secundário)",
+        "A faixa muda para 'Tem certeza? As alterações desta tela que ainda não foram salvas serão descartadas.' com 'Sim, descartar minhas alterações' em azul escuro e 'Não, voltar' em branco"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j10-dois-funcionarios-1280-03-confirmar-descartar.png",
+      "impact": "O pai que clicou em 'Abrir versão mais recente' por curiosidade tende a clicar no azul de novo e perde o trabalho da tela (verificado: depois do 'Sim' o texto da aba 2 some; sobra só a cópia de segurança local, invisível para ele). A confirmação existe e funciona — o problema é qual botão chama o clique.",
+      "proposedFix": "src/vnext/app/editor/EditorNotices.tsx (ConflictNotice, PROIBIDO) — 'Não, voltar' como primário/foco inicial e 'Sim, descartar minhas alterações' como botão de perigo (vermelho, à direita). Entra junto com o diálogo bloqueante da 2G → _state/PROPOSTAS.md. Passo 18b da prova confere a classe do botão (adicionado após a última execução; ver notes).",
+      "knownFR": "FR-43",
+      "verified": true,
+      "proofFile": "tests/vnext/proof/father-journeys/j10-dois-funcionarios.mjs"
+    }
+  ],
+  "observations": {
+    "J-IA1": {
+      "cliquesAteInserir": 3,
+      "sequenciaProntidao": ["Verificando a IA…", "IA pronta."],
+      "palavrasDoPainel": { "usa": ["propõe", "estrutura", "páginas A4", "inserir", "confirma", "proposta", "revisar", "dados ainda vazios"], "naoUsa": ["esqueleto", "versão"], "GeminiPorTela": 4, "IAPorTela": 4 },
+      "retornoAoInserir": "sem aviso flutuante do editor; o retorno é a resposta 'Apliquei 3 página(s) e 1 tabela(s)…' (16 px, visível) + 'Páginas 4' no painel de páginas + 'Página 1 de 4'",
+      "tabelaInserida": { "linhas": 5, "colunas": 3, "estilo": ["base", "rowRoles", "annotation", "annotationGapMm"], "quadro": "17×66 mm, 176×77 mm" },
+      "ctrlZ": "funcionou logo depois de Confirmar, com o foco em BODY (D-02 'precisa de clique na página' NÃO aconteceu)",
+      "fontesPx": { "botaoAssistenteIA": 12, "abas": 12, "fechar": 11, "descricao": 12, "IAPronta": 12, "sugestoes": 12, "enviar": 12, "avisoLimitesDaIA": 10, "propostaResumo": 12, "propostaItem": 11, "confirmar": 12, "mensagemErro": 12, "respostaDoAssistente": 16 },
+      "alvosPx": { "botaoAssistenteIA": 36, "confirmar": 40, "sugestao": ">= 24" },
+      "cobertura": { "1366": "painel fixed 400 px cobre 100% de 'Propriedades' (260 px) e 8% da página", "1280": "100% de 'Propriedades' e 10% da página" },
+      "avancadoNoLimite": { "campos": ["Chave API do provedor", "Senha de proteção do cofre"], "botao": "Salvar chave criptografada" }
+    },
+    "J2-J3": {
+      "botoesBiblioteca": ["Novo catálogo", "Ativos", "Arquivados", "Buscar catálogos", "Ordenar catálogos", "Criar novo catálogo"],
+      "opcoesNovoCatalogo": ["Em branco", "Ficha técnica essencial", "PRESYS · TA-25N — produto e específicações"],
+      "editorPalavrasDeArquivo": ["Publicar / PDF", "Colar tabela do Excel", "Imagem", "Substituir imagem", "Enviar imagem"],
+      "soltarPdf": "página e painel: sem dica, sem mensagem, sem mudança no catálogo, sem navegar",
+      "avisoHonesto": "'A IA propõe a estrutura das páginas e você confere antes de inserir. Ela não lê PDFs, não trata fotos e não inventa valores técnicos: as tabelas chegam vazias para você preencher.' — 10 px, visível sem rolar, 1 clique",
+      "ferramentas": { "sugestoes": ["Deixe as tabelas mais compactas", "Desfaça a última alteração", "Abra a revisão do PDF"], "camposDeArquivo": 0, "usaIA": false },
+      "preencherTabelaComPdfs": { "apareceQuando": "tabela selecionada + aba Criar com Gemini", "rotulos": ["PDFs originais (até cinco)", "Manifesto JSON contendo `sources` e `proposal`"], "jargao": ["JSON", "manifesto", "textos literais", "PDFs pesquisáveis", "fluxo supervisionado"] },
+      "fotoDaCapa": "pedido vai como compose_scaffold; proposta falsa de páginas novas; 'Rejeitar' mantém 1 página",
+      "tabelaCompacta": "aplicada na hora; Ctrl+Z com foco na caixa do painel desfez em 20–29 ms com aviso 'Alteração desfeita.'",
+      "cliquesTotaisDaProcura": 14
+    },
+    "J10": {
+      "textoDaFaixa": "Este catálogo foi salvo em outro lugar enquanto você editava. Suas alterações continuam nesta tela, mas ainda não foram salvas no catálogo. Salvar meu trabalho como cópia: cria o catálogo “Cópia de PCON-Y18 — Catálogo 2026” com tudo o que está nesta tela. O catálogo original fica com a versão salva em outro lugar. Abrir versão mais recente: mostra a versão salva em outro lugar e descarta as alterações desta tela.",
+      "statusNaBarra": "Conflito",
+      "fontesPx": { "titulo": 15, "texto": 13, "botoes": 13 },
+      "alvosPx": { "botoes": 40 },
+      "ordem": ["Salvar meu trabalho como cópia (primário)", "Abrir versão mais recente (secundário)"],
+      "confirmacao": ["Sim, descartar minhas alterações (primário)", "Não, voltar (secundário)"],
+      "cliques": { "resolverComCopia": 1, "abrirMaisRecente": 2 },
+      "aposCopia": { "urlAindaDoOriginal": true, "F5ReabreOriginal": true, "copiaNaBiblioteca": true, "mensagemFlutuante": "nenhuma — só o título muda para 'Cópia de …' e o aviso some" },
+      "aposDescartar": { "mensagemFlutuante": "nenhuma", "copiaDeSegurancaLocal": "1 registro VALID do catálogo original (invisível para o pai)" }
+    }
+  },
+  "files": [
+    "tests/vnext/proof/father-journeys/jia1-assistente.mjs",
+    "tests/vnext/proof/father-journeys/j02-j03-ia-arquivos-conversa.mjs",
+    "tests/vnext/proof/father-journeys/j10-dois-funcionarios.mjs",
+    "_state/5-jornadas/D-assistente-conflito.json"
+  ],
+  "evidence": [
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-01-painel-pronto.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-02-proposta.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1366-05-limite-diario.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/jia1-assistente-1280-06-sem-ia.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j02-j03-ia-arquivos-conversa-1366-02-novo-catalogo-sem-ia.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j02-j03-ia-arquivos-conversa-1366-06-preencher-tabela-com-pdfs.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j02-j03-ia-arquivos-conversa-1366-08-ferramentas-respostas.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j10-dois-funcionarios-1366-01-aviso-de-conflito.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j10-dois-funcionarios-1366-02-copia-aberta.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j10-dois-funcionarios-1280-03-confirmar-descartar.png"
+  ],
+  "consoleErrors": [],
+  "consoleNote": "6 execuções (3 provas × 1366/1280): 0 erros de console, 0 avisos, 0 pageerror, 0 diálogos do navegador (nem o 'sair sem salvar').",
+  "timings": {
+    "J-IA1": { "iaProntaMs": { "1366": 238, "1280": 226 }, "propostaMs(IA falsa)": { "1366": 95, "1280": 92 }, "inseriu3PaginasMs": { "1366": 36, "1280": 34 }, "salvoAposInserirMs": { "1366": 2340, "1280": 2325 }, "ctrlZMs": { "1366": 32, "1280": 14 }, "alertaLimiteMs": { "1366": 64, "1280": 68 }, "clicks": { "abrir": 1, "enviar": 1, "confirmar": 1 } },
+    "J2-J3": { "respostaGeminiFotoMs(IA falsa)": { "1366": 90, "1280": 78 }, "respostasFerramentasMs": "1–5", "desfazerCompactarMs": { "1366": 29, "1280": 20 }, "cliquesTotais": 14 },
+    "J10": { "aba2AbreMs": { "1366": 726, "1280": 755 }, "aba1EditaAteSalvoMs": { "1366": 1256, "1280": 1222 }, "conflitoApareceMs": { "1366": 1230, "1280": 1238 }, "salvarComoCopiaMs": { "1366": 10, "1280": 11 }, "conflito2Ms": { "1366": 1329, "1280": 1347 }, "abrirMaisRecenteMs": { "1366": 14, "1280": 14 }, "clicks": { "salvar como cópia": 1, "abrir versão mais recente": 2, "não, voltar": 1, "sim, descartar": 1 } }
+  },
+  "notes": "VERIFICADO (vi rodar, 1366 e 1280, resultados em scratch/father-journeys/results/{jia1-assistente,j02-j03-ia-arquivos-conversa,j10-dois-funcionarios}[@1280].json): tudo o que está em journeys.reason e nos achados D-01..D-08, inclusive os textos literais. Os passos B7 (D-07) e 18b (D-08) foram escritos DEPOIS da última execução, a partir do que vi nas capturas (jia1-02-proposta em 1366 e 1280; j10-03-confirmar-descartar em 1280 e 1366) e do código (EditorNotices.tsx: 'Sim, descartar' tem vnext-btn-primary); passaram em `node --check`, mas NÃO foram re-executados porque o disco C: caiu abaixo de 5 GB (regra 5) — o run-all da etapa 6 vai executá-los. SUPOSIÇÃO: (a) a duração visível do piscar do 'Avançado' em produção (no harness ficou 1–2 ms no DOM, provavelmente nem pintado); (b) a resposta real do Gemini a 'aumente a foto da capa' (o harness devolve uma proposta falsa de 3 páginas para qualquer compose_scaffold); (c) em produção o status com orçamento esgotado também responde 429 (o harness copia esse comportamento, segundo o próprio harness). Decisões: letras < 13 px no painel do assistente e na proposta foram registradas como PENDENTE Onda 2 (2C, FR-16b) com as medidas, não como achado, seguindo a regra 4 (o grupo A registrou como P3; se a 2C não tocar o painel do assistente, os números estão em observations.J-IA1.fontesPx); 'Preencher tabela com PDFs' com 'Manifesto JSON' é conhecido ([ai] P1) e será substituído pela 2E → pendente, não achado. O id D-02 ficou reservado na prova para 'Ctrl+Z só funciona depois de clicar na página' e NÃO disparou (Ctrl+Z funcionou com o foco em BODY). O modelo 'Ficha técnica essencial' não tem foto de capa (p1: texto + tabela), então J3 'aumente a foto da capa' não tinha foto para apontar. DISCO: 7,4 GB livres às 15:05 → 3,4 GB às 15:38 → 2,4 GB às 15:43; as provas do grupo D gravaram ~4 MB (capturas + JSON + evidências); algo fora da Equipe B está consumindo o disco — parei de rodar Chromium e aviso. Processos: nenhum Chromium/headless_shell pendurado ao terminar; o vite de 5190 (scratch/serve-5190.mjs) é compartilhado e ficou de pé. Nenhum arquivo de PROIBIDOS nem de src/ foi editado; sem git commit/stash/push."
+}

@@ -1,7 +1,14 @@
 import type { CatalogDocument } from '@/vnext/domain';
 import type { CatalogPersistenceEnvelope } from '@/vnext/persistence/contracts';
 import { canonicalDocumentEquivalence } from '@/vnext/persistence/equivalence';
-import type { AuthoringRecoveryOverlay, PendingRemoteMutation, RecoveryKey, RecoveryRecord } from './contracts';
+import {
+  recoveryKeyOf,
+  recoveryKeyToken,
+  type AuthoringRecoveryOverlay,
+  type PendingRemoteMutation,
+  type RecoveryKey,
+  type RecoveryRecord,
+} from './contracts';
 import { RecoveryCoordinator } from './coordinator';
 import { digestCanonicalDocument } from './digest';
 import { RecoveryWriteScheduler, type RecoverySchedulerClock } from './scheduler';
@@ -93,13 +100,31 @@ export class SessionRecoveryManager {
     this.scheduler.schedule(source);
   }
 
+  /**
+   * The editor can switch to another open session (reopen, "Salvar como cópia"). The last
+   * record then belongs to the previous session: it must never be deleted through the new
+   * session's key (that delete always missed and left the record behind).
+   * - Another catalog took over (the copy holds this work): delete the old record by its own key.
+   * - Same catalog (e.g. "Abrir versão mais recente"): keep it; it is the only local copy of
+   *   the replaced changes and is offered again the next time this catalog opens.
+   * A record with an unconfirmed save is always kept so it can be verified.
+   */
+  private async releaseReplacedSessionRecord(source: SessionRecoverySource): Promise<void> {
+    const written = this.lastWrittenRecord;
+    if (!written || recoveryKeyToken(recoveryKeyOf(written)) === recoveryKeyToken(sourceKey(source))) return;
+    this.lastWrittenRecord = undefined;
+    if (written.catalogId === source.catalogId || written.pendingRemoteMutation) return;
+    await this.options.coordinator.deleteIfGeneration(recoveryKeyOf(written), written.recoveryGeneration);
+  }
+
   private async persist(source: SessionRecoverySource, baseOverride?: CatalogPersistenceEnvelope): Promise<void> {
     if (!this.ownsActiveScope(source)) return;
+    await this.releaseReplacedSessionRecord(source);
     if (!source.dirty && !source.authoringRecoveryOverlay && !this.pendingRemoteMutation) {
       const written = this.lastWrittenRecord;
       if (!written) return;
       const deletion = await this.options.coordinator.deleteIfGeneration(
-        sourceKey(source),
+        recoveryKeyOf(written),
         written.recoveryGeneration
       );
       if (deletion.status === 'DELETED' || deletion.status === 'NOT_FOUND') {
@@ -159,9 +184,10 @@ export class SessionRecoveryManager {
     const liveMatchesAcknowledgement = canonicalDocumentEquivalence(source.documentSnapshot)
       === canonicalDocumentEquivalence(envelope.documentSnapshot);
     if (liveMatchesAcknowledgement && !overlay) {
+      await this.releaseReplacedSessionRecord(source);
       const written = this.lastWrittenRecord;
       if (written) {
-        await this.options.coordinator.deleteIfGeneration(sourceKey(source), written.recoveryGeneration);
+        await this.options.coordinator.deleteIfGeneration(recoveryKeyOf(written), written.recoveryGeneration);
       }
       this.lastWrittenRecord = undefined;
       return;

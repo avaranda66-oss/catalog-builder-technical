@@ -1,0 +1,494 @@
+{
+  "journey": "j13-falhas",
+  "title": "J13 — falhas: foto grande (6000×4000) sem travar e com PDF; IA indisponível avisa em português; rede/sessão reais fora do harness",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T16:01:11.481Z",
+  "steps": [
+    {
+      "name": "F0 fixture: JPEG 6000×4000 com 2–4 MB (como uma foto real de celular)",
+      "ok": true,
+      "detail": "{\"path\":\"scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/photos/foto-grande-6000x4000.jpg\",\"reused\":false,\"bytes\":2149256,\"quality\":0.85,\"noise\":20,\"attempts\":[{\"noise\":12,\"quality\":0.85,\"bytes\":1203361},{\"noise\":20,\"quality\":0.85,\"bytes\":2149256}],\"generateMs\":2222,\"sof\":{\"height\":4000,\"width\":6000},\"mb\":2.05}",
+      "atMs": 2285
+    },
+    {
+      "name": "F0 catálogo \"Em branco\" aberto e salvo",
+      "ok": true,
+      "detail": null,
+      "atMs": 3461
+    },
+    {
+      "name": "F1 em menos de 1 s aparece um retorno visível sem rolar (\"Enviando imagem…\" ou já \"Imagem adicionada.\")",
+      "ok": true,
+      "detail": "4 ms · \"Enviando imagem…\" · tom: progress · visível: true · andamento visto: true · sequência: 0ms \"-\" → 66ms \"Enviando imagem…\" → 499ms \"Imagem adicionada.\"",
+      "atMs": 4023
+    },
+    {
+      "name": "F1 \"Imagem adicionada.\" em menos de 15 s, sem travar a tela (maior pausa < 2 s)",
+      "ok": true,
+      "detail": "471 ms · maior pausa 207 ms · letra 15 px · visível: true",
+      "atMs": 4023
+    },
+    {
+      "name": "F2 a foto grande entrou (1 objeto) e foi reduzida sozinha para 3000×2000, mais leve que o original — sem pedir nada ao pai",
+      "ok": true,
+      "detail": "objetos: 1 · guardada: {\"widthPx\":3000,\"heightPx\":2000,\"mime\":\"image/jpeg\",\"fileSize\":445800,\"name\":\"foto-grande-6000x4000.jpg\"} · enviada: 445800 bytes (original 2149256)",
+      "atMs": 4027
+    },
+    {
+      "name": "F2 a foto aparece na página (3000×2000)",
+      "ok": true,
+      "detail": "11 ms · [3000,2000]",
+      "atMs": 4044
+    },
+    {
+      "name": "F2 \"Salvo\" volta sozinho depois da foto grande (nada se perde)",
+      "ok": true,
+      "detail": "1091 ms · Saved",
+      "atMs": 5191
+    },
+    {
+      "name": "F2 o salvamento confirmado da foto mostra \"Salvo às HH:MM\" (FR-44)",
+      "ok": true,
+      "detail": "Salvo às 13:01",
+      "atMs": 5194
+    },
+    {
+      "name": "F2 editor com a foto grande: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 5198
+    },
+    {
+      "name": "F3 Publicar / PDF com a foto grande → \"Pronto para imprimir ou salvar PDF.\" (a foto não bloqueia nem demora)",
+      "ok": true,
+      "detail": "110 ms · READY · \"Pronto para imprimir ou salvar PDF.\" · itens: 0",
+      "atMs": 5357
+    },
+    {
+      "name": "F3 PDF: 1 página A4 com a foto dentro (imagem embutida), gerado em menos de 15 s",
+      "ok": true,
+      "detail": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j13-foto-grande@1280.pdf · 447525 bytes · 14 ms · páginas: 1 · [[594.96,841.92,\"1 img\"]]",
+      "atMs": 5628
+    },
+    {
+      "name": "L0 o botão \"Assistente IA\" está visível sem rolar",
+      "ok": true,
+      "detail": "141×44 px · letra 15 px",
+      "atMs": 6081
+    },
+    {
+      "name": "L1 ao abrir, o painel JÁ avisa do limite diário em português, antes de o pai digitar (sem pedir chave)",
+      "ok": true,
+      "detail": "\"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · em 66 ms · campos de chave: 0 · letra 13 px · visível sem rolar: false",
+      "atMs": 6162
+    },
+    {
+      "name": "L2 ao enviar, a mensagem diz O QUE FAZER (\"Continue editando manualmente hoje; amanhã o limite renova\") em menos de 2 s",
+      "ok": true,
+      "detail": "92 ms · \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova. O catálogo não foi alterado.\"",
+      "atMs": 6286
+    },
+    {
+      "name": "L2 a mensagem está visível SEM ROLAR (nem a página nem o painel)",
+      "ok": true,
+      "detail": "visível: true · cortada pelo painel: false [] · base y=679 (janela 720)",
+      "atMs": 6286
+    },
+    {
+      "name": "L2 a mensagem de limite tem letra legível (≥ 13 px)",
+      "ok": true,
+      "detail": "15 px",
+      "atMs": 6286
+    },
+    {
+      "name": "L2 o pedido NÃO se perde: volta para a caixa, marcado como \"não enviado\"",
+      "ok": true,
+      "detail": "não enviado: 1 · caixa: \"Crie uma capa e uma página de especificações para o termômetro TA-25N.\"",
+      "atMs": 6286
+    },
+    {
+      "name": "L2 o catálogo não foi alterado pela tentativa (0 páginas novas, continua \"Salvo\")",
+      "ok": true,
+      "detail": "páginas: 1 · Saved",
+      "atMs": 6289
+    },
+    {
+      "name": "L2 painel do assistente (limite): tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 6291
+    },
+    {
+      "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+      "ok": false,
+      "finding": {
+        "id": "C-05",
+        "severity": "P3",
+        "knownFR": "FR-61"
+      },
+      "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar",
+      "atMs": null
+    },
+    {
+      "name": "O1 com o servidor sem IA, o painel avisa em português ao abrir, sem pedir chave nem senha",
+      "ok": true,
+      "detail": "\"A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.\" · em 59 ms · campos de chave: 0 · letra 13 px · visível sem rolar: false",
+      "atMs": 6729
+    },
+    {
+      "name": "O2 a mensagem \"servidor sem IA\" não cita botão inexistente",
+      "ok": true,
+      "detail": "\"A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.\"",
+      "atMs": 6729
+    },
+    {
+      "name": "O3 ao enviar, a mesma explicação aparece como aviso visível sem rolar e o pedido volta para a caixa",
+      "ok": true,
+      "detail": "88 ms · \"A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado.\" · visível sem rolar: true · letra 15 px",
+      "atMs": 6836
+    },
+    {
+      "name": "O3 painel do assistente (sem IA): tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 6838
+    },
+    {
+      "name": "R1 rede desligada por 30 s durante a edição: \"Sem conexão\" visível, nada se perde, salvamento retomado sozinho",
+      "ok": null,
+      "pending": true,
+      "detail": "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real.",
+      "atMs": null
+    },
+    {
+      "name": "R2 sessão expirada: aviso \"Sessão expirada\" com o que fazer, sem perder o trabalho",
+      "ok": null,
+      "pending": true,
+      "detail": "FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações.",
+      "atMs": null
+    },
+    {
+      "name": "zero erros de console (do aplicativo) e de página em toda a jornada",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do vite ignorado: 0",
+      "atMs": 6896
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j13-falhas-01-foto-grande-inserida@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j13-falhas-02-publicar-pronto-foto-grande@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j13-falhas-03-ia-limite-diario@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j13-falhas-04-servidor-sem-ia@1280.png"
+  ],
+  "findings": [],
+  "pendingReason": "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real. | FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações.",
+  "pendingSteps": [
+    "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real.",
+    "FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações."
+  ],
+  "findingSteps": [
+    {
+      "id": "C-05",
+      "severity": "P3",
+      "knownFR": "FR-61",
+      "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+      "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "largePhoto": {
+      "firstNoticeMs": 4,
+      "firstNoticeText": "Enviando imagem…",
+      "addedMs": 471,
+      "longestStallMs": 207,
+      "savedMs": 1091,
+      "publishReadyMs": 110
+    },
+    "limite": {
+      "openMs": 66,
+      "alertMs": 92
+    },
+    "semIA": {
+      "openMs": 59,
+      "alertMs": 88
+    }
+  },
+  "measures": {
+    "largeFixture": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/photos/foto-grande-6000x4000.jpg",
+      "reused": false,
+      "bytes": 2149256,
+      "quality": 0.85,
+      "noise": 20,
+      "attempts": [
+        {
+          "noise": 12,
+          "quality": 0.85,
+          "bytes": 1203361
+        },
+        {
+          "noise": 20,
+          "quality": 0.85,
+          "bytes": 2149256
+        }
+      ],
+      "generateMs": 2222,
+      "sof": {
+        "height": 4000,
+        "width": 6000
+      },
+      "mb": 2.05
+    },
+    "largeNoticeTrace": [
+      {
+        "ms": 0,
+        "text": null,
+        "tone": null
+      },
+      {
+        "ms": 66,
+        "text": "Enviando imagem…",
+        "tone": "progress"
+      },
+      {
+        "ms": 499,
+        "text": "Imagem adicionada.",
+        "tone": "success"
+      }
+    ],
+    "largeFirstNotice": {
+      "text": "Enviando imagem…",
+      "fontPx": 15,
+      "heightPx": 37,
+      "widthPx": 720,
+      "top": 330,
+      "inViewport": true,
+      "fullyVisible": true,
+      "tone": "progress"
+    },
+    "largeDoneNotice": {
+      "text": "Imagem adicionada.",
+      "fontPx": 15,
+      "heightPx": 58,
+      "widthPx": 720,
+      "top": 330,
+      "inViewport": true,
+      "fullyVisible": true,
+      "tone": "success"
+    },
+    "largeFinalized": {
+      "widthPx": 3000,
+      "heightPx": 2000,
+      "mime": "image/jpeg",
+      "fileSize": 445800,
+      "name": "foto-grande-6000x4000.jpg"
+    },
+    "largeUpload": {
+      "storagePath": "vnext/8e97ee14-33cc-4f49-b7a0-3f47f81a7c48/1.jpeg",
+      "mime": "image/jpeg",
+      "size": 445800
+    },
+    "largeNatural": [
+      3000,
+      2000
+    ],
+    "largeReview": {
+      "hostStatus": "READY",
+      "statusText": "Pronto para imprimir ou salvar PDF.",
+      "items": []
+    },
+    "largePdf": {
+      "path": "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/pdf/j13-foto-grande@1280.pdf",
+      "bytes": 447525,
+      "pdfMs": 14,
+      "printed": 1,
+      "approved": "true",
+      "numPages": 1,
+      "pages": [
+        {
+          "widthPt": 594.96,
+          "heightPt": 841.92,
+          "images": 1,
+          "text": ""
+        }
+      ],
+      "allA4": true
+    },
+    "assistButton": {
+      "text": "Abrir assistente de edição",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 141,
+      "top": 12,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "prontidaoLimite": {
+      "text": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; a",
+      "fontPx": 13,
+      "heightPx": 81,
+      "widthPx": 217,
+      "top": 79,
+      "inViewport": true,
+      "fullyVisible": true,
+      "clippedByScroll": true,
+      "clippers": [
+        "ai-workbench-chat (267–720)",
+        "vnext-assistant-dock (129–720)"
+      ],
+      "bottom": 159,
+      "visibleWithoutScrolling": false
+    },
+    "sendButtonLimite": {
+      "text": "Enviar ao Gemini",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 156,
+      "top": 572,
+      "inViewport": true,
+      "fullyVisible": true,
+      "enabled": true
+    },
+    "alertaLimite": {
+      "text": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; a",
+      "fontPx": 15,
+      "heightPx": 80,
+      "widthPx": 267,
+      "top": 599,
+      "inViewport": true,
+      "fullyVisible": true,
+      "clippedByScroll": false,
+      "clippers": [],
+      "bottom": 679,
+      "visibleWithoutScrolling": true
+    },
+    "prontidaoSemIA": {
+      "text": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto i",
+      "fontPx": 13,
+      "heightPx": 81,
+      "widthPx": 217,
+      "top": 79,
+      "inViewport": true,
+      "fullyVisible": true,
+      "clippedByScroll": true,
+      "clippers": [
+        "ai-workbench-chat (267–720)",
+        "vnext-assistant-dock (129–720)"
+      ],
+      "bottom": 159,
+      "visibleWithoutScrolling": false
+    },
+    "alertaSemIA": {
+      "text": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto i",
+      "fontPx": 15,
+      "heightPx": 100,
+      "widthPx": 267,
+      "top": 599,
+      "inViewport": true,
+      "fullyVisible": true,
+      "clippedByScroll": false,
+      "clippers": [],
+      "bottom": 699,
+      "visibleWithoutScrolling": true
+    },
+    "devServerNoise": [],
+    "clicks": {
+      "foto grande": 2,
+      "publicar": 1,
+      "imprimir / salvar PDF": 1,
+      "voltar ao editor": 1,
+      "abrir assistente (limite)": 1,
+      "enviar (limite)": 1,
+      "abrir assistente (sem IA)": 1,
+      "enviar (sem IA)": 1
+    },
+    "clicksTotal": 9
+  },
+  "texts": {
+    "F2 editor com a foto grande": {
+      "hits": [],
+      "mm": []
+    },
+    "prontidaoLimite": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.",
+    "alertaLimite": "O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova. O catálogo não foi alterado.",
+    "L2 painel do assistente (limite)": {
+      "hits": [],
+      "mm": []
+    },
+    "prontidaoSemIA": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.",
+    "alertaSemIA": "A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado.",
+    "O3 painel do assistente (sem IA)": {
+      "hits": [],
+      "mm": []
+    }
+  },
+  "clicks": {
+    "foto grande": 2,
+    "publicar": 1,
+    "imprimir / salvar PDF": 1,
+    "voltar ao editor": 1,
+    "abrir assistente (limite)": 1,
+    "enviar (limite)": 1,
+    "abrir assistente (sem IA)": 1,
+    "enviar (sem IA)": 1
+  },
+  "viteEvents": [
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected."
+  ],
+  "status": "pending",
+  "findingSummary": [
+    {
+      "id": "C-05",
+      "severity": "P3",
+      "knownFR": "FR-61",
+      "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+      "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "d7bd041a-b12d-49fa-bf9b-899bbba90335",
+    "startedAt": "2026-10-20T16:01:04.269Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

@@ -381,7 +381,7 @@ try {
   assert.equal(cell(assigned.tableB, 'b-cell-1-1').content.legendEntryId, starLive.id);
   assert.equal(cell(assigned.tableB, 'b-cell-1-2').content.legendEntryId, starLive.id);
   const row = page.locator(`[data-legend-entry-id="${starLive.id}"]`);
-  assert((await row.innerText()).includes('2 uso(s)'));
+  assert((await row.innerText()).includes('Usado 2 vezes'));
   await row.locator(`[data-legend-text="${starLive.id}"]`).fill('Opcional atualizado');
   await row.locator('[data-editor-action="update-legend"]').click();
   await settle(page);
@@ -396,7 +396,7 @@ try {
   assert.equal(cell(codeUpdated.tableB, 'b-cell-1-1').content.legendEntryId, starLive.id);
   const removeInUse = row.locator('[data-editor-action="remove-legend"]');
   assert.equal(await removeInUse.isDisabled(), true);
-  assert((await removeInUse.getAttribute('title')).includes('2 célula(s)'));
+  assert((await removeInUse.getAttribute('title')).includes('2 células'));
   await selectRange(page, 1, 1, 1, 2);
   await page.locator('[data-editor-action="detach-marker"]').click();
   await settle(page);
@@ -404,7 +404,7 @@ try {
   assert.equal(cell(detached.tableB, 'b-cell-1-1').content.type, 'empty');
   assert.equal(cell(detached.tableB, 'b-cell-1-2').content.type, 'empty');
   const detachedRow = page.locator(`[data-legend-entry-id="${starLive.id}"]`);
-  assert((await detachedRow.innerText()).includes('0 uso(s)'));
+  assert((await detachedRow.innerText()).includes('Não usado'));
   const deleteBefore = await state(page);
   await detachedRow.locator('[data-editor-action="remove-legend"]').click();
   await settle(page);
@@ -508,7 +508,7 @@ try {
     await enterTableTouch(mp, ms.document.pages[0].objects[1].id);
     await extendRangeVisible(mp, 0, 0, 0, 1, 'tap');
 
-    for (const action of ['extend-table-selection','paste-table-cells','clear-table-cells','marker-panel','legend-panel']) {
+    for (const action of ['extend-table-selection','paste-table-cells','clear-table-cells','marker-panel']) {
       const button = mp.locator(`[data-editor-action="${action}"]`);
       await button.scrollIntoViewIfNeeded();
       assert(await button.isVisible(), `${action} must be visible at ${width}px`);

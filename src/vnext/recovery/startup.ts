@@ -30,6 +30,15 @@ export type PendingRecoveryReconciliation =
     }
   | { readonly status: 'NOT_PENDING' };
 
+/** Which local records may gate the editor that is opening. */
+export interface RecoveryDiscoveryScope {
+  /**
+   * The catalog being opened. Records of other catalogs stay stored on this computer and
+   * are offered when their own catalog is opened; they never block this one.
+   */
+  readonly catalogId?: string;
+}
+
 export interface RecoveryStartupCoordinatorOptions {
   readonly coordinator: RecoveryCoordinator;
   readonly repository: CatalogRepository;
@@ -57,16 +66,23 @@ async function provesPendingMutation(
 export class RecoveryStartupCoordinator {
   constructor(private readonly options: RecoveryStartupCoordinatorOptions) {}
 
-  async discover(authorityScopeId: string): Promise<readonly RecoveryStartupCandidate[]> {
+  async discover(
+    authorityScopeId: string,
+    scope: RecoveryDiscoveryScope = {}
+  ): Promise<readonly RecoveryStartupCandidate[]> {
     if (
       this.options.getActiveAuthorityScopeId
       && this.options.getActiveAuthorityScopeId() !== authorityScopeId
     ) return [];
-    const inspections = await this.options.coordinator.discover(authorityScopeId);
+    const discovered = await this.options.coordinator.discover(authorityScopeId);
     if (
       this.options.getActiveAuthorityScopeId
       && this.options.getActiveAuthorityScopeId() !== authorityScopeId
     ) return [];
+    // Filter before reading the cloud: other catalogs are neither fetched nor shown.
+    const inspections = scope.catalogId === undefined
+      ? discovered
+      : discovered.filter((inspection) => inspection.key.catalogId === scope.catalogId);
     return Promise.all(inspections.map(async (inspection) => {
       if (inspection.status === 'INVALID') {
         return {

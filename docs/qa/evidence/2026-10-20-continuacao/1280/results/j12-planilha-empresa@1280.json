@@ -1,0 +1,440 @@
+{
+  "journey": "j12-planilha-empresa",
+  "title": "J12 — Planilha da empresa: importar PCON-MASTER-ENGLISHV2.xlsx e escolher DB_SENSORS (interface integrada + comparação célula a célula com o Excel real)",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "at": "2026-10-20T16:01:03.640Z",
+  "steps": [
+    {
+      "name": "A1 Novo catálogo oferece Criar com IA a partir de arquivos como primeira opção",
+      "ok": true,
+      "detail": null,
+      "atMs": 478
+    },
+    {
+      "name": "A1 a opção tem alvo legível e clicável",
+      "ok": true,
+      "detail": "{\"opcao\":{\"text\":\"Criar com IA a partir de arquivos\",\"fontPx\":16,\"heightPx\":77,\"widthPx\":422,\"top\":226,\"inViewport\":true,\"fullyVisible\":true}}",
+      "atMs": 478
+    },
+    {
+      "name": "C0 a planilha real da empresa existe no disco",
+      "ok": true,
+      "detail": "C:/Users/Usuario/Desktop/CONFIGURATOR PCON/PCON-MASTER-ENGLISHV2.xlsx",
+      "atMs": 579
+    },
+    {
+      "name": "C1 abas OCULTAS no Excel ficam de fora por padrão, cada uma com o motivo",
+      "ok": true,
+      "detail": "ocultas no Excel: [ORIGINAL_Y17, ORIGINAL_Y18-LP, ORIGINAL_Y18-HP] · fora como \"oculta\": [ORIGINAL_Y17, ORIGINAL_Y18-LP, ORIGINAL_Y18-HP]",
+      "atMs": 4167
+    },
+    {
+      "name": "C2 AccessLogs, HELPER, CONFIGURADOR e PENDING_ITEMS (uso interno) ficam de fora por padrão",
+      "ok": true,
+      "detail": "fora como \"interno\": [AccessLogs, HELPER, CONFIGURADOR, PENDING_ITEMS] · motivo mostrado: \"A aba “AccessLogs” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).\"",
+      "atMs": 4167
+    },
+    {
+      "name": "C3 as colunas de PREÇO da DB_SENSORS (I, K) ficam de fora por padrão e não aparecem no cabeçalho",
+      "ok": true,
+      "detail": "fora: [I, K] · cabeçalhos com \"Price\" na tabela: 0 · com \"incluir dados internos\" o cabeçalho volta: null",
+      "atMs": 4167
+    },
+    {
+      "name": "C4 por padrão entram só as 5 abas de conteúdo visíveis, sem pedir intervalo e sem aviso",
+      "ok": true,
+      "detail": "abas lidas: [INSTRUCTIONS, DB_BASE_UNIT, DB_SENSORS, DB_OPTIONS, DB_ACCESSORIES] · pedidos de intervalo: 0 · avisos: 0 · 560 ms",
+      "atMs": 4167
+    },
+    {
+      "name": "C5 os motivos do que ficou de fora estão em português, sem jargão, e dizem o nome da aba/coluna",
+      "ok": true,
+      "detail": "14 motivos · jargão: - · exemplo: \"A coluna B (“Price (USD)”) da aba “DB_BASE_UNIT” não foi importada: parece ser preço ou dado interno.\"",
+      "atMs": 4168
+    },
+    {
+      "name": "C6 escolhendo a aba DB_SENSORS, só ela é lida (as outras ficam \"não escolhida\")",
+      "ok": true,
+      "detail": "blocos: 1 · abas não escolhidas: 11 · 405 ms",
+      "atMs": 4168
+    },
+    {
+      "name": "C7 DB_SENSORS: cabeçalho reconhecido na linha 4 (\"Code\", \"Range (1)\"…, \"Description\") e 68 linhas de sensores (o plano fala em 69)",
+      "ok": true,
+      "detail": "cabeçalho: [\"Code\",\"Range (1)\",\"Range (2)\",\"Range (3)\",\"Gauge Type\",\"Accuracy\",\"Precision\",\"Description\",\"Family(ies)\",\"Family(ies)\"] · sensores: 68 (0D100 … H9G21M) · linhas antes do cabeçalho: [\"SENSORS / RANGES - Unified\",\"Prices in columns I/J/K — used by CONFIGURADOR via VLOOKUP\",\"\"] · depois dos dados: [\"\",\"New sensors:\"] · células marcadas: 0 · limite: 150 linhas",
+      "atMs": 4168
+    },
+    {
+      "name": "C8 as 68 linhas cabem numa importação (limite 150 linhas × 10 colunas) e o arquivo fica \"pronto\" sem pedir ajuda",
+      "ok": true,
+      "detail": "grade 74 × 10 · needsHelp: false · lote: [{\"fileName\":\"PCON-MASTER-ENGLISHV2.xlsx\",\"status\":\"ready\",\"code\":null,\"message\":null}]",
+      "atMs": 4168
+    },
+    {
+      "name": "C9 vírgulas e decimais iguais ao Excel: 686 células comparadas (67 numéricas), decimais com vírgula como no Excel em português, valor bruto preservado, textos idênticos",
+      "ok": true,
+      "detail": "comparadas: 686 · numéricas: 67 · decimais com vírgula: 66 · divergências: 0  · exemplo: [{\"excel\":0.2,\"mostrado\":\"0,2\",\"bruto\":\"0.2\"},{\"excel\":0.6,\"mostrado\":\"0,6\",\"bruto\":\"0.6\"},{\"excel\":0.1,\"mostrado\":\"0,1\",\"bruto\":\"0.1\"}]",
+      "atMs": 4169
+    },
+    {
+      "name": "B1 o cartão cria o catálogo e abre o assistente com a área de arquivos",
+      "ok": true,
+      "detail": null,
+      "atMs": 4602
+    },
+    {
+      "name": "B2 o arquivo real é lido e aparece Pronto, sem pedir ajuda",
+      "ok": true,
+      "detail": "ready · 452 ms",
+      "atMs": 5059
+    },
+    {
+      "name": "B2 dados ocultos, registros de acesso e preços ficam de fora pela interface",
+      "ok": true,
+      "detail": "Deixado de fora (14)\nA aba “CONFIGURADOR” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).Ler mesmo assim\nA coluna B (“Price (USD)”) da aba “DB_BASE_UNIT” não foi importada: parece ser preço ou dado interno.\nA coluna I (“Price”) da aba “DB_SENSORS” não foi importada: parece ser preço ou dado interno.\nA coluna K (“Price Y18-HP”) da aba “DB_SENSORS” não foi importada: parece ser preço ou dado interno.\nA coluna C (“Price Y17”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna D (“Price Y18-LP”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna E (“Price Y18-HP”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna C (“Price”) da aba “DB_ACCESSORIES” não foi importada: parece ser preço ou dado interno.\nA aba “ORIGINAL_Y17” não foi importada: estava oculta",
+      "atMs": 5105
+    },
+    {
+      "name": "B3 Escolher colunas recomenda sete das dez colunas úteis, sem preço",
+      "ok": true,
+      "detail": "{\"chosenColumns\":[0,1,2,3,4,5,6],\"chosenNames\":[\"Code\",\"Range (1)\",\"Range (2)\",\"Range (3)\",\"Gauge Type\",\"Accuracy\",\"Precision\"]}",
+      "atMs": 5214
+    },
+    {
+      "name": "B3 a prévia mantém os valores e vírgulas exatamente como o módulo conferido com o Excel",
+      "ok": true,
+      "detail": "[[\"Code\",\"Range (1)\",\"Range (2)\",\"Range (3)\",\"Gauge Type\",\"Accuracy\",\"Precision\"],[\"0D100\",\"± 100 Pa\",\"0,40 inH2O\",\"±1 mbar\",\"Differential\",\"1\",\"Standard Precision\"],[\"0D1K\",\"± 1000 Pa\",\"4 inH20\",\"±10 mbar\",\"Differential\",\"0,2\",\"Standard Precision\"],[\"0D250\",\"± 250 Pa\",\"1 inH2O\",\"±2,5 mbar\",\"Differential\",\"0,6\",\"Standard Precision\"]]",
+      "atMs": 5217
+    },
+    {
+      "name": "B4 Inserir como tabela divide automaticamente a planilha em páginas com cabeçalho repetido",
+      "ok": true,
+      "detail": "{\"paginas\":4,\"partes\":4,\"sensores\":68,\"linhasComNotas\":69,\"chosenColumns\":[0,1,2,3,4,5,6],\"chosenNames\":[\"Code\",\"Range (1)\",\"Range (2)\",\"Range (3)\",\"Gauge Type\",\"Accuracy\",\"Precision\"],\"cabecalhoRepetido\":true}",
+      "atMs": 8179
+    },
+    {
+      "name": "B4 os 68 sensores e os valores das sete colunas ficam na ordem original, sem perda nem duplicação",
+      "ok": true,
+      "detail": null,
+      "atMs": 8179
+    },
+    {
+      "name": "B5 a planilha dividida não bloqueia Publicar / PDF",
+      "ok": true,
+      "detail": "{\"estado\":\"READY\",\"texto\":\"Publicação\\n\\nRevisar e publicar\\nVoltar ao editor\\n\\nConfira as páginas e a verificação do catálogo antes de gerar o PDF.\\n\\nPronto para imprimir ou salvar PDF.\\n\\nVerificar novamente\\n\\nO PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas as páginas na prévia abaixo.\\n\\nNa janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.\\n\\nImprimir / salvar PDF\\n\\nCode\\n\\nRange (1)\\n\\nRange (2)\\n\\nRange (3)\\n\\nGauge Type\\n\\nAccuracy\\n\\nPrecision\\n\\n0D100\\n\\n± 100 Pa\\n\\n0,40 inH2O\\n\\n±1 mbar\\n\\nDifferential\\n\\n1\\n\\nStandard Precision\\n\\n0D1K\\n\\n± 1000 Pa\\n\\n4 inH20\\n\\n±10 mbar\\n\\nDifferential\\n\\n0,2\\n\\nStandard Precision\\n\\n0D250\\n\\n± 250 Pa\\n\\n1 inH2O\\n\\n±2,5 mbar\\n\\nDifferential\\n\\n0,6\\n\\nStandard Precision\\n\\n0D2K5\\n\\n± 2500 Pa\\n\\n10 inH2O\\n\\n±25 mbar\\n\\nDifferential\\n\\n0,1\\n\\nStandard Precision\\n\\n1D10K\\n\\n± 10000 Pa\\n\\n40 inH2O\\n\\n±100 mbar\\n\\nDifferential\\n\\n0,05\\n\\nStandard Precision\\n\\n1D7K5\\n\\n± 7500 Pa\\n\\n30 inH2O\\n\\n±75 mbar\\n\\nDifferential\\n\\n0,05\\n\\nStandard Precision\\n\\n2D20K\\n\\n± 20000 Pa\\n\\n80 inH2O\\n\\n±200 mbar\\n\\nDifferential\\n\\n0,025\\n\\nStandard Precision\\n\\n2D35K\\n\\n± 35000 Pa\\n\\n140 inH2O\\n\\n±350 mbar\\n\\nDifferential\\n\\n0,025\\n\\nStandard Precision\\n\\n2D50K\\n\\n± 50000 Pa\\n\\n200 inH2O\\n\\n±500 mbar\\n\\nDifferential\\n\\n0,025\\n\\nStandard Precision\\n\\n3C100K\\n\\n-100 kPa to 100 kPa\\n\\n-15 psi to 15 psi\\n\\n-1 to 1 bar\\n\\nCompound gauge(bi-directional)\\n\\n0,025\\n\\nStandard Precision\\n\\n4C200K\\n\\n-100 kPa to 200 kPa\\n\\n-15 psi to 30 psi\\n\\n-1 to 2 bar\\n\\nCompound gauge(bi-directional)\\n\\n0,025\\n\\nStandard Precision\\n\\n4G200K\\n\\n0 to 200 kPa\\n\\n0 to 30 psi\\n\\n0 to 2  bar (STD)\\n\\nGauge\\n\\n0,025\\n\\nStandard Precision\\n\\n4G250K\\n\\n0 to 250 kPa\\n\\n0 to 36 psi\\n\\n0 to 2.5 bar (STD)\\n\\nGauge\\n\\n0,025\\n\\nStandard Precision\\n\\n5C1M\\n\\n-100kPa\"}",
+      "atMs": 8992
+    },
+    {
+      "name": "B6 um Desfazer remove a inserção inteira e todas as páginas de continuação",
+      "ok": true,
+      "detail": null,
+      "atMs": 9274
+    },
+    {
+      "name": "B6 Refazer restaura a planilha dividida com os mesmos dados",
+      "ok": true,
+      "detail": null,
+      "atMs": 9697
+    },
+    {
+      "name": "D1 zero erros de console e de página (fora o ruído do servidor de desenvolvimento ao otimizar o exceljs)",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do vite: 0",
+      "atMs": 9700
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-01-caminho-criar-com-arquivos@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-02-planilha-lida-no-assistente@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-03-db-sensors-colunas-previa@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-04-planilha-inserida-e-dividida@1280.png",
+    "scratch/father-journeys/runs/2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7/shots/j12-05-publicacao-da-planilha@1280.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "findingSteps": [],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "clicks": {
+    "procurar onde importar": 1,
+    "escolher DB_SENSORS": 1,
+    "inserir a planilha": 1
+  },
+  "timings": {
+    "moduloTotalMs": 1751,
+    "leituraPadraoMs": 560,
+    "leituraDbSensorsMs": 405,
+    "leituraPelaTelaMs": 452,
+    "insercaoEDivisaoMs": 2930
+  },
+  "measures": {
+    "criarComArquivos": {
+      "opcao": {
+        "text": "Criar com IA a partir de arquivos",
+        "fontPx": 16,
+        "heightPx": 77,
+        "widthPx": 422,
+        "top": 226,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    }
+  },
+  "observations": {
+    "biblioteca": {
+      "botoes": [
+        "Novo catálogo",
+        "Criar novo catálogo"
+      ]
+    },
+    "excel": {
+      "abas": [
+        {
+          "name": "CONFIGURADOR",
+          "state": "visible",
+          "rows": 28,
+          "dims": "A1:E32"
+        },
+        {
+          "name": "INSTRUCTIONS",
+          "state": "visible",
+          "rows": 31,
+          "dims": "A1:E56"
+        },
+        {
+          "name": "DB_BASE_UNIT",
+          "state": "visible",
+          "rows": 23,
+          "dims": "A1:G25"
+        },
+        {
+          "name": "DB_SENSORS",
+          "state": "visible",
+          "rows": 72,
+          "dims": "A1:L74"
+        },
+        {
+          "name": "DB_OPTIONS",
+          "state": "visible",
+          "rows": 30,
+          "dims": "A1:G36"
+        },
+        {
+          "name": "DB_ACCESSORIES",
+          "state": "visible",
+          "rows": 11,
+          "dims": "A1:E21"
+        },
+        {
+          "name": "ORIGINAL_Y17",
+          "state": "hidden",
+          "rows": 28,
+          "dims": "A1:G32"
+        },
+        {
+          "name": "ORIGINAL_Y18-LP",
+          "state": "hidden",
+          "rows": 30,
+          "dims": "A1:G36"
+        },
+        {
+          "name": "ORIGINAL_Y18-HP",
+          "state": "hidden",
+          "rows": 30,
+          "dims": "A1:H34"
+        },
+        {
+          "name": "PENDING_ITEMS",
+          "state": "visible",
+          "rows": 14,
+          "dims": "A1:G16"
+        },
+        {
+          "name": "HELPER",
+          "state": "visible",
+          "rows": 69,
+          "dims": "A1:H78"
+        },
+        {
+          "name": "AccessLogs",
+          "state": "visible",
+          "rows": 70,
+          "dims": "A1:P70"
+        }
+      ],
+      "colunasDePreco": [
+        "I",
+        "K"
+      ],
+      "abasOcultas": [
+        "ORIGINAL_Y17",
+        "ORIGINAL_Y18-LP",
+        "ORIGINAL_Y18-HP"
+      ],
+      "bytes": 333366
+    },
+    "aquecimentoDoModulo": "ok",
+    "dbSensors": {
+      "intervalo": "A1:L74",
+      "linhasNaGrade": 74,
+      "linhaDoCabecalho": 4,
+      "cabecalho": [
+        "Code",
+        "Range (1)",
+        "Range (2)",
+        "Range (3)",
+        "Gauge Type",
+        "Accuracy",
+        "Precision",
+        "Description",
+        "Family(ies)",
+        "Family(ies)"
+      ],
+      "colunas": 10,
+      "linhasDeSensores": 68,
+      "primeiroCodigo": "0D100",
+      "ultimoCodigo": "H9G21M",
+      "linhasAntesDoCabecalho": [
+        "SENSORS / RANGES - Unified",
+        "Prices in columns I/J/K — used by CONFIGURADOR via VLOOKUP",
+        ""
+      ],
+      "linhasDepoisDosDados": [
+        "",
+        "New sensors:"
+      ],
+      "celulasMarcadas": 0,
+      "mesclagens": 2,
+      "exemplo": [
+        [
+          "0D100",
+          "± 100 Pa",
+          "0,40 inH2O",
+          "±1 mbar",
+          "Differential",
+          "1",
+          "Standard Precision",
+          "± 100 Pa  0,40 inH2O  ±1 mbar",
+          "Y17, Y18-LP",
+          "Y17, Y18-LP"
+        ],
+        [
+          "0D1K",
+          "± 1000 Pa",
+          "4 inH20",
+          "±10 mbar",
+          "Differential",
+          "0,2",
+          "Standard Precision",
+          "± 1000 Pa  4 inH20  ±10 mbar",
+          "Y17, Y18-LP",
+          "Y17, Y18-LP"
+        ]
+      ]
+    },
+    "comparacaoComExcel": {
+      "celulasComparadas": 686,
+      "numericas": 67,
+      "decimaisComVirgula": 66,
+      "divergencias": [],
+      "totalDivergencias": 0,
+      "exemploNumerico": [
+        {
+          "excel": 0.2,
+          "mostrado": "0,2",
+          "bruto": "0.2"
+        },
+        {
+          "excel": 0.6,
+          "mostrado": "0,6",
+          "bruto": "0.6"
+        },
+        {
+          "excel": 0.1,
+          "mostrado": "0,1",
+          "bruto": "0.1"
+        }
+      ]
+    },
+    "importacaoPelaTela": {
+      "estado": "ready",
+      "botoesDeTabelas": [
+        "Escolher colunas",
+        "Escolher colunas",
+        "Escolher colunas",
+        "Escolher colunas",
+        "Escolher colunas"
+      ],
+      "deixadoDeFora": "Deixado de fora (14)\nA aba “CONFIGURADOR” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).Ler mesmo assim\nA coluna B (“Price (USD)”) da aba “DB_BASE_UNIT” não foi importada: parece ser preço ou dado interno.\nA coluna I (“Price”) da aba “DB_SENSORS” não foi importada: parece ser preço ou dado interno.\nA coluna K (“Price Y18-HP”) da aba “DB_SENSORS” não foi importada: parece ser preço ou dado interno.\nA coluna C (“Price Y17”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna D (“Price Y18-LP”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna E (“Price Y18-HP”) da aba “DB_OPTIONS” não foi importada: parece ser preço ou dado interno.\nA coluna C (“Price”) da aba “DB_ACCESSORIES” não foi importada: parece ser preço ou dado interno.\nA aba “ORIGINAL_Y17” não foi importada: estava oculta no Excel.Ler mesmo assim\nA aba “ORIGINAL_Y18-LP” não foi importada: estava oculta no Excel.Ler mesmo assim\nA aba “ORIGINAL_Y18-HP” não foi importada: estava oculta no Excel.Ler mesmo assim\nA aba “PENDING_ITEMS” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).Ler mesmo assim\nA aba “HELPER” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).Ler mesmo assim\nA aba “AccessLogs” não foi importada: parece de uso interno (registros, listas auxiliares, preços ou pendências).Ler mesmo assim"
+    },
+    "tabelaInserida": {
+      "paginas": 4,
+      "partes": 4,
+      "sensores": 68,
+      "linhasComNotas": 69,
+      "chosenColumns": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "chosenNames": [
+        "Code",
+        "Range (1)",
+        "Range (2)",
+        "Range (3)",
+        "Gauge Type",
+        "Accuracy",
+        "Precision"
+      ],
+      "cabecalhoRepetido": true
+    },
+    "publicacao": {
+      "estado": "READY",
+      "texto": "Publicação\n\nRevisar e publicar\nVoltar ao editor\n\nConfira as páginas e a verificação do catálogo antes de gerar o PDF.\n\nPronto para imprimir ou salvar PDF.\n\nVerificar novamente\n\nO PDF mantém o texto pesquisável e as tabelas nítidas. Confira todas as páginas na prévia abaixo.\n\nNa janela que abrir, escolha Salvar como PDF (em Destino ou Impressora) e clique em Salvar.\n\nImprimir / salvar PDF\n\nCode\n\nRange (1)\n\nRange (2)\n\nRange (3)\n\nGauge Type\n\nAccuracy\n\nPrecision\n\n0D100\n\n± 100 Pa\n\n0,40 inH2O\n\n±1 mbar\n\nDifferential\n\n1\n\nStandard Precision\n\n0D1K\n\n± 1000 Pa\n\n4 inH20\n\n±10 mbar\n\nDifferential\n\n0,2\n\nStandard Precision\n\n0D250\n\n± 250 Pa\n\n1 inH2O\n\n±2,5 mbar\n\nDifferential\n\n0,6\n\nStandard Precision\n\n0D2K5\n\n± 2500 Pa\n\n10 inH2O\n\n±25 mbar\n\nDifferential\n\n0,1\n\nStandard Precision\n\n1D10K\n\n± 10000 Pa\n\n40 inH2O\n\n±100 mbar\n\nDifferential\n\n0,05\n\nStandard Precision\n\n1D7K5\n\n± 7500 Pa\n\n30 inH2O\n\n±75 mbar\n\nDifferential\n\n0,05\n\nStandard Precision\n\n2D20K\n\n± 20000 Pa\n\n80 inH2O\n\n±200 mbar\n\nDifferential\n\n0,025\n\nStandard Precision\n\n2D35K\n\n± 35000 Pa\n\n140 inH2O\n\n±350 mbar\n\nDifferential\n\n0,025\n\nStandard Precision\n\n2D50K\n\n± 50000 Pa\n\n200 inH2O\n\n±500 mbar\n\nDifferential\n\n0,025\n\nStandard Precision\n\n3C100K\n\n-100 kPa to 100 kPa\n\n-15 psi to 15 psi\n\n-1 to 1 bar\n\nCompound gauge(bi-directional)\n\n0,025\n\nStandard Precision\n\n4C200K\n\n-100 kPa to 200 kPa\n\n-15 psi to 30 psi\n\n-1 to 2 bar\n\nCompound gauge(bi-directional)\n\n0,025\n\nStandard Precision\n\n4G200K\n\n0 to 200 kPa\n\n0 to 30 psi\n\n0 to 2  bar (STD)\n\nGauge\n\n0,025\n\nStandard Precision\n\n4G250K\n\n0 to 250 kPa\n\n0 to 36 psi\n\n0 to 2.5 bar (STD)\n\nGauge\n\n0,025\n\nStandard Precision\n\n5C1M\n\n-100kPa"
+    }
+  },
+  "viewportUsed": {
+    "width": 1280,
+    "height": 720
+  },
+  "server": "http://127.0.0.1:5190",
+  "xlsx": "C:/Users/Usuario/Desktop/CONFIGURATOR PCON/PCON-MASTER-ENGLISHV2.xlsx",
+  "status": "pass",
+  "findingSummary": [],
+  "run": {
+    "id": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+    "executionId": "87405c98-32ac-4d0a-a0af-7bc032c8a6e6",
+    "startedAt": "2026-10-20T16:00:53.584Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": true
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": true
+      },
+      "serverId": "191b0b2e-efe0-4a18-8886-3c8d85e88992",
+      "startedAt": "2026-10-20T15:56:33.128Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

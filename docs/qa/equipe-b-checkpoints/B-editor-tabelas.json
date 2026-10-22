@@ -1,0 +1,160 @@
+{
+  "group": "B-editor-tabelas",
+  "journeysCovered": ["J4", "J5"],
+  "at": "2026-10-17T10:52:00-03:00",
+  "base": "33cd5df (branch equipe-b/usabilidade, worktree wt-equipe-b/main)",
+  "server": "http://127.0.0.1:5190 (vite do worktree, reutilizado via BASE_URL; nenhum servidor novo)",
+  "browser": "Chromium 151.0.7922.34 (Playwright, headless), pt-BR, 1366×768 e 1280×720",
+  "statusConvention": "fail = passo funcional ou achado P0/P1 falhou; pending = depende de recurso da Onda 2 (passo com ok:null, pending:true); achados P2/P3 ficam ok:false no passo e aqui em findings, sem derrubar a jornada. Nada que não rodou está verde.",
+  "journeys": [
+    {
+      "id": "J4",
+      "status": "fail",
+      "proofFile": "tests/vnext/proof/father-journeys/j04-editar-a-mao.mjs",
+      "results": ["scratch/father-journeys/results/j04-editar-a-mao.json", "scratch/father-journeys/results/j04-editar-a-mao@1280.json"],
+      "reason": "FAIL pelo achado B-01 (P1, verificado a 1366 e 1280): a primeira palavra digitada numa célula de tabela nova gera erro vermelho 'Bloqueia publicação · Conteúdo excede a altura da tabela'. O resto da Onda 1 passa: colar 12×4 do Excel (Ctrl+V na página e pela caixa 'Colar tabela do Excel') cria tabela com cabeçalho azul e estilo, valores '±0,1 °C', '-25 a 140 °C', '0,02 % FE', '1.500' iguais, mensagem verde em <0,2 s; adicionar/excluir (confirmação clara) /mover página e Ctrl+Z; zoom 100 % (célula 13,3 px) e 125 % (16,7 px) e Ctrl+roda em degraus; campo X aceita '12,5' e recusa 'abc' com aviso curto, Desfazer e Salvar seguem funcionando; alvos ≥ 24 px (menor 31 px); zero erros de console. Pendentes Onda 2: 2A (edição na célula: hoje o painel 'Tipo de conteúdo = Vazio' abre FORA da janela, teclar não faz nada, caminho de hoje = 8 cliques; FR-22 'Alterações não salvas' ao só abrir a célula), 2B (nenhum controle 'Título'), 2C (alças 12 px; 20 botões com letra 11–12 px)."
+    },
+    {
+      "id": "J5",
+      "status": "pending",
+      "proofFile": "tests/vnext/proof/father-journeys/j05-tabela-longa.mjs",
+      "results": ["scratch/father-journeys/results/j05-tabela-longa.json", "scratch/father-journeys/results/j05-tabela-longa@1280.json"],
+      "reason": "pendente Onda 2 (2I, FR-35): não existe 'Continuar na próxima página'. HOJE (verificado): colar cabeçalho + 40 linhas (41 × 4) cria a tabela com quadro até 285 mm (cabe no A4) mas o conteúdo passa 5 linhas (127 px a 101 %) do fim da folha; mensagem verde 'Tabela criada com 41 linhas…' em 0,2 s, '!' vermelho na tabela, chip '1 a corrigir' (coberto pelo aviso verde por 4 s), painel 'ERRO Bloqueia publicação · Conteúdo excede a altura da tabela · Ajustar altura'. Publicar / PDF bloqueia em 0,3 s sem travar: 'Publicação bloqueada. Corrija os itens abaixo…', item 'Página 1 · tabela 1 · A tabela ultrapassa a altura reservada. Aumente o quadro da tabela ou reduza seu conteúdo.', 'Imprimir / salvar PDF' desligado, 'Corrigir este item' leva à tabela, 'Voltar ao editor' devolve editor que responde. 'Ajustar altura' (único botão oferecido) leva o quadro a 330 mm e troca o bloqueio para 'Parte do objeto está fora da página. Mova o objeto ou reduza seu tamanho' + aviso de borda — beco sem saída até a 2I; Ctrl+Z volta. Nada trava, nada se perde, zero erros de console. O pai NÃO entende o que fazer: nenhuma mensagem fala em outra página/dividir."
+    }
+  ],
+  "findings": [
+    {
+      "id": "B-01",
+      "journey": "J4",
+      "severity": "P1",
+      "title": "Digitar a primeira palavra numa célula de tabela nova gera erro vermelho 'Bloqueia publicação' (conteúdo excede a altura da tabela)",
+      "steps": [
+        "Meus catálogos → Novo catálogo → nome → 'Em branco'",
+        "Adicionar página → 'Tabela' (cria 6 × 3 com cabeçalho; aparece '0 a corrigir · 1 para revisar' = 'Esta tabela tem 6 linhas vazias… Nada impede o PDF', aceitável)",
+        "Dois cliques na tabela (abre 'Editar tabela') → dois cliques na célula 'Linha 2, coluna 1'",
+        "No painel lateral (abaixo da dobra, topo a 899 px): 'Tipo de conteúdo' → Texto → digitar 'Parâmetro' → 'Concluir' (mensagem 'Conteúdo da célula atualizado')",
+        "Ver: '!' vermelho no canto da tabela, chip 'Problemas do catálogo: 1 a corrigir · 1 para revisar', painel 'Problemas da tabela · ERRO · Bloqueia publicação · Conteúdo excede a altura da tabela · [Ajustar altura]'",
+        "Clicar 'Ajustar altura' resolve (quadro 39,16 → 40,40 mm; chip volta a '0 a corrigir'); sem clicar, o mesmo código TABLE_CONTENT_OVERFLOW bloqueia Publicar com 'A tabela ultrapassa a altura reservada…' (visto na J5; não cliquei em Publicar dentro da J4)"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-03-celula-erro-bloqueia-publicacao.png",
+      "impact": "A primeira palavra que o pai escreve numa tabela nova já aparece como ERRO que 'bloqueia publicação'. O botão que resolve ('Ajustar altura', 96×36 px, letra 11 px) fica no fim do painel lateral e nada no erro manda clicar nele. Se ele seguir sem ver, Publicar bloqueia e manda 'aumentar o quadro ou reduzir o conteúdo'. Medo de ter quebrado algo em todo começo de tabela; acontece em 'Em branco' e no modelo (mesma tabela 6 × 3).",
+      "proposedFix": "Fazer a linha crescer sozinha: ao concluir a edição de uma célula (commitCellEdit) numa tabela de linhas com altura automática, aplicar a mesma medição de 'Ajustar altura' (prepareTableFitHeight, src/vnext/editor/table-fit-height-authoring.ts) dentro da mesma transação, como já é feito para a tabela recém-criada (pendingTableFit) e para 'Adicionar N linhas e colar' (Onda 1, 42f0488). Alternativa menor: estimar a altura inicial da tabela nova com uma linha de texto por linha (editor-defaults.ts, 'altura estimada') para que a primeira palavra caiba. Arquivos: src/vnext/app/EditorWorkspace.tsx e src/vnext/app/editor-defaults.ts — ambos em PROIBIDOS → registrar em _state/PROPOSTAS.md.",
+      "knownFR": null,
+      "related": "próximo de FR-36 (Tabela fina, onda 5) e do achado da Onda 1 'Ajustar altura após colar' (42f0488), mas o gatilho (editar célula) não está em CONHECIDOS.md",
+      "verified": true,
+      "viewports": ["1366x768", "1280x720"],
+      "proofFile": "tests/vnext/proof/father-journeys/j04-editar-a-mao.mjs"
+    },
+    {
+      "id": "B-02",
+      "journey": "J4",
+      "severity": "P3",
+      "title": "A mensagem verde some em 4,1 s, antes de dar tempo de ler (21 palavras pedem ~8 s)",
+      "steps": [
+        "'Em branco' → clicar numa parte vazia da página → Ctrl+V com um bloco 12 × 4 copiado do Excel",
+        "Ler 'Tabela criada com 12 linhas e 4 colunas. A primeira linha virou o cabeçalho, em destaque. Para voltar, use Desfazer.'",
+        "Cronometrar: some sozinha após ~4,1 s (medido 4104–4139 ms em 6 execuções, 1366 e 1280; o mesmo para 'Criar tabela' pela caixa e para 'Página excluída. Para recuperar, use Desfazer.')"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-01-colar-12x4.png",
+      "impact": "A 150 palavras/min (leitor de 60 anos, sem pressa) 21 palavras pedem ~8,4 s: o pai perde o fim ('Para voltar, use Desfazer') e a explicação de que a primeira linha virou cabeçalho. Passar o mouse em cima pausa o sumiço, mas nada diz isso.",
+      "proposedFix": "src/vnext/editor/editor-notices.ts (NÃO está em PROIBIDOS): trocar SUCCESS_NOTICE_TIMEOUT_MS fixo (4000) por tempo proporcional ao texto — ex.: max(6000, 350 ms × palavras) — ou só sumir na próxima ação do usuário. EditorNotices.tsx (PROIBIDO, src/vnext/app/editor/**) não precisa mudar se a constante virar função exportada do mesmo módulo.",
+      "knownFR": null,
+      "related": "FR-12 (avisos visíveis, feito na Onda 1) fixou os 4 s",
+      "verified": true,
+      "viewports": ["1366x768", "1280x720"],
+      "proofFile": "tests/vnext/proof/father-journeys/j04-editar-a-mao.mjs"
+    },
+    {
+      "id": "B-03",
+      "journey": "J4",
+      "severity": "P3",
+      "title": "Em janela 1280×720 o zoom padrão 'Ajustar à largura' fica em 90 % e o texto das células cai para 12,1 px",
+      "steps": [
+        "Janela 1280×720 → 'Em branco' → colar o bloco 12 × 4",
+        "Zoom padrão 'Ajustar à largura' = 90 % → texto da célula 13,3 px × 0,9 = 12,1 px (caixa da linha 17 px)",
+        "A 1366×768 o mesmo ajuste dá 101 % (13,5 px); clicando '100%' as células ficam com 13,3 px e '125%' com 16,7 px"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1280-01-colar-12x4.png",
+      "impact": "Em monitor/janela menor as letras do corpo da tabela ficam abaixo de 13 px; o pai precisa descobrir e clicar '100%' (botão com letra 12 px) toda vez que abre o catálogo.",
+      "proposedFix": "Piso de 100 % para 'Ajustar à largura' quando o cálculo der menos que 1,0 (a página de 794 px rola pouco na horizontal em 1280) ou lembrar o último zoom escolhido por catálogo. Arquivos: src/vnext/editor/stage-zoom.ts (não proibido) e src/vnext/app/editor/use-stage-zoom.ts (PROIBIDO). Relacionado à fatia 2C (FR-16b 'Página inteira/75%').",
+      "knownFR": null,
+      "related": "FR-16b/2C (escala 60+) não cobre o zoom padrão do conteúdo",
+      "verified": true,
+      "viewports": ["1280x720"],
+      "proofFile": "tests/vnext/proof/father-journeys/j04-editar-a-mao.mjs"
+    },
+    {
+      "id": "B-04",
+      "journey": "J5",
+      "severity": "P3",
+      "title": "O aviso verde flutuante cobre o contador 'N a corrigir' por 4 s: 'sucesso' na tela e '!' vermelho na tabela ao mesmo tempo",
+      "steps": [
+        "'Em branco' → Ctrl+V com a tabela de cabeçalho + 40 linhas (ou 'Tabela' numa página, na J4)",
+        "Enquanto 'Tabela criada com 41 linhas…' (verde) está na tela, ela ocupa a faixa onde fica 'Problemas do catálogo: 1 a corrigir' (x ≈ 875–1040, y ≈ 101 a 1366) e o esconde",
+        "Ao mesmo tempo a tabela mostra o '!' vermelho; o contador só aparece quando a mensagem some"
+      ],
+      "screenshot": "docs/qa/evidence/2026-10-17-usabilidade-pai/j05-tabela-longa-1366-01-colada-40-linhas.png",
+      "impact": "Sinais contraditórios: 'sucesso' em verde para uma tabela que já nasce bloqueando o PDF; o pai só descobre o bloqueio em Publicar.",
+      "proposedFix": "Posicionar a mensagem flutuante fora da faixa do contador (alinhar à esquerda sob a barra, deixando o contador à vista) e, quando a ação criar um erro bloqueante, trocar o tom para aviso e citar o problema ('…mas ela não cabe na página'). Arquivos: src/vnext/app/editor/EditorNotices.css e EditorNotices.tsx (PROIBIDOS) → PROPOSTAS.md; a parte 'avisar que não cabe' é FR-35 (2I).",
+      "knownFR": null,
+      "related": "FR-35 (2I) para a parte de conteúdo; a sobreposição em si é layout do FR-12",
+      "verified": true,
+      "viewports": ["1366x768", "1280x720"],
+      "proofFile": "tests/vnext/proof/father-journeys/j05-tabela-longa.mjs"
+    }
+  ],
+  "pendingOnda2": [
+    { "slice": "2A", "fr": "FR-30/34", "hoje": "dois cliques na célula abrem 'Tipo de conteúdo = Vazio' no painel lateral FORA da janela (topo a 899 px de 768/720); teclar 'Parâmetro' + Enter não faz nada e nenhuma mensagem explica; caminho de hoje: Tipo de conteúdo → Texto → campo → Concluir = 8 cliques (Concluir visível, y = 633). Nada trava, nada se perde. Igual em 'Em branco' e no modelo." },
+    { "slice": "2A", "fr": "FR-22", "hoje": "só abrir a célula (sem digitar) já mostra 'Alterações não salvas' no topo." },
+    { "slice": "2B", "fr": "FR-14/15", "hoje": "texto selecionado: painel diz 'Use Editar texto na barra acima da página ou dê dois cliques no texto'; nenhum 'Título'/negrito/cor/alinhamento, nem em 'Mais propriedades' nem em 'Mais opções'. Dois cliques abrem a caixa de edição (26,7 px) com símbolos ± °C Ω µ ≤ ≥ ≈ e Cancelar/Concluir." },
+    { "slice": "2C", "fr": "FR-16b/17", "hoje": "8 alças de redimensionar de 12 px; 20 botões/campos com letra 11–12 px (Texto/Imagem/Tabela/Colar tabela do Excel 11 px; Publicar / PDF, Desfazer, zoom 12 px; aviso do campo X 11 px). Alvos ≥ 24 px: ok (menor 31 px = campo X; ⋯ da página 36×52; confirmar exclusão 155×42, letra 15 px)." },
+    { "slice": "2I", "fr": "FR-35", "hoje": "ver J5.reason; mensagens de hoje: 'A tabela ultrapassa a altura reservada. Aumente o quadro da tabela ou reduza seu conteúdo.' → após 'Ajustar altura': 'Altura ajustada. A tabela é mais alta que uma página A4 e ainda exige revisão da composição.' e bloqueio 'Parte do objeto está fora da página…' ('revisão da composição' é jargão para o pai). A caixa 'Colar tabela do Excel' não avisa antes de criar que 41 linhas não cabem." }
+  ],
+  "verifiedOk": [
+    "Ctrl+V na página vazia e 'Colar tabela do Excel' → 'Criar tabela': tabela 12 × 4 com cabeçalho azul (rgb(0,114,206), negrito 700) e corpo branco, textos iguais ao Excel ('-25 a 140 °C', '±0,1 °C', '1.500', '0,02 % FE'), cabe na página (12→105 mm), salva sozinha; mensagem verde em 94–210 ms; caixa 'Cole aqui (Ctrl+V)' já focada, explica Ctrl+C/Ctrl+V, mostra '12 linhas × 4 colunas', prévia e 'A primeira linha é o cabeçalho'",
+    "Páginas: 'Adicionar página' (1 clique), menu ⋯ com Duplicar/Mover para cima/Mover para baixo/Excluir página…, confirmação 'Excluir a Página 3? Ela tem 1 objeto: 1 tabela. Tudo o que está nela será excluído. Se mudar de ideia, use Desfazer (Ctrl+Z).' (texto 15 px, botão vermelho 155×42), mensagem 'Página 3 excluída. Para recuperar, use Desfazer.', 'Página 1 movida para baixo. Agora ela é a Página 2.', Ctrl+Z desfaz os três",
+    "Zoom: grupo 'Zoom da página' com Ajustar à largura/75%/100%/125%; 100 % → página 794 px, célula 13,3 px; 125 % → 992 px, 16,7 px; sem rolagem horizontal da janela; Ctrl+roda sobe 75 → 100 → Ajustar (101 %) → 125 e desce, sem mexer no zoom do navegador",
+    "Campo X em 'Mais propriedades' ('Posição e tamanho em milímetros'): '12,5' aceito (X = 12,5 mm, salvo no servidor), 'abc' recusado com 'Use um número, como 12,5.' sob o campo e mensagem 'X: digite um número em milímetros, como 12,5. O valor anterior foi mantido.'; Desfazer volta a 12; Ctrl+S salva sem diálogo do navegador; clicar na tabela troca o painel para 'Tabela'",
+    "Publicar / PDF com tabela longa: abre 'Revisar e publicar' em 0,3 s, 'Publicação bloqueada…', item com local ('Página 1 · tabela 1'), 'Correção necessária', explicação em português (13 px), 'Imprimir / salvar PDF' desligado, 'Corrigir este item' fecha e seleciona a tabela, 'Voltar ao editor' devolve editor que responde (inserir 'Texto' funciona); Ctrl+Z tira a tabela longa",
+    "Sem jargão/inglês no texto visível do editor, da caixa de colar, da confirmação e da janela de publicação (varredura com fixtures/father-eyes.mjs; 'Zoom' e a marca 'Catalog Builder' permitidos); 'mm' sempre acompanhado de A4/posição/largura",
+    "Zero erros de console e de página nas 4 execuções válidas (duas execuções anteriores invalidadas por recarga do vite, ver notes)"
+  ],
+  "files": [
+    "tests/vnext/proof/father-journeys/j04-editar-a-mao.mjs",
+    "tests/vnext/proof/father-journeys/j05-tabela-longa.mjs",
+    "tests/vnext/proof/father-journeys/fixtures/tsv/excel-12x4.tsv",
+    "tests/vnext/proof/father-journeys/fixtures/tsv/faixas-40.tsv",
+    "tests/vnext/proof/father-journeys/fixtures/father-eyes.mjs (reutilizado; criado na rodada interrompida, compartilhado com o grupo A)",
+    "scratch/father-journeys/results/j04-editar-a-mao.json",
+    "scratch/father-journeys/results/j04-editar-a-mao@1280.json",
+    "scratch/father-journeys/results/j05-tabela-longa.json",
+    "scratch/father-journeys/results/j05-tabela-longa@1280.json",
+    "_state/5-jornadas/B-editor-tabelas.json"
+  ],
+  "evidence": [
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-01-colar-12x4.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-02-celula-depois-de-digitar.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-03-celula-erro-bloqueia-publicacao.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-07-texto-sem-estilo.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-08-confirmar-excluir-pagina.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1366-11-campo-x-abc.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j04-editar-a-mao-1280-01-colar-12x4.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j05-tabela-longa-1366-01-colada-40-linhas.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j05-tabela-longa-1366-03-publicar-bloqueado.png",
+    "docs/qa/evidence/2026-10-17-usabilidade-pai/j05-tabela-longa-1366-03b-publicar-depois-de-ajustar-altura.png"
+  ],
+  "consoleErrors": [],
+  "consoleErrorsNote": "Nas 4 execuções válidas (j04 e j05, 1366 e 1280, 10:42–10:47): 0 erros de console, 0 erros de página, 0 avisos, 0 diálogos. Duas execuções anteriores (10:26 e 10:30) foram INVALIDADAS: outro processo salvou src/ no mesmo worktree (src/vnext/translation/*, publication/preflight.ts, layout-diagnostics-projection.ts, publication-diagnostic-presentation.ts, rendering/styles.css — correções da fundação da Equipe B, sem commit) e o vite fez HMR/recarga no meio da prova: '500 Internal Server Error' + '[hmr] Failed to reload EditorWorkspace.tsx/IssuesPanel.tsx' numa, e 'createRoot() on a container…' ×3, 'Failed to execute removeChild' ×4, erro no <RecoveryCenter> e um beforeunload na outra (a página 2 recém-criada sumiu). Não são erros do aplicativo em produção (não há HMR lá). As provas agora marcam a janela e falham com 'ambiente: recarga…' se isso voltar a acontecer, e separam ruído HMR/500 do vite dos erros do app.",
+  "timings": {
+    "j04_1366_ms": "~50 000 (inclui duas esperas de até 7 s medindo quando o aviso some)",
+    "j04_1280_ms": "~50 000",
+    "j05_1366_ms": "~24 000",
+    "j05_1280_ms": "~24 000",
+    "noticeAppearMs": { "colar Ctrl+V": "94–210", "botão Tabela": "77–78", "Criar tabela (caixa)": "141–150", "excluir/mover página": "< 400" },
+    "noticeVanishMs": "4104–4139 (auto)",
+    "publicationVerdictMs": "280–302 (abrir + veredito)",
+    "cellEditTodayClicks": 8,
+    "clicks": { "colar Ctrl+V": 1, "inserir tabela (com página)": 2, "colar pelo botão": 3, "excluir página": 3, "mover página": 2, "zoom": 1, "abrir campo X": 1, "publicar": 1, "corrigir este item": 1 }
+  },
+  "notes": "VERIFICADO (vi rodar, 1366×768 e 1280×720, Chromium headless, servidor 5190 reutilizado, sem rede): tudo em journeys[].reason, findings[] (verified:true), pendingOnda2[] e verifiedOk[]. Capturas lidas uma a uma (Read nos PNG). SUPOSIÇÕES: (1) B-01: que Publicar bloqueia sem 'Ajustar altura' — inferido pelo mesmo código TABLE_CONTENT_OVERFLOW que bloqueou na J5; na J4 não cliquei em Publicar depois de digitar. (2) B-02: 150 palavras/min é estimativa de leitura para 60 anos; o tempo de 4,1 s é medido. (3) 'Ajustar altura' está visível sem rolar (topo a 702 px de 768 e 654 de 720) — a dúvida é só se o pai associa o botão ao erro; não testei com pessoa real. (4) J5 'tabela de 40 linhas' = cabeçalho + 40 linhas de dados (41 linhas no TSV, fixtures/tsv/faixas-40.tsv); com 40 linhas no total provavelmente também estoura (5 linhas sobram). (5) O comportamento de Ctrl+roda ir primeiro a 'Ajustar à largura' (101 %) antes de 125 % é por ordem de valor de zoom — razoável, só anotado (1 % de mudança é imperceptível no primeiro dente). OBSERVAÇÕES não registradas como achado por serem Onda 2: aviso 'Alterações não salvas' ao abrir célula (FR-22/2A); editor de célula fora da janela (2A); mensagens de bloqueio da tabela longa ('aumente o quadro', 'revisão da composição') (2I/FR-35). O aviso amarelo '1 para revisar · Esta tabela tem 6 linhas vazias, que sairão em branco no PDF… Nada impede o PDF' logo após inserir 'Tabela' é legítimo e bem escrito — NÃO é achado (a prova checa que não fala de área segura). AMBIENTE: worktree compartilhado com o grupo A (j01/j07/j11 em andamento) e com as correções da fundação (src/vnext/translation/**, publication/preflight.ts etc. modificados sem commit) — os textos de bloqueio lidos aqui podem mudar quando essas edições fecharem. Não editei nada em src/ nem em PROIBIDOS; não fiz commit/stash/push. Disco: 13 GB livres. Nenhum node/Chromium meu ficou pendurado (só o node scratch/serve-5190.mjs, servidor compartilhado)."
+}

@@ -102,12 +102,15 @@ const repository = new ProofRepository([envelope(primary, 1, INITIAL_MUTATION_ID
 const assets = new ProofAssets();
 const dependencies: ApplicationExecutionDependencies = { createId: () => crypto.randomUUID() };
 const session = createDocumentSession(primary, dependencies);
+// Same scope as bootstrap.tsx: blob URLs are cached per signed-in person, so the editor and the
+// publication share one URL per photo even after reopening a catalog (new openSessionId).
+const PROOF_ASSET_CONTEXT = { authLineage: 'proof-user' } as const;
 let runtime: VNextPersistenceRuntime;
 const bridge = new DefaultAssetPersistenceBridge(assets, { getActiveLineage: () => {
   const snap = runtime.workspace.getSnapshot();
   return { authLineage: snap.binding.authLineage, openSessionId: snap.binding.openSessionId, authorityScopeId: snap.activeAuthorityScopeId, catalogId: snap.binding.kind === 'PERSISTED' ? snap.binding.catalogId : undefined };
 } });
-runtime = new VNextPersistenceRuntime({ session, repository, applicationDependencies: dependencies, createMutationId: () => crypto.randomUUID(), createOpenSessionId: () => crypto.randomUUID(), authLineage: 'proof-user', authorityScopeId: 'proof:w4f4', binding: envelope(primary, 1, INITIAL_MUTATION_ID), autosave: false, resolveAssetUrls: (doc) => bridge.resolveDocumentAssets(doc) });
+runtime = new VNextPersistenceRuntime({ session, repository, applicationDependencies: dependencies, createMutationId: () => crypto.randomUUID(), createOpenSessionId: () => crypto.randomUUID(), authLineage: 'proof-user', authorityScopeId: 'proof:w4f4', binding: envelope(primary, 1, INITIAL_MUTATION_ID), autosave: false, resolveAssetUrls: (doc) => bridge.resolveDocumentAssets(doc, PROOF_ASSET_CONTEXT) });
 let publish: () => void;
 const api = {
   primaryId: primary.id, otherId: other.id,
@@ -134,7 +137,7 @@ const api = {
   publication: async () => {
     const doc = runtime.workspace.getSnapshot().session.getSnapshot().document;
     const root = document.querySelector<HTMLElement>('[data-publication] [data-editorial-root]')!;
-    const resolved = await bridge.resolveDocumentAssets(doc);
+    const resolved = await bridge.resolveDocumentAssets(doc, PROOF_ASSET_CONTEXT);
     await resolveAssets(doc, (asset) => resolved.urls.get(asset.id));
     await loadFonts(doc, root);
     await decodeImages(root, doc, resolved.urls);

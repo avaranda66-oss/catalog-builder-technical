@@ -10,7 +10,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const output=resolve(root,'scratch/w4g-wave4-closeout-proof'); await mkdir(output,{recursive:true});
 const port=Number(process.env.W4G_PROOF_PORT??5251);
-const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},logLevel:'error'});
+const server=await createServer({root,server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root,realpathSync(resolve(root,'node_modules'))]}},resolve:{preserveSymlinks:true},logLevel:'error'});
 const url=`http://127.0.0.1:${port}/tests/vnext/proof/fixtures/w4g-wave4-closeout-browser.html`;
 const errors={consoleErrors:[],pageErrors:[],failedResources:[],requestFailures:[]};
 const watch=p=>{p.on('console',m=>{if(m.type()==='error')errors.consoleErrors.push(m.text())});p.on('pageerror',e=>errors.pageErrors.push(e.message));p.on('response',r=>{if(r.status()>=400)errors.failedResources.push({status:r.status(),url:r.url()})});p.on('requestfailed',r=>errors.requestFailures.push(r.url()))};
@@ -52,10 +52,10 @@ async function desktop(browser){
  await p.locator('[data-table-row-selector="1"]').click();await p.locator('[data-table-row-dimensions]').waitFor();n=(await state(p)).localSequence;await p.locator('[data-row-property="role"]').selectOption('section');await seq(p,n);assert.equal(main(await state(p)).table.rows[1].role,'section');
  // W4.F.2 preset/cascade.
  await p.locator('[data-table-selector="table"]').click();await p.locator('[data-table-style-inspector]').waitFor();n=(await state(p)).localSequence;await p.locator('[data-table-preset="technical-specification"]').click();await seq(p,n);
- // W4.F.3 title semantic surface.
- await p.locator('[data-table-title-input]').fill('Tabela integrada W4.G');n=(await state(p)).localSequence;await p.locator('[data-editor-action="set-table-title"]').click();await seq(p,n);assert(main(await state(p)).table.title);
- // W4.E explicit Fit only.
- const h0=main(await state(p)).frame.heightMm;await p.locator('[data-editor-action="fit-table-height"]').waitFor({timeout:30000});n=(await state(p)).localSequence;await p.locator('[data-editor-action="fit-table-height"]').click();await seq(p,n);assert(main(await state(p)).frame.heightMm>h0);
+ // W4.F.3 title semantic surface. B-01 (b7925e3): writing the title also grows the frame with one growOnly fit in the same Desfazer.
+ const h0=main(await state(p)).frame.heightMm;await p.locator('[data-table-title-input]').fill('Tabela integrada W4.G');n=(await state(p)).localSequence;await p.locator('[data-editor-action="set-table-title"]').click();await p.waitForFunction(s=>window.__W4G_PROOF__.state().localSequence===s+2,n,{timeout:15000});await settle(p);assert(main(await state(p)).table.title);assert(main(await state(p)).frame.heightMm>h0,'title grows the frame');
+ // W4.E explicit Fit after the automatic growth: already at the measured height, so a semantic no-op.
+ await p.locator('[data-editor-action="fit-table-height"]').waitFor({timeout:30000});const fitted=await state(p);n=fitted.localSequence;await p.locator('[data-editor-action="fit-table-height"]').click();await p.waitForTimeout(500);await settle(p);assert.equal((await state(p)).localSequence,n);assert.deepEqual(main(await state(p)).frame,main(fitted).frame);
  // Cross-feature lifecycle: a valid dirty Cell draft commits exactly once when Father legitimately switches to object editing.
  await p.locator('[data-table-cell="1:0"]').click();await p.locator('[data-table-grid-overlay]').press('Enter');await p.locator('[data-cell-edit-session]').waitFor();const contextBefore=await state(p);
  await p.locator('[data-cell-rich-text]').fill('Integração W4.G via contexto');assert.equal((await state(p)).localSequence,contextBefore.localSequence);

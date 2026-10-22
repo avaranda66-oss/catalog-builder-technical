@@ -8,7 +8,7 @@ import {
   cellDisplayText,
   referencedAnnotations,
 } from '@/vnext/rendering/render-plan';
-import { TableRenderer } from '@/vnext/rendering/TableRenderer';
+import { TableRenderer, tableAccessibleName } from '@/vnext/rendering/TableRenderer';
 import {
   createW4F2Document,
   W4F2_MERGED_OBJECT_ID,
@@ -142,5 +142,24 @@ describe('W4.F.3 canonical Table semantic rendering', () => {
     expect(html).toContain('object-fit:contain');
     expect(html).toContain('width:');
     expect(owner.span).toBeDefined();
+  });
+});
+
+describe('table accessible name (screen readers)', () => {
+  it('reads the table title, or "Tabela", never the internal id', () => {
+    const document = createW4F2Document();
+    const table = tableObject(document).table;
+    const plan = compilePlans(document).plans.get(table.id);
+    const html = () => renderToStaticMarkup(
+      <TableRenderer table={table} plan={plan} assets={document.assets} assetUrls={new Map()} />
+    );
+    table.title = undefined;
+    expect(tableAccessibleName(table)).toBe('Tabela');
+    expect(html()).toContain('role="table" aria-label="Tabela"');
+    expect(html()).not.toContain(`aria-label="${table.id}"`);
+
+    table.title = plainRichText('title', 'Especificações técnicas');
+    expect(tableAccessibleName(table)).toBe('Especificações técnicas');
+    expect(html()).toContain('role="table" aria-label="Especificações técnicas"');
   });
 });

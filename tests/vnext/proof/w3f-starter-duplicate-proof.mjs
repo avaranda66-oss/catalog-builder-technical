@@ -22,6 +22,12 @@ const server = await createServer({
 });
 let browser;
 
+/** J7: only the recommended recovery choice is in view; the other choices are behind "Mais opções". */
+async function openMoreRecoveryOptions(scope) {
+  const toggle = scope.getByRole('button', { name: 'Mais opções', exact: true }).first();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
 const structuralIntersection = (left, right) => left.filter((identity) => right.includes(identity));
 const rowByTitle = async (page, title) => {
   const rows = page.locator('[data-library-catalog-id]');
@@ -192,6 +198,8 @@ try {
   const recoveryDialog = page.getByRole('dialog', { name: 'Recuperação local' });
   await recoveryDialog.waitFor();
   assert.equal(await page.locator('[data-vnext-shell]').count(), 0, 'W3.D must still gate the editor before a Recovery decision');
+  // J7: with recoverable work, the saved version is one of the "Mais opções".
+  await openMoreRecoveryOptions(recoveryDialog);
   await recoveryDialog.getByRole('button', { name: 'Abrir versão salva na nuvem' }).click();
   await page.locator('[data-vnext-shell]').waitFor();
   await page.getByRole('button', { name: 'Voltar aos catálogos' }).click();

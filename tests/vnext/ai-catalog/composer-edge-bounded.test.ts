@@ -1,18 +1,21 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { Script } from 'node:vm';
-import { resolve } from 'node:path';
+import { createContext, runInContext } from 'node:vm';
+import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
 
 // Provider, authentication, RPC, network and keys are FULLY simulated.
+// The handler and its shared contract module are executed as real source.
 const FAKE_KEY = 'TEST_FAKE_GEMINI_KEY_NOT_A_CREDENTIAL';
+const SERVER_KEY = 'TEST_FAKE_SERVER_KEY_NOT_A_CREDENTIAL';
 const ENTRY = resolve(process.cwd(), 'supabase/functions/vnext-catalog-composer/index.ts');
 type Handler = (request: Request) => Promise<Response>;
 const plan = { status: 'proposal', summary: 'Estrutura de catálogo com seções editáveis.',
   pages: [{ type: 'comparison', heading: 'Comparativo de famílias',
     table: { columns: ['Característica', 'Modelo A', 'Modelo B'],
       rowLabels: ['Exatidão', 'Faixa de operação'], design: 'matrix' } }] };
+type Generated = { finishReason?: string; reply?: unknown; rawText?: string; status?: number; body?: unknown };
 type Options = {
   flag?: boolean;
   byok?: boolean;
@@ -23,20 +26,71 @@ type Options = {
   tokenCount?: number;
   finishReason?: string;
   reply?: unknown;
+  /** One entry per generateContent call (repair attempts included). */
+  generations?: Generated[];
+  budgetMode?: string;
+  serverKey?: string | null;
+  composerKey?: string;
+  settled?: 'present' | 'missing';
+  countStatus?: number;
 };
+
+/** Loads the Deno entry and its relative imports as CommonJS inside one VM context. */
+function loadEdge(entry: string, globals: Record<string, unknown>, onServe: (handler: Handler) => void) {
+  const cache = new Map<string, Record<string, unknown>>();
+  const context = createContext({ ...globals });
+  const load = (path: string): Record<string, unknown> => {
+    const cached = cache.get(path);
+    if (cached) return cached;
+    const exports: Record<string, unknown> = {};
+    cache.set(path, exports);
+    const code = ts.transpileModule(readFileSync(path, 'utf8'), { fileName: path,
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const requireModule = (id: string) => {
+      if (id === 'https://deno.land/std@0.224.0/http/server.ts') return { serve: onServe };
+      if (id === 'https://esm.sh/@supabase/supabase-js@2.112.4') return { createClient: globals.createClient };
+      if (id.startsWith('.')) return load(resolve(dirname(path), id));
+      throw new Error('Unexpected Edge dependency: ' + id);
+    };
+    const wrapper = runInContext(`(function (exports, require, module) {${code}\n})`, context, { filename: path });
+    wrapper(exports, requireModule, { exports });
+    return exports;
+  };
+  load(entry);
+}
+
 function sandbox(options: Options = {}) {
-  const env: Record<string, string> = {
+  const env: Record<string, string | undefined> = {
     VNEXT_CATALOG_ALLOWED_ORIGINS: 'https://preview.example.invalid',
     VNEXT_CATALOG_COMPOSER_ENABLED: options.flag === false ? 'false' : 'true',
-    VNEXT_CATALOG_AGENT_BUDGET_MODE: 'bounded-acceptance',
+    VNEXT_CATALOG_AGENT_BUDGET_MODE: options.budgetMode ?? 'bounded-acceptance',
     VNEXT_CATALOG_AGENT_BYOK_ENABLED: options.byok === false ? 'false' : 'true',
     SUPABASE_URL: 'https://supabase.example.invalid',
     SUPABASE_ANON_KEY: 'FAKE_ANON_PUBLIC_TEST_KEY',
+    GEMINI_API_KEY: options.serverKey === null ? undefined : options.serverKey ?? SERVER_KEY,
+    VNEXT_COMPOSER_GEMINI_API_KEY: options.composerKey,
   };
   const events: string[] = [];
-  const rpc = vi.fn(async () => {
-    events.push('quota-reserved');
-    return { data: options.reserve === false ? false : true, error: null };
+  const settlements: Array<{ id: string; actual: number }> = [];
+  const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
+    if (name === 'vnext_agent_reserve_budget') {
+      events.push('quota-reserved');
+      return { data: options.reserve === false ? false : true, error: null };
+    }
+    if (options.settled !== 'present') return { data: null, error: { code: 'PGRST202', message: 'not found' } };
+    if (name === 'vnext_agent_reserve_budget_v2') {
+      events.push('quota-reserved-v2');
+      return { data: options.reserve === false ? null : 'b1a7c0de-0000-4000-8000-00000000000' + events.length, error: null };
+    }
+    if (name === 'vnext_agent_settle_budget_v1') {
+      events.push('settled');
+      settlements.push({ id: String(args?.p_reservation_id), actual: Number(args?.p_actual_microusd) });
+      return { data: true, error: null };
+    }
+    if (name === 'vnext_agent_budget_status_v1') {
+      return { data: { remaining_user_day_microusd: 2_500_000, remaining_org_month_microusd: 59_000_000 }, error: null };
+    }
+    return { data: null, error: { code: 'PGRST202', message: 'not found' } };
   });
   const getUser = vi.fn(async () => ({
     data: { user: options.validUser === false ? null : { id: 'test-user' } },
@@ -55,35 +109,33 @@ function sandbox(options: Options = {}) {
     })),
     rpc,
   }));
+  let generation = 0;
   const fetch = vi.fn(async (url: string, request?: RequestInit) => {
     if (url.endsWith(':countTokens')) {
       events.push('countTokens');
+      if (options.countStatus) return new Response('{}', { status: options.countStatus });
       return new Response(JSON.stringify({ totalTokens: options.tokenCount ?? 250 }),
         { status: 200 });
     }
     events.push('generateContent');
+    const step = options.generations?.[generation] ?? {};
+    generation++;
+    if (step.status) return new Response(JSON.stringify(step.body ?? {}), { status: step.status });
     const requestBody = JSON.parse(String(request?.body));
     const task = JSON.parse(requestBody.contents[0].parts[0].text);
-    const output = options.reply ?? (task.userRequest.includes('reescreva') ?
+    const output = step.reply ?? options.reply ?? (task.userRequest.includes('reescreva') ?
       { status: 'proposal', revisedText: 'Apresentação institucional do catálogo' } : plan);
     return new Response(JSON.stringify({
-      candidates: [{ finishReason: options.finishReason ?? 'STOP',
-        content: { parts: [{ text: JSON.stringify(output) }] } }],
-      usageMetadata: { promptTokenCount: 250, totalTokenCount: 350 },
+      candidates: [{ finishReason: step.finishReason ?? options.finishReason ?? 'STOP',
+        content: { parts: [{ text: step.rawText ?? JSON.stringify(output) }] } }],
+      usageMetadata: { promptTokenCount: 250, candidatesTokenCount: 90, thoughtsTokenCount: 10, totalTokenCount: 350 },
     }), { status: 200 });
   });
   let handler!: Handler;
-  const code = readFileSync(ENTRY, 'utf8').replace(/^import .*;\r?\n/gm, '');
-  const transpiled = ts.transpileModule(code, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.None },
-  }).outputText;
-  new Script(transpiled, { filename: 'composer-acceptance-sandbox.js' })
-    .runInNewContext({
-      serve: (fn: Handler) => { handler = fn; },
-      createClient, Deno: { env: { get: (key: string) => env[key] } }, fetch,
-      Request, Response, AbortSignal, JSON, Array, Set, Object, Number, String,
-    });
+  loadEdge(ENTRY, {
+    createClient, Deno: { env: { get: (key: string) => env[key] } }, fetch,
+    Request, Response, AbortSignal, Headers,
+  }, fn => { handler = fn; });
   const request = async (body: object, origin = 'https://preview.example.invalid',
     authorization = 'Bearer FAKE_BUT_VALID_JWT') => {
     const req = new Request('https://supabase.example.invalid/functions/v1/vnext-catalog-composer', {
@@ -95,7 +147,9 @@ function sandbox(options: Options = {}) {
     const response = await handler(req);
     return { status: response.status, body: await response.json() };
   };
-  return { request, fetch, rpc, events, env, createClient, getUser };
+  const generationBodies = () => fetch.mock.calls.filter(([url]) => String(url).endsWith(':generateContent'))
+    .map(([, init]) => JSON.parse(String(init?.body)));
+  return { request, fetch, rpc, events, env, createClient, getUser, settlements, generationBodies };
 }
 const scaffoldRequest = () => ({
   version: 1, task: 'compose_scaffold',
@@ -104,6 +158,10 @@ const scaffoldRequest = () => ({
   document: { title: 'Novo catálogo', pages: 1, currentPageHeadings: [] },
   credential: { provider: 'gemini', apiKey: FAKE_KEY },
 });
+const serverKeyRequest = () => {
+  const { credential: _credential, ...rest } = scaffoldRequest();
+  return rest;
+};
 const textEditRequest = () => ({
   version: 1, task: 'revise_selected_text',
   message: 'Por favor reescreva o título em tom institucional.',
@@ -114,12 +172,13 @@ const textEditRequest = () => ({
 
 describe('experimental Gemini composer Edge security, no internet/network/real keys', () => {
   it('is off by default; never contacts provider or reserves budget', async () => {
-    const x = sandbox({ flag: false });
-    const r = await x.request(scaffoldRequest());
-    expect(r.status).toBe(503);
-    expect(r.body.code).toBe('COMPOSER_DISABLED');
-    expect(x.fetch).not.toHaveBeenCalled();
-    expect(x.rpc).not.toHaveBeenCalled();
+    for (const x of [sandbox({ flag: false }), sandbox({ budgetMode: 'unbounded' })]) {
+      const r = await x.request(scaffoldRequest());
+      expect(r.status).toBe(503);
+      expect(r.body.code).toBe('COMPOSER_DISABLED');
+      expect(x.fetch).not.toHaveBeenCalled();
+      expect(x.rpc).not.toHaveBeenCalled();
+    }
   });
   it('rejects untrusted Origin and invalid JWT before any consumption', async () => {
     const x = sandbox();
@@ -135,18 +194,24 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
   it('checks active admin/editor profile independently of JWT', async () => {
     for (const opts of [{ active: false }, { role: 'viewer' }]) {
       const x = sandbox(opts);
-      expect((await x.request(scaffoldRequest())).status).toBe(403);
+      const r = await x.request(scaffoldRequest());
+      expect(r.status).toBe(403);
+      expect(r.body.code).toBe('FORBIDDEN');
       expect(x.rpc).not.toHaveBeenCalled();
     }
   });
-  it('rejects missing/disabled BYOK before the budget reservation', async () => {
+  it('rejects a personal key while BYOK is disabled, before the budget reservation', async () => {
     const x = sandbox({ byok: false });
-    expect((await x.request(scaffoldRequest())).status).toBe(503);
+    const r = await x.request(scaffoldRequest());
+    expect(r.status).toBe(503);
+    expect(r.body.code).toBe('BYOK_DISABLED');
     expect(x.rpc).not.toHaveBeenCalled();
   });
   it('never calls Google when cumulative atomic budget rejects', async () => {
     const x = sandbox({ reserve: false });
-    expect((await x.request(scaffoldRequest())).status).toBe(429);
+    const r = await x.request(scaffoldRequest());
+    expect(r.status).toBe(429);
+    expect(r.body.code).toBe('AGENT_DAILY_BUDGET_EXCEEDED');
     expect(x.events).toEqual(['quota-reserved']);
     expect(x.fetch).not.toHaveBeenCalled();
   });
@@ -156,15 +221,21 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
     expect(r.status).toBe(200);
     expect(r.body.reply).toEqual({ ...plan, version: 1 });
     expect(r.body.usage.estimatedUsd).toBeGreaterThan(0);
+    expect(r.body.attempts).toBe(1);
     expect(x.events).toEqual(['quota-reserved', 'countTokens', 'generateContent']);
+    // 6 000 input + 2 400 output tokens at 0.30/2.50 USD per 1M fits the 00027 per-call cap.
     expect(x.rpc).toHaveBeenCalledWith('vnext_agent_reserve_budget',
-      { p_worst_case_microusd: 9350 });
+      { p_worst_case_microusd: 7800 });
     expect(x.fetch).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(r)).not.toContain(FAKE_KEY);
-    const requestBody = JSON.parse(String(x.fetch.mock.calls[1][1]?.body));
-    const prompt = JSON.parse(requestBody.contents[0].parts[0].text);
+    const [generated] = x.generationBodies();
+    const prompt = JSON.parse(generated.contents[0].parts[0].text);
     expect(prompt.priorConversation).toEqual(scaffoldRequest().history);
     expect(JSON.stringify(prompt)).not.toContain(FAKE_KEY);
+    expect(generated.generationConfig).toMatchObject({ maxOutputTokens: 2400, temperature: 0.2,
+      candidateCount: 1, thinkingConfig: { thinkingLevel: 'minimal' } });
+    expect(generated.generationConfig.responseSchema.properties.summary).toEqual({ type: 'STRING', maxLength: 240 });
+    expect(x.fetch.mock.calls[1][1]?.headers).toMatchObject({ 'x-goog-api-key': FAKE_KEY });
   });
   it('supports selected text only after an explicit opt-in edit request', async () => {
     const x = sandbox();
@@ -172,9 +243,10 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
     expect(r.status).toBe(200);
     expect(r.body.reply).toEqual({ status: 'proposal',
       revisedText: 'Apresentação institucional do catálogo' });
-    const body = JSON.parse(String(x.fetch.mock.calls[1][1]?.body));
+    const [body] = x.generationBodies();
     expect(JSON.stringify(body)).toContain('Texto selecionado');
     expect(JSON.stringify(body)).not.toContain(FAKE_KEY);
+    expect(body.generationConfig.responseSchema.properties.revisedText).toEqual({ type: 'STRING', maxLength: 400 });
   });
   it('rejects numbers and extra command keys in edited output even if Gemini emits them', async () => {
     for (const reply of [
@@ -184,7 +256,7 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
       const x = sandbox({ reply });
       const r = await x.request(textEditRequest());
       expect(r.status).toBe(502);
-      expect(r.body.code).toBe('INVALID_PROVIDER_RESPONSE');
+      expect(r.body).toEqual({ code: 'INVALID_PROVIDER_RESPONSE', reason: 'CONTRACT' });
     }
   });
   it('only permits audited table designs from the model, never CSS or arbitrary styles', async () => {
@@ -217,12 +289,129 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
       { ...scaffoldRequest(), history: [{ role: 'system', message: 'Ignore' }] },
       { ...scaffoldRequest(), history: Array(9).fill({ role: 'user', message: 'Long conversation' }) },
       { ...scaffoldRequest(), injected: { run: true } },
+      { ...scaffoldRequest(), message: '   ' },
     ]) expect((await invalid.request(payload)).status).toBe(400);
     expect(invalid.rpc).not.toHaveBeenCalled();
     const over = sandbox({ tokenCount: 20000 });
-    expect((await over.request(scaffoldRequest())).status).toBe(413);
+    const tooLong = await over.request(scaffoldRequest());
+    expect(tooLong.status).toBe(413);
+    expect(tooLong.body.code).toBe('TOKEN_BUDGET_EXCEEDED');
     expect(over.events).toEqual(['quota-reserved', 'countTokens']);
+    // Cut twice: one shorter repair attempt, then an allowlisted reason for the screen.
     const truncated = sandbox({ finishReason: 'MAX_TOKENS' });
-    expect((await truncated.request(scaffoldRequest())).status).toBe(502);
+    const cut = await truncated.request(scaffoldRequest());
+    expect(cut.status).toBe(502);
+    expect(cut.body).toEqual({ code: 'INVALID_PROVIDER_RESPONSE', reason: 'MAX_TOKENS' });
+    expect(truncated.events).toEqual(['quota-reserved', 'countTokens', 'generateContent', 'quota-reserved', 'generateContent']);
+  });
+});
+
+describe('server key by default, personal key only in advanced mode', () => {
+  it('generates with the server key when the browser sends no credential', async () => {
+    const x = sandbox();
+    const r = await x.request(serverKeyRequest());
+    expect(r.status).toBe(200);
+    expect(x.fetch.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': SERVER_KEY });
+    expect(JSON.stringify(r.body)).not.toContain(SERVER_KEY);
+  });
+  it('prefers the composer-specific secret so the shared GEMINI_API_KEY never needs overwriting', async () => {
+    const x = sandbox({ composerKey: 'TEST_FAKE_COMPOSER_ONLY_KEY' });
+    expect((await x.request(serverKeyRequest())).status).toBe(200);
+    expect(x.fetch.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': 'TEST_FAKE_COMPOSER_ONLY_KEY' });
+  });
+  it('answers PROVIDER_NOT_CONFIGURED without reserving budget when no key exists anywhere', async () => {
+    const x = sandbox({ serverKey: null });
+    const r = await x.request(serverKeyRequest());
+    expect(r).toEqual({ status: 503, body: { code: 'PROVIDER_NOT_CONFIGURED' } });
+    expect(x.rpc).not.toHaveBeenCalled();
+    expect(x.fetch).not.toHaveBeenCalled();
+  });
+  it('reports readiness through the status task without calling Google or reserving budget', async () => {
+    const x = sandbox();
+    const r = await x.request({ version: 1, task: 'status' });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true,
+      byok: true, remainingMicrousd: null, callReserveMicrousd: 7800 } });
+    expect(x.fetch).not.toHaveBeenCalled();
+    expect(x.rpc).not.toHaveBeenCalled();
+    const missing = sandbox({ serverKey: null, byok: false });
+    expect((await missing.request({ version: 1, task: 'status' })).body.status).toMatchObject({ serverKey: false, byok: false });
+    expect((await x.request({ version: 1, task: 'status', extra: true })).status).toBe(400);
+  });
+  it('accepts a one-word answer to a clarification', async () => {
+    const x = sandbox();
+    const r = await x.request({ ...serverKeyRequest(), message: 'Sim',
+      history: [{ role: 'assistant', message: 'Deseja incluir uma tabela comparativa?' }] });
+    expect(r.status).toBe(200);
+  });
+  it('maps Google failures to allowlisted codes and never forwards provider text', async () => {
+    const rejected = sandbox({ generations: [{ status: 403, body: { error: { message: 'API key leaked secret-xyz' } } }] });
+    expect(await rejected.request(serverKeyRequest())).toEqual({ status: 503, body: { code: 'PROVIDER_REJECTED_KEY' } });
+    const limited = sandbox({ countStatus: 429 });
+    expect(await limited.request(serverKeyRequest())).toEqual({ status: 429, body: { code: 'PROVIDER_RATE_LIMIT' } });
+    const down = sandbox({ generations: [{ status: 500 }] });
+    expect(await down.request(serverKeyRequest())).toEqual({ status: 502, body: { code: 'PROVIDER_UNAVAILABLE' } });
+  });
+});
+
+describe('lenient normalization before strict validation, and one short repair attempt', () => {
+  it('drops empty optional keys and keys of the other reply branch', async () => {
+    const x = sandbox({ reply: { status: 'proposal', question: '', version: 1,
+      summary: '  Estrutura com capa\n e tabela.  ',
+      pages: [{ type: 'cover', heading: 'Capa do catálogo', subtitle: '' },
+        { type: 'section', heading: 'Comparativo', table: { columns: ['Item', 'Modelo A'], rowLabels: ['Faixa', ''], design: '' } },
+        { type: 'comparison', heading: 'Sem tabela' }] } });
+    const r = await x.request(serverKeyRequest());
+    expect(r.status).toBe(200);
+    expect(r.body.reply).toEqual({ version: 1, status: 'proposal', summary: 'Estrutura com capa e tabela.',
+      pages: [{ type: 'cover', heading: 'Capa do catálogo' },
+        { type: 'comparison', heading: 'Comparativo', table: { columns: ['Item', 'Modelo A'], rowLabels: ['Faixa'] } },
+        { type: 'section', heading: 'Sem tabela' }] });
+  });
+  it('repairs a cut answer with a shorter second attempt covered by its own reservation', async () => {
+    const x = sandbox({ generations: [{ finishReason: 'MAX_TOKENS', rawText: '{"status":"proposal","summary":"Estrutura em' }, {}] });
+    const r = await x.request(serverKeyRequest());
+    expect(r.status).toBe(200);
+    expect(r.body.attempts).toBe(2);
+    expect(x.rpc.mock.calls.map(call => call[1])).toEqual([{ p_worst_case_microusd: 7800 }, { p_worst_case_microusd: 4800 }]);
+    const [, repair] = x.generationBodies();
+    expect(repair.generationConfig.maxOutputTokens).toBe(1200);
+    expect(JSON.parse(repair.contents[0].parts[0].text).repairNotice).toMatch(/SHORTER/);
+  });
+  it('repairs invalid JSON once, but never retries a contract violation', async () => {
+    const json = sandbox({ generations: [{ rawText: 'not json' }, {}] });
+    expect((await json.request(serverKeyRequest())).status).toBe(200);
+    const injected = sandbox({ reply: { ...plan, command: 'deleteAll' } });
+    expect((await injected.request(serverKeyRequest())).body).toEqual({ code: 'INVALID_PROVIDER_RESPONSE', reason: 'CONTRACT' });
+    expect(injected.generationBodies()).toHaveLength(1);
+  });
+});
+
+describe('settled budget mode (migration 00028) with fallback to 00027', () => {
+  it('reserves with an id and settles by real usage', async () => {
+    const x = sandbox({ budgetMode: 'settled', settled: 'present' });
+    const r = await x.request(serverKeyRequest());
+    expect(r.status).toBe(200);
+    expect(x.rpc).toHaveBeenCalledWith('vnext_agent_reserve_budget_v2', { p_worst_case_microusd: 12040, p_feature: 'composer' });
+    // 250 input * 0.30 + (90 output + 10 thinking) * 2.50 = 325 micro-USD.
+    expect(x.settlements).toEqual([{ id: expect.any(String), actual: 325 }]);
+    expect(x.generationBodies()[0].generationConfig.maxOutputTokens).toBe(4096);
+  });
+  it('refunds the reservation when the provider answers with an error', async () => {
+    const x = sandbox({ budgetMode: 'settled', settled: 'present', generations: [{ status: 500 }] });
+    expect((await x.request(serverKeyRequest())).status).toBe(502);
+    expect(x.settlements).toEqual([{ id: expect.any(String), actual: 0 }]);
+  });
+  it('falls back to the 00027 reservation while 00028 is not applied', async () => {
+    const x = sandbox({ budgetMode: 'settled', settled: 'missing' });
+    const r = await x.request(serverKeyRequest());
+    expect(r.status).toBe(200);
+    expect(x.rpc).toHaveBeenCalledWith('vnext_agent_reserve_budget', { p_worst_case_microusd: 7800 });
+    expect(x.generationBodies()[0].generationConfig.maxOutputTokens).toBe(2400);
+  });
+  it('reports the remaining settled budget in the status task', async () => {
+    const x = sandbox({ budgetMode: 'settled', settled: 'present' });
+    const r = await x.request({ version: 1, task: 'status' });
+    expect(r.body.status).toMatchObject({ mode: 'settled', remainingMicrousd: 2_500_000, callReserveMicrousd: 12040 });
   });
 });

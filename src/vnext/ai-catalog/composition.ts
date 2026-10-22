@@ -95,19 +95,19 @@ export async function compileCatalog(raw: unknown, rawPlan?: unknown, decisions:
       style: { base: {}, rowRoles: {}, annotation: {}, annotationGapMm: 1 }, annotations: [], legend: [],
     };
     table = materializeTablePreset(table, blank.style, plan.style);
-    const text = (value: string, yMm: number, heightMm: number, size: number, bold = false) => ({ type: 'text' as const, frame: { xMm: 17, yMm, widthMm: 176, heightMm }, zIndex: 0, text: rich(`${id}-text${yMm}`, value), style: { fontFamily: 'Noto Sans', fontSizePt: size, fontWeight: bold ? 700 as const : 400 as const, lineHeight: 1.25, color: bold ? '#003366' : '#172033' } });
+    const text = (value: string, yMm: number, heightMm: number, size: number, bold = false, textAlign: 'left' | 'right' = 'left') => ({ type: 'text' as const, frame: { xMm: 17, yMm, widthMm: 176, heightMm }, zIndex: 0, text: rich(`${id}-text${yMm}`, value), style: { fontFamily: 'Noto Sans', fontSizePt: size, fontWeight: bold ? 700 as const : 400 as const, lineHeight: 1.25, color: bold ? '#003366' : '#172033', textAlign } });
+    // FR-81: only catalog content is printed. Provenance and review reminders go to the review screens (generationReviewNotes).
     return { id, label: chunk.section.title, safeArea: { topMm: 12, rightMm: 12, bottomMm: 12, leftMm: 12 }, objects: [
-      text('PRESYS · Estudo de catálogo', 14, 9, 12, true), text(input.title, 27, 16, 17, true),
+      text('PRESYS', 14, 9, 12, true), text(input.title, 27, 16, 17, true),
       text(`${chunk.section.title}${chunk.start ? ' · continuação' : ''}${input.models.length > 4 ? ` · modelos ${chunk.modelStart + 1}–${chunk.modelEnd}/${input.models.length}` : ''}`, 46, 10, 12, true),
       { type: 'table', frame: { xMm: 17, yMm: 62, widthMm: 176, heightMm: 173 }, zIndex: 1, table },
-      text(input.kind === 'grounded-pdf-specifications'
-        ? 'Dados transcritos de PDF com fontes identificadas. Valide modelo, unidade, condição e revisão antes de publicar.'
-        : 'Dados sintéticos originais. Não representam especificações de produtos PRESYS.', 247, 13, 9),
-      text(`Fontes: ${input.sources.map(source => `${source.id} (rev. ${source.revision})`).join('; ')}.\n${page + (institutional ? 3 : 1)} / ${pageCount} · Conferir dados aprovados antes de publicar.`, 266, 17, 8),
+      text(`Página ${page + (institutional ? 3 : 1)} de ${pageCount}`, 272, 6, 8, false, 'right'),
     ] };
   });
+  // Printed page number where each section starts: cover and contents come first in the institutional layout.
+  const sectionStartPages = input.sections.map(section => technicalChunks.findIndex(chunk => chunk.section.id === section.id) + 3);
   const definitions: PageTemplateDefinition[] = [
-    ...(institutional ? institutionalOpening(input, technicalChunks.length) : []),
+    ...(institutional ? institutionalOpening(input, sectionStartPages) : []),
     ...technicalPages,
     ...(institutional ? institutionalClosing(input) : []),
   ];
@@ -142,7 +142,7 @@ export function assertGeneratedIntegrity(value: GeneratedCatalog): TechnicalCell
     if (!literalText(0).includes(value.input.title) ||
       value.input.models.some(model => !literalText(0).includes(model)) ||
       value.input.sections.some(section => !literalText(1).includes(section.title)) ||
-      value.input.sources.some(source => !literalText(expectedPages - 1).includes(source.id))) {
+      !literalText(expectedPages - 1).includes(value.input.title)) {
       throw new Error('GENERATION_INSTITUTIONAL_CONTENT_MISMATCH');
     }
   }
@@ -160,6 +160,19 @@ export function assertGeneratedIntegrity(value: GeneratedCatalog): TechnicalCell
   });
   return trace;
 }
+/**
+ * FR-81: what used to be printed as notes and source lines on the pages, for the
+ * review screens only. Plain Portuguese; the catalog itself never carries it.
+ */
+export function generationReviewNotes(input: TechnicalInput): string[] {
+  return [
+    input.kind === 'grounded-pdf-specifications'
+      ? 'Dados transcritos de PDF com fontes identificadas. Confira modelo, unidade, condição e revisão antes de publicar.'
+      : 'Dados de exemplo criados para teste. Não representam especificações de produtos PRESYS.',
+    ...input.sources.map(source => `Fonte: ${source.name} · revisão ${source.revision}`),
+  ];
+}
+
 export async function generationHash(value: GeneratedCatalog): Promise<string> {
   const captured = structuredClone(value);
   await validateTechnicalInput(captured.input); assertGeneratedIntegrity(captured);

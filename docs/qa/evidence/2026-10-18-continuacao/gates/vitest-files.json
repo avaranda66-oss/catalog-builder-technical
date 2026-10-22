@@ -1,0 +1,3017 @@
+{
+  "rawSha256": "c6a9949c92fea2f527a8918be815a8da540c27ca9a6e05176a8b51da4fe12a15",
+  "files": [
+    {
+      "file": "tests/acceptance/company-acceptance-critical-journeys.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": [
+        "W3-I Company Acceptance — critical journeys [BLOCKED BY TEST INFRA][BROWSER E2E] drives NEW/EDIT/DELETE/PUBLISH through Chromium and validates the downloaded export"
+      ]
+    },
+    {
+      "file": "tests/app/root-redirect.test.tsx",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/catalogs/presys-ta-family.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/additel-two-col-inspector.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/auth-gate.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/auth-return-target.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/bottom-header-inspector.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/box-block-source-fidelity-r1.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/box-block-xss-security.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/canvas-integrated-acceptance.test.tsx",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/composite-blocks-parity.test.tsx",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/contextual-inspector.test.tsx",
+      "status": "passed",
+      "passed": 34,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/corporate-icon-registry.test.tsx",
+      "status": "passed",
+      "passed": 37,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/editorial-headers-parity.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/family-management-modals.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/fluke-header-inspector.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/freeform-cover.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/full-page-cover-drag.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/full-page-cover-inspector.test.tsx",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/full-page-cover-integration.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/hero-banner-inspector.test.tsx",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/image-inspector.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/insertion-menu-pointer.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/inspector-color-input.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/inspector-primitives.test.tsx",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/pdf-export-cleanliness.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/pdf-import-modal-security.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/quantity-cell-editor.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/specialized-table-editability-parity-c4.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/specs-table-hardening.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/specs-table-inspector-command.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/specs-table-parity.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/specs-table-pilot.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/structural-lifecycle.test.tsx",
+      "status": "passed",
+      "passed": 43,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/structural-resize-and-reorder.test.tsx",
+      "status": "passed",
+      "passed": 32,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/table-data-truth-h1.test.tsx",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/table-design-system-ux.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/table-v2-official-activation.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/table-v2-presets.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/technical-table.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/text-inspector.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/vertical-overflow-guard.test.tsx",
+      "status": "passed",
+      "passed": 31,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/workspace-zero-mock-regression.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/bottom-header-appearance.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/canvas-domain-foundation.test.tsx",
+      "status": "passed",
+      "passed": 28,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/catalog.schema.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/color-contrast.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/compliance-coverage.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/composite-content.engine.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/divergence.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/element-capability-registry.test.ts",
+      "status": "passed",
+      "passed": 38,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/full-page-cover-engine.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/gallery-image.engine.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/hero-banner-appearance.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/page-composition-policy.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/page-geometry-and-fixed-width.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/primary-image-engine.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product.schema.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/publication-export-snapshot-rr009.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-flow-r1-3-1-counterproof.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-flow-r1-3-2-runtime-boundary.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-flow-r1-3-3-diagnostic-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-flow-r1-3-4-ambiguous-page-identity.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-flow-r1-3-principal-followup.test.tsx",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-runtime-store-integration-r1-1.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-runtime-wiring-r1-1.test.tsx",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-smart-flow.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/a4-studio-white-screen-hotfix.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/cover-geometry.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/page-flow-stability-editing.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/flow/table-pagination-planner.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/guided-help/context-help-lifecycle.test.tsx",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/guided-help/father-learning-and-expert-workflow.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/guided-help/glossary-search.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/guided-help/help-registry.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/guided-help/learn-mode.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/active-editing-context-c2.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/active-editing-keyboard-composition-c23.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/export-snapshot-version-consistency-rr009.test.tsx",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/factual-publishing-authority-rr007.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/incident1-supabase-storm-guard.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/mega-workspace-integration.test.tsx",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/pim-table-production.integration.test.ts",
+      "status": "passed",
+      "passed": 34,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/workbook-draft-lifecycle.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/integration/workbook-realtime-catchup-aud012.test.ts",
+      "status": "passed",
+      "passed": 25,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/labs/product-workspace-ux.test.tsx",
+      "status": "passed",
+      "passed": 58,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/library-v2/library-experience-gate.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/library-v2/rr004c-containment.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/library-v2/v2-sections-rendering.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/scripts/extract-facts-eval.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/security/pdfjs-security.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/security/product-image-write-authority.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/ai.service.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/auth-session-and-payload-preservation.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/document-lifecycle.service.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/migration-rehearsal-runner.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/pdf-service-rr009.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/permission-parity.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/product-workbook-persistence-contract.test.ts",
+      "status": "passed",
+      "passed": 84,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/product-workbook-v2-persistence-contract.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/read-authority-rr006.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/realtime-canonical-decoder-c1.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/server-c9-parity-and-search.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/source-document-cas-v2.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/storage.service.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/services/supabase.service.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/asset-lifecycle-phase2b2b.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/asset-reference-durability-phase2b2a.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/asset-runtime-hardening-phase2b2c.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/auth-session-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/catalog-consistency-phase1.test.ts",
+      "status": "passed",
+      "passed": 40,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/catalog-session-lineage-aud012.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/daily-use-reliability-phase2a1c.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/delete-catalog-ack-aud013.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/document-context-template-save.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/family-management.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/family-selection.helper.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/father-auth-revalidation.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/functional-integrity-phase1-4.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/library-consistency-phase2b.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/library-save-queue.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/presence-collaborator-awareness.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/product-assets-phase2b2.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/save-queue-watchdog.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/system-template-discovery-r3.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/template-cas-hardening.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/universal-document-persistence.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/useAuthStore.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/useCatalogStore.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/useLibraryStore.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/useMediaStore.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/stores/workspace-authority-phase1-3.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/font-manager.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/full-catalog-translation-engine.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/printable-localization-completeness.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/translation-final-parity-phase2c1b.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/translation-foundation-phase2c1.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/translation-hardening-phase2c1a.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/translation-white-screen-hotfix.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/translation/white-screen-repro.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/editor/table-core-renderer.test.tsx",
+      "status": "passed",
+      "passed": 22,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/document-commands/command-geometry.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/document-commands/table-commands.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/canonical-decision-safety.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/cell-key-adversarial.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/dataset-core.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/dataset-editor-operations.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/dataset-reuse.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/delete-lifecycle-integrity.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/empty-workbook-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/ingestion-fail-closed.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/ingestion.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/inheritance-and-overrides.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/operations-and-scale.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/provenance-and-conflicts.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/query-and-views.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/referential-integrity.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/revision-semantics.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/schema-and-values.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/table-compatibility.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workbook/versioning-v1-v2.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/ai-knowledge-envelope.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/mega-workspace-view-model.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/semantic-descriptor.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-auto-organizer.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-commands.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-final-hardening.test.ts",
+      "status": "passed",
+      "passed": 25,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-foundation-1d.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-hardening-policies.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-layout.schema.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-projection.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/product-workspace/workspace-source-trace.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-binding/joint-architecture.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-binding/product-workbook-binding.test.ts",
+      "status": "passed",
+      "passed": 22,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-binding/read-authority-rr006.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/cell-key.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/color-system-v2.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/editorial-column-removal-aud013.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/empty-row-policy.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/legacy-ghost-custom.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/legacy-table.adapter.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/merge-data-loss.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/operations-expansion.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/preset-registry-safety.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/product-knowledge-picker-request-budget.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/release-main-production1-closures.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/serialization-adversarial.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/style-token.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table-core-v2-adversarial.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table-core-v2-presentation.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table-core-v2-production-experience.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table-production-experience-1-1.test.tsx",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table-production-experience-1-2.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.engine.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.merge.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.physical.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.presets.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.printable.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/table.schema.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/domain/table-core/width-binding.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/agent-edge-bounded.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/agent-proposal-lifecycle.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/ai-budget-settlement-migration.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/byok-catalog-gateway.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/catalog-native-composer-files.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/catalog-native-composer.test.tsx",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/catalog-native-selected-rewrite.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/catalog-workbench-chat.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/composer-client-contract.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/composer-edge-bounded.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/composition.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/conversation-evidence.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/draft-client.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/draft-contract.test.ts",
+      "status": "passed",
+      "passed": 41,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/draft-edge.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/excel-display-format.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/extraction-review.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/fact-extraction-prompt.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/fact-extraction.test.ts",
+      "status": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/fact-verifier.test.ts",
+      "status": "passed",
+      "passed": 41,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/gemini-chat.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/gemini-father-dialogue.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/gemini-plan.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/institutional-long-form.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/multiturn-gemini-conversation.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/native-compose.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/native-pdf-cell-fill.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/native-table-design.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/native-text-edit.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/own-key-settings-screen.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/pdf-evidence.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/pdf-grounded-input.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/pdf-grounding-boundary.test.ts",
+      "status": "passed",
+      "passed": 61,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/pdf-intake.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/pdf-native-provenance.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/prototype-cancellation.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/provenance-review-persistence.test.ts",
+      "status": "passed",
+      "passed": 23,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/provider-vault.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/qa-native-reader.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/qa-native-ui-cancellation.test.tsx",
+      "status": "passed",
+      "passed": 23,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/qa-pdf-literal-ambiguity.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/six-model-partition.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/source-files-migration.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/source-intake.test.ts",
+      "status": "passed",
+      "passed": 48,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/workbench-dialogue.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/auth-lineage.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/bootstrap-persistence-wiring.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/catalog-navigation.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/catalog-title-button.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/cell-inline-editing-flow.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/cell-inline-editor.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/conflict-dialog.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/editor-assistant-files.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/editor-costura.test.tsx",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/editor-notices.test.tsx",
+      "status": "passed",
+      "passed": 40,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/editor-scale-60.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/editor-zoom-integration.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/father-editor-safety.test.tsx",
+      "status": "passed",
+      "passed": 30,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/father-save-presentation.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/inline-assistant-ux.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/issues-panel.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/layout-diagnostics-projection.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/library-navigation-notice.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/notice-anchor.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/page-panel.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/page-thumbnails.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/paste-table-area.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/persistence-editor-integration.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/pilot-b-access-entry.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/presys-page-reuse.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/publish-action.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/recovery-center-father.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/retry-primary-action.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/save-and-photo-status.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/side-panel-assistant.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-cell-editor-section-advanced.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-continuation.test.tsx",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-grid-actions.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-grid-overlay-inline.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-panel-integration.test.tsx",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-panel-sections.test.tsx",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-paste-actions.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/table-structure-actions.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/text-edit-toolbar.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/text-inspector-section.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/use-stable-grid-plan.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/app/zoom-control.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/application-actions.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/catalog-clone.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/editor-insertion-avoidance.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/editor-interaction.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/editor-workspace.test.tsx",
+      "status": "passed",
+      "passed": 49,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/fr54-editor-bleed-warning.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/group-actions.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/image-insert.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/image-professional-authoring.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/image-upload-ui.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/image-upload.test.ts",
+      "status": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/object-actions.test.ts",
+      "status": "passed",
+      "passed": 26,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/object-arrangement-locking.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/page-template-insertion.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/pilot-a-authorship-trust.test.tsx",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-axis-actions.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-bulk-actions.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-button-keyboard.test.tsx",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-cell-actions.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-fit-height-actions.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-merge-actions.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-paste-create.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-preset-contrast.test.ts",
+      "status": "passed",
+      "passed": 31,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-professional-dimensions-actions.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-professional-style-actions.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-semantic-actions.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/table-title-identity.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/text-actions.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/text-style-actions.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/w3c-editor-persistence.test.tsx",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/w3d-startup-race.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/application/w3h-online-retry.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/asset-persistence-bridge.test.ts",
+      "status": "passed",
+      "passed": 38,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/bridge-parallel-logging.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/father-asset-reliability.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/image-normalization.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/vnext-asset-migration.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/asset/vnext-asset-security-rehearsal.test.ts",
+      "status": "passed",
+      "passed": 12,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-library-ai-create.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-library-entry.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-library-open-recovery.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-library-service.test.ts",
+      "status": "passed",
+      "passed": 31,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-library-ui.test.tsx",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/catalog-starter-registry.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/no-demo-text-printed.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/official-presys-starter.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/pending-create-preparation.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/presys-archetypes.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/library/starter-dependencies.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/decimal-ptbr.test.ts",
+      "status": "passed",
+      "passed": 43,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/editor-keyboard.test.ts",
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/snapping.test.ts",
+      "status": "passed",
+      "passed": 24,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/stage-zoom.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-bulk-authoring.test.ts",
+      "status": "passed",
+      "passed": 13,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-cell-draft.test.ts",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-dimension-authoring.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-fit-height-authoring.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-grid-commands.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-grid-overlay.test.tsx",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-look-authoring.test.ts",
+      "status": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-merge-authoring.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-panel-pure.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-paste-import.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-selection.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-semantic-authoring.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-split-authoring.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-style-authoring.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/table-tsv.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/text-fit-height-authoring.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/editor/text-style-authoring.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/archive-race-w3h.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/asset-loading-coordinator.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/authority-loss-protection.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/autosave-authoring-draft.test.tsx",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/autosave-concurrency.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/autosave-retry.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/conflict-fr43.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/conflict-resolution.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/create-coordinator-w3h.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/persistence-contracts.test.ts",
+      "status": "passed",
+      "passed": 19,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/recovery-lifecycle.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/runtime-coordination.test.ts",
+      "status": "passed",
+      "passed": 23,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/supabase-repository.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/table-cell-authoring-barrier.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/persistence/vnext-persistence-migration.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/content-preflight.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/fr54-bleed-preflight.test.ts",
+      "status": "passed",
+      "passed": 23,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/printable-content-overlap.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/publication-dialog.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/publication-editor-integration.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/publication-presentation.test.ts",
+      "status": "passed",
+      "passed": 22,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/publication-review.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/publication/publication-simple-mode.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-contracts.test.ts",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-coordinator.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-indexeddb.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-open-catalog-scope.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-scheduler.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/recovery/recovery-startup.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/measurement-hanging-space.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/measurement-identity.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/resources-used-assets.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/table-semantic-surfaces.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/table-style-cascade.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/table-style-renderer.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/rendering/text-object-measurement.test.tsx",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/table/table-pagination.test.ts",
+      "status": "passed",
+      "passed": 11,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/architecture-boundary.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/arithmetic-adversarial.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/authoring-diagnostics.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/geometry.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/model.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/paint.test.ts",
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/primitives-rendering.test.tsx",
+      "status": "passed",
+      "passed": 9,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/stability.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/proof/table.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/father-translation-batching.test.ts",
+      "status": "passed",
+      "passed": 29,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/glossary.test.ts",
+      "status": "passed",
+      "passed": 16,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/locale-number-format.test.ts",
+      "status": "passed",
+      "passed": 92,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/p2-multilingual-contracts.test.ts",
+      "status": "passed",
+      "passed": 76,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/p2-review-target.test.ts",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/p2-server-gateway-runtime.test.ts",
+      "status": "passed",
+      "passed": 281,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/p2-technical-benchmark.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/p2-translation-center-attempts.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/response-validation.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/review-dialog.test.tsx",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/review-guardian.test.ts",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/review-suggestions.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/semantic-leaves.test.ts",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/server-gateway-contract.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/technical-token-protector.test.ts",
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-dialog.test.tsx",
+      "status": "passed",
+      "passed": 14,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-entry.test.tsx",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-foundation-service.test.ts",
+      "status": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-model-registry.test.ts",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-review-copy.test.ts",
+      "status": "passed",
+      "passed": 20,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/translation/translation-review-locale.test.tsx",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/components/library/product-workspace-v2/mega-workspace-components.test.tsx",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/intake/assistant-link.test.ts",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/intake/intake-store.test.ts",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/intake/source-intake-section.test.tsx",
+      "status": "passed",
+      "passed": 10,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/intake/source-table-insert.test.ts",
+      "status": "passed",
+      "passed": 17,
+      "failed": 0,
+      "skipped": []
+    },
+    {
+      "file": "tests/vnext/ai-catalog/intake/use-source-intake.test.tsx",
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "skipped": []
+    }
+  ]
+}

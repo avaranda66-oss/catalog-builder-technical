@@ -1,0 +1,356 @@
+{
+  "generatedAt": "2026-10-17T05:52:49.282Z",
+  "ledger": {
+    "reserved": [],
+    "settled": []
+  },
+  "runs": [
+    {
+      "source": "ta-folder",
+      "attempt": "first",
+      "httpStatus": 200,
+      "code": "OK",
+      "msTotal": 0,
+      "megabytes": 3.2,
+      "providerCalls": [],
+      "cached": false,
+      "modelVersion": "gemini-3.8-flash",
+      "trimmed": 0,
+      "tokens": {
+        "input": 11845,
+        "output": 4658
+      },
+      "costUsdNow": 0.02635,
+      "costUsdReserved2027": 0.052703,
+      "counts": {
+        "verified": 36,
+        "toCheck": 0,
+        "unverified": 0,
+        "missing": 6
+      },
+      "summary": "Li as páginas 9 a 13 de presys-ta-folder (4).pdf: 36 valores conferidos no texto. As páginas 10, 11, 12, 13 não trouxeram valores; veja o motivo abaixo.",
+      "pages": [
+        "Página 9: 36 valores conferidos no texto.",
+        "Página 10: fala de outros modelos, que não foram pedidos; nada foi aproveitado.",
+        "Página 11: fala de outros modelos, que não foram pedidos; nada foi aproveitado.",
+        "Página 12: fala de outros modelos, que não foram pedidos; nada foi aproveitado.",
+        "Página 13: fala de outros modelos, que não foram pedidos; nada foi aproveitado."
+      ],
+      "dropped": 0,
+      "tables": [
+        {
+          "kind": "models",
+          "title": "Technical Specifications TA-25N / TA-35N / TA-50N",
+          "columns": [
+            "TA-25N",
+            "TA-35N",
+            "TA-50N"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 36,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 0,
+            "UNVERIFIED": 0,
+            "CONFLICT": 0,
+            "MISSING": 6
+          }
+        }
+      ],
+      "modelTable": {
+        "wrongVerified": [],
+        "unmatchedVerified": [],
+        "wrongCaught": 0,
+        "coverage": {
+          "positions": 36,
+          "verified": 36,
+          "anyStatus": 36
+        }
+      },
+      "sharedTables": [],
+      "verifiedWithPrivateUseCharacter": 0
+    },
+    {
+      "source": "ta-manual-pt",
+      "attempt": "first",
+      "httpStatus": 200,
+      "code": "OK",
+      "msTotal": 0,
+      "megabytes": 2.66,
+      "providerCalls": [],
+      "cached": false,
+      "modelVersion": "gemini-3.8-flash",
+      "trimmed": 0,
+      "tokens": {
+        "input": 21985,
+        "output": 11699
+      },
+      "costUsdNow": 0.06036,
+      "costUsdReserved2027": 0.12072,
+      "counts": {
+        "verified": 99,
+        "toCheck": 17,
+        "unverified": 35,
+        "missing": 6
+      },
+      "summary": "Li as páginas 5 a 8 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf: 99 valores conferidos no texto, 17 para você conferir olhando a página, 35 que não conferem e não serão usados sem você. A página 7 não trouxe valores; veja o motivo abaixo.",
+      "pages": [
+        "Página 5: 20 valores conferidos no texto, 4 para conferir olhando a página, 15 que não conferem com o texto.",
+        "Página 6 (\"1.1.1 - Especificações Técnicas da Entrada\"): 68 valores conferidos no texto, 4 para conferir olhando a página, 12 que não conferem com o texto.",
+        "Página 7: não tem valores de especificação.",
+        "Página 8 (\"Blocos de Prova (Insert)\"): 11 valores conferidos no texto, 9 para conferir olhando a página, 8 que não conferem com o texto."
+      ],
+      "dropped": 0,
+      "tables": [
+        {
+          "kind": "models",
+          "title": "Calibradores de Temperatura Avançados",
+          "columns": [
+            "TA-25N",
+            "TA-35N",
+            "TA-50N"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 20,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 4,
+            "UNVERIFIED": 15,
+            "CONFLICT": 0,
+            "MISSING": 6
+          }
+        },
+        {
+          "kind": "shared",
+          "title": "1.1.1 - Especificações Técnicas da Entrada",
+          "columns": [
+            "Entradas",
+            "Resolução",
+            "Exatidão",
+            "Remarks"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 68,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 4,
+            "UNVERIFIED": 12,
+            "CONFLICT": 0,
+            "MISSING": 0
+          }
+        },
+        {
+          "kind": "shared",
+          "title": "Blocos de Prova (Insert)",
+          "columns": [
+            "Orifícios",
+            "Código de Encomenda"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 11,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 9,
+            "UNVERIFIED": 8,
+            "CONFLICT": 0,
+            "MISSING": 0
+          }
+        }
+      ],
+      "modelTable": {
+        "wrongVerified": [],
+        "unmatchedVerified": [],
+        "wrongCaught": 9,
+        "coverage": {
+          "positions": 39,
+          "verified": 20,
+          "anyStatus": 30
+        }
+      },
+      "sharedTables": [
+        {
+          "table": "1.1.1 - Especificações Técnicas da Entrada",
+          "page": 6,
+          "cells": 84,
+          "verifiedCorrect": 68,
+          "wrongVerified": [],
+          "unmatchedVerified": [],
+          "toCheck": 4,
+          "unverified": 12,
+          "pua": 0
+        },
+        {
+          "table": "Blocos de Prova (Insert)",
+          "page": 8,
+          "cells": 28,
+          "verifiedCorrect": 11,
+          "wrongVerified": [],
+          "unmatchedVerified": [],
+          "toCheck": 9,
+          "unverified": 8,
+          "pua": 0
+        }
+      ],
+      "verifiedWithPrivateUseCharacter": 0
+    },
+    {
+      "source": "y17-folder",
+      "attempt": "first",
+      "httpStatus": 200,
+      "code": "OK",
+      "msTotal": 0,
+      "megabytes": 23,
+      "providerCalls": [],
+      "cached": false,
+      "modelVersion": "gemini-3.8-flash",
+      "trimmed": 0,
+      "tokens": {
+        "input": 7579,
+        "output": 2784
+      },
+      "costUsdNow": 0.01612,
+      "costUsdReserved2027": 0.032249,
+      "counts": {
+        "verified": 31,
+        "toCheck": 7,
+        "unverified": 4,
+        "missing": 0
+      },
+      "summary": "Li a página 11 de pressure-controller-pcon-y17-folder.pdf: 31 valores conferidos no texto, 7 para você conferir olhando a página, 4 que não conferem e não serão usados sem você.",
+      "pages": [
+        "Página 11 (\"Pressure Controller Range (C1)\"): 31 valores conferidos no texto, 7 para conferir olhando a página, 4 que não conferem com o texto."
+      ],
+      "dropped": 0,
+      "tables": [
+        {
+          "kind": "models",
+          "title": "PCON-Y17",
+          "columns": [
+            "PCON-Y17"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 3,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 0,
+            "UNVERIFIED": 4,
+            "CONFLICT": 0,
+            "MISSING": 0
+          }
+        },
+        {
+          "kind": "shared",
+          "title": "Pressure Controller Range (C1)",
+          "columns": [
+            "bar",
+            "psi",
+            "SI-Pascal",
+            "Control*",
+            "Accuracy"
+          ],
+          "counts": {
+            "VERIFIED_TEXT": 28,
+            "VERIFIED_CELL": 0,
+            "VISUAL_ONLY": 7,
+            "UNVERIFIED": 0,
+            "CONFLICT": 0,
+            "MISSING": 0
+          }
+        }
+      ],
+      "modelTable": {
+        "wrongVerified": [],
+        "unmatchedVerified": [],
+        "wrongCaught": 0,
+        "coverage": {
+          "positions": 12,
+          "verified": 4,
+          "anyStatus": 8
+        }
+      },
+      "sharedTables": [
+        {
+          "table": "Pressure Controller Range (C1)",
+          "page": 11,
+          "cells": 35,
+          "verifiedCorrect": 28,
+          "wrongVerified": [],
+          "unmatchedVerified": [],
+          "toCheck": 7,
+          "unverified": 0,
+          "pua": 0
+        }
+      ],
+      "verifiedWithPrivateUseCharacter": 0
+    }
+  ],
+  "divergences": [
+    {
+      "model": "TA-25N",
+      "key": "operating-range",
+      "field": "value",
+      "message": "As fontes divergem: -25 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -25 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-25N",
+      "key": "operating-range",
+      "field": "condition",
+      "message": "As fontes divergem: -25 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -25 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-35N",
+      "key": "operating-range",
+      "field": "value",
+      "message": "As fontes divergem: -35 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -35 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-35N",
+      "key": "operating-range",
+      "field": "condition",
+      "message": "As fontes divergem: -35 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -35 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-50N",
+      "key": "operating-range",
+      "field": "value",
+      "message": "As fontes divergem: -50 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -50 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-50N",
+      "key": "operating-range",
+      "field": "condition",
+      "message": "As fontes divergem: -50 °C to +155 °C (ambient temperature: 23 °C) na página 9 de presys-ta-folder (4).pdf; -50 a 140 °C (Temperatura Ambiente: 20°C.) na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-25N",
+      "key": "stability",
+      "field": "value",
+      "message": "As fontes divergem: ± 0.02 °C na página 9 de presys-ta-folder (4).pdf; 0,02 °C ou 0,04 °F na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-35N",
+      "key": "stability",
+      "field": "value",
+      "message": "As fontes divergem: ± 0.02 °C na página 9 de presys-ta-folder (4).pdf; 0,02 °C ou 0,04 °F na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-50N",
+      "key": "stability",
+      "field": "value",
+      "message": "As fontes divergem: ± 0.02 °C na página 9 de presys-ta-folder (4).pdf; 0,02 °C ou 0,04 °F na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-25N",
+      "key": "dimensions",
+      "field": "value",
+      "message": "As fontes divergem: 260 x 200 x 305 mm na página 9 de presys-ta-folder (4).pdf; 354,5x206x318 mm na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-35N",
+      "key": "dimensions",
+      "field": "value",
+      "message": "As fontes divergem: 315 x 200 x 305 mm na página 9 de presys-ta-folder (4).pdf; 354,5x206x318 mm na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    },
+    {
+      "model": "TA-50N",
+      "key": "dimensions",
+      "field": "value",
+      "message": "As fontes divergem: 315 x 200 x 305 mm na página 9 de presys-ta-folder (4).pdf; 354,5x206x318 mm na página 5 de banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf. Escolha o valor certo."
+    }
+  ]
+}

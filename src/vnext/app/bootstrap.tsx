@@ -24,6 +24,7 @@ import {
   type AssetLineageContext,
 } from '../asset';
 import { IndexedDbRecoveryRepository } from '../recovery';
+import { AssetLoadingCoordinator } from '../persistence/asset-loading-coordinator';
 import {
   authLineageValue,
   createAuthLineageState,
@@ -61,6 +62,56 @@ function activeV2Url(runtime: VNextPersistenceRuntime): string {
     : '/v2';
 }
 
+/** FR-45: the browser's own signal; `undefined` (no navigator) never counts as offline. */
+export function browserIsOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/**
+ * FR-45: lineage reported to the photo bridge after access was lost. It is never empty, so every photo
+ * request that started before compares as stale instead of "unknown".
+ */
+const INVALIDATED = 'INVALIDATED';
+export const INVALIDATED_ASSET_LINEAGE: AssetLineageContext = Object.freeze({
+  authLineage: INVALIDATED,
+  authorityScopeId: INVALIDATED,
+});
+
+/**
+ * FR-41: how long opening a catalog waits for its photos. Photos still downloading after this are shown
+ * as "Carregando foto…" and appear one by one; the catalog never waits for all of them.
+ */
+export const OPEN_PHOTO_WAIT_MS = 1200;
+
+/** Resolves with the value when it arrives within `ms`, otherwise with undefined (the work goes on). */
+export function settleWithin<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise<T | undefined>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    work.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error: unknown) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
+/**
+ * FR-43: the address follows the catalog on screen. After "Salvar meu trabalho como cópia" (or any other
+ * in-place switch) it becomes /v2?catalog=<id>, so F5 reopens the catalog the person is looking at.
+ */
+export function syncCatalogAddress(
+  runtime: VNextPersistenceRuntime,
+  target: Pick<Window, 'location' | 'history'> = window
+): () => void {
+  const sync = () => {
+    const binding = runtime.workspace.getSnapshot().binding;
+    if (binding.kind !== 'PERSISTED') return;
+    if (new URLSearchParams(target.location.search).get('catalog') === binding.catalogId) return;
+    target.history.replaceState(null, '', activeV2Url(runtime));
+  };
+  sync();
+  return runtime.workspace.subscribe(sync);
+}
+
 function openFailureCode(code: string): CatalogLibraryFailureCode {
   if (code === 'REQUESTED_ID_MISMATCH') return 'ENVELOPE_MISMATCH';
   if (code === 'UNSAVED_CHANGES') return 'STALE_RESULT';
@@ -87,8 +138,8 @@ function showAuthorityLossBoundary(
   root.setAttribute('inert', '');
   root.setAttribute('aria-hidden', 'true');
   root.style.display = 'none';
-  // Publication lives in a body portal, outside the protected React root.
-  for (const portal of document.querySelectorAll<HTMLElement>('[data-publication-host]')) {
+  // Publication and the conflict dialog live in body portals, outside the protected React root.
+  for (const portal of document.querySelectorAll<HTMLElement>('[data-publication-host], [data-conflict-dialog-host]')) {
     portal.inert = true;
     portal.setAttribute('aria-hidden', 'true');
     portal.style.display = 'none';
@@ -138,8 +189,8 @@ export function VNextServerAccessUnavailable({
         <h1>Acesso não disponível</h1>
         <p>Não foi possível confirmar seu acesso com o servidor. Tente novamente.</p>
         <div className="vnext-access-actions">
-          <button type="button" onClick={onRetry}>Tentar novamente</button>
-          <button type="button" className="is-primary" onClick={onSignOut}>Sair</button>
+          <button type="button" className="is-primary" onClick={onRetry}>Tentar novamente</button>
+          <button type="button" onClick={onSignOut}>Sair</button>
         </div>
       </section>
     </main>
@@ -208,12 +259,31 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
   let revalidatingServerAccess = false;
   let runtime: VNextPersistenceRuntime | undefined;
   let detachOnlineRetry: (() => void) | undefined;
+  let photoLoader: AssetLoadingCoordinator | undefined;
   let authorityExit: Promise<void> | undefined;
+
+  // FR-45: the photo bridge knows when the browser is offline and when access was lost.
+  const assetRepository = new SupabaseAssetRepository(
+    vnextRpcClientFromSupabase(supabase),
+    supabaseStorageClientFromSupabase(supabase.storage),
+    { isOffline: browserIsOffline }
+  );
+  let getActiveLineage: () => AssetLineageContext = () => ({
+    authLineage: lineage(),
+    authorityScopeId: authorityScopeId(authorizedUserId),
+  });
+  const assetBridge = new DefaultAssetPersistenceBridge(assetRepository, {
+    isOffline: browserIsOffline,
+    getActiveLineage: () => authorityInvalidated ? INVALIDATED_ASSET_LINEAGE : getActiveLineage(),
+  });
 
   const exitProtectedVNext = (): Promise<void> => {
     if (authorityExit) return authorityExit;
     authorityInvalidated = true;
     detachOnlineRetry?.();
+    photoLoader?.dispose();
+    // Photos of the lost session are dropped (cached copies and downloads still running).
+    assetBridge.invalidateAuth(INVALIDATED);
     showAuthorityLossBoundary(
       root,
       'protecting',
@@ -281,17 +351,6 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     );
   };
 
-  const assetRepository = new SupabaseAssetRepository(
-    vnextRpcClientFromSupabase(supabase),
-    supabaseStorageClientFromSupabase(supabase.storage)
-  );
-  let getActiveLineage: () => AssetLineageContext = () => ({
-    authLineage: lineage(),
-    authorityScopeId: authorityScopeId(authorizedUserId),
-  });
-  const assetBridge = new DefaultAssetPersistenceBridge(assetRepository, {
-    getActiveLineage: () => authorityInvalidated ? { authLineage: '', authorityScopeId: '' } : getActiveLineage(),
-  });
   const starterDependencies = new DefaultStarterDependencyPreparer(assetBridge);
 
   if (!requestedCatalogId) {
@@ -325,15 +384,22 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     applicationDependencies
   );
   const recoveryRepository = new IndexedDbRecoveryRepository();
+  // Opening and the photo loader send the same lineage, so a photo already downloading is not fetched twice.
+  const photoContext = (): AssetLineageContext => ({ authLineage: lineage() });
   const resolveAssetUrls = async (
     doc: CatalogDocument
   ): Promise<{ urls: ReadonlyMap<string, string>; states: ReadonlyMap<string, AssetRuntimeState> }> => {
     const urls = new Map<string, string>(resolveKnownW2CDemoAssetUrls(doc));
     const states = new Map<string, AssetRuntimeState>();
     try {
-      const resolved = await assetBridge.resolveDocumentAssets(doc, { authLineage: lineage() });
-      for (const [id, url] of resolved.urls.entries()) urls.set(id, url);
-      for (const [id, state] of resolved.states.entries()) states.set(id, state);
+      // FR-41: only photos in use, 4 at a time, and the catalog opens after OPEN_PHOTO_WAIT_MS at most.
+      // The photo loader installs the ones that arrive later (it joins the same downloads).
+      const resolved = await settleWithin(
+        assetBridge.resolveDocumentAssets(doc, photoContext(), { onlyUsed: true }),
+        OPEN_PHOTO_WAIT_MS
+      );
+      for (const [id, url] of resolved?.urls.entries() ?? []) urls.set(id, url);
+      for (const [id, state] of resolved?.states.entries() ?? []) states.set(id, state);
     } catch {
       // Degraded editing: remote asset failure is ephemeral runtime state.
     }
@@ -381,8 +447,24 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     detachOnlineRetry = attachPersistenceOnlineRetry(runtime);
     window.addEventListener('pagehide', () => {
       detachOnlineRetry?.();
+      photoLoader?.dispose();
       void runtime?.dispose();
     }, { once: true });
+
+    // FR-41: photos in use that are not on screen yet load in the background, 4 at a time.
+    photoLoader = new AssetLoadingCoordinator({
+      workspace: runtime.workspace,
+      resolve: (asset, context) => assetBridge.resolve(asset, context),
+      getContext: photoContext,
+      isActive: () => !authorityInvalidated,
+    });
+    photoLoader.start();
+    const retryFailedPhotos = () => { void photoLoader?.retryAfterReconnect(); };
+    window.addEventListener('online', retryFailedPhotos);
+    window.addEventListener('pagehide', () => window.removeEventListener('online', retryFailedPhotos), { once: true });
+
+    const detachAddress = syncCatalogAddress(runtime);
+    window.addEventListener('pagehide', detachAddress, { once: true });
 
     window.addEventListener('popstate', () => {
       const targetCatalogId = new URLSearchParams(window.location.search).get('catalog');
@@ -456,6 +538,8 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
             if (authorityInvalidated || !runtime) return undefined;
             const source = runtime.workspace.getSnapshot(), binding = source.binding;
             if (binding.kind !== 'PERSISTED' || source.dirty || source.save.phase !== 'idle' || runtime.saveCoordinator.hasUnresolvedActiveMutation()) return undefined;
+            // FR-41: the PDF check starts once the photos still downloading have arrived (or failed).
+            if (source.loadingAssetIds.size > 0) return undefined;
             return { document: source.session.getSnapshot().document, remoteRevision: binding.remoteRevision,
               openSessionId: binding.openSessionId, authLineage: lineage(), authorityScopeId: authorityScopeId(authorizedUserId), assetUrls: source.assetUrls };
           }}

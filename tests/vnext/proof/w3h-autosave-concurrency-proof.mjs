@@ -164,8 +164,12 @@ try {
   assert.equal((await state(pageB)).saveDispatchCount, dispatchesAtConflict);
 
   // Father choice 1: Open latest installs a fresh clean session at remote revision 4.
+  // FR-43: it discards this tab's changes, so it asks first and only acts after confirmation.
   const conflictedOpenSession = conflictB.openSessionId;
   await conflictActions.getByRole('button', { name: 'Abrir versão mais recente', exact: true }).click();
+  await pageB.waitForTimeout(150);
+  assert.equal((await state(pageB)).openSessionId, conflictedOpenSession, 'Open latest must wait for confirmation');
+  await conflictActions.getByRole('button', { name: 'Sim, descartar minhas alterações', exact: true }).click();
   await pageB.waitForFunction((previous) => {
     const current = window.__W3H_PROOF__.state();
     return current.openSessionId !== previous

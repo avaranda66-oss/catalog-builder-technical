@@ -464,6 +464,38 @@ describe('W3.C SaveCoordinator causal semantics', () => {
 });
 
 describe('W3.C canonical reopen', () => {
+  it.each([false, true])('keeps new edits made while photos load (discard previous work: %s)', async (allowDiscardUnsaved) => {
+    const started = deferred<void>();
+    const photos = deferred<ReadonlyMap<string, string>>();
+    const { runtime, session } = runtimeFor(repositoryBase({
+      getCatalog: async () => ({ ok: true, value: envelope(documentFixture(B_ID)) }),
+    }), documentFixture(), 'user-a:0', {
+      resolveAssetUrls: () => { started.resolve(); return photos.promise; },
+    });
+    if (allowDiscardUnsaved) session.execute({ type: 'document.rename', title: 'Previous local work' });
+
+    const reopening = runtime.reopenCoordinator.open(B_ID, { allowDiscardUnsaved });
+    await started.promise;
+    session.execute({ type: 'document.rename', title: 'Typed while waiting for photos' });
+    photos.resolve(new Map());
+
+    expect(await reopening).toMatchObject({ ok: false, error: { code: 'UNSAVED_CHANGES' } });
+    expect(runtime.workspace.getSnapshot().session).toBe(session);
+    expect(session.getSnapshot().document.title).toBe('Typed while waiting for photos');
+    expect(session.getSnapshot().canUndo).toBe(true);
+  });
+
+  it('does not treat discard permission as permission to discard new edits during the server read', async () => {
+    const pending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    const { runtime, session } = runtimeFor(repositoryBase({ getCatalog: () => pending.promise }));
+    session.execute({ type: 'document.rename', title: 'Previous local work' });
+    const reopening = runtime.reopenCoordinator.open(B_ID, { allowDiscardUnsaved: true });
+    session.execute({ type: 'document.rename', title: 'Keep this later correction' });
+    pending.resolve({ ok: true, value: envelope(documentFixture(B_ID)) });
+    expect(await reopening).toMatchObject({ ok: false, error: { code: 'UNSAVED_CHANGES' } });
+    expect(session.getSnapshot().document.title).toBe('Keep this later correction');
+  });
+
   it('REOPEN-1 creates a fresh DocumentSession with empty history and correct binding', async () => {
     const { runtime, session: sessionA } = runtimeFor(repositoryBase({
       getCatalog: vi.fn(() => Promise.resolve({

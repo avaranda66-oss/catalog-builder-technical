@@ -1,9 +1,12 @@
 import React from 'react';
 import { CatalogWorkbenchChat } from '../ai-catalog/CatalogWorkbenchChat';
 import { CatalogNativeComposer } from '../ai-catalog/CatalogNativeComposer';
+import { assistantRequested, forgetAssistantRequest } from '../ai-catalog/intake/assistant-link';
+import { CatalogTitleButton } from './editor/CatalogTitleButton';
+import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
-import { FolderOpen, FileText, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
-import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState, type TablePresetId } from '../application';
+import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
   qCss,
@@ -24,12 +27,20 @@ import {
   navigateTableSelection,
   reconcileTableSelection,
   selectedTableAnchorIds,
-  selectionAfterAxisInsert,
   selectionAfterAxisRemove,
+  selectionAfterTableAxisInsert,
+  selectionAfterTableAxisRemove,
   tableCellSelection,
+  tableSelectionAxisIds,
+  tableSelectionFocusPoint,
   tableSelectionIdentity,
   type TableSelection,
 } from '../editor/table-selection';
+import { insertedRowRole, planTableAxisRemoval, tableAxisRefusalMessage, tableStructureAvailability } from '../editor/table-axis-authoring';
+import { projectTableLook, tableLookSteps, type TableLookRequest } from '../editor/table-look-authoring';
+import { quickNoteCreateStep, quickNoteRemoveSteps } from '../editor/table-quick-notes';
+import { cellCountText, describeTableLocation } from '../editor/table-location';
+import { completeNewTableLook, insertTableAxes, removeTableAxes, runTableSteps } from './editor/table-structure-actions';
 import {
   mergeEligibility,
   selectionAfterMerge,
@@ -52,17 +63,20 @@ import {
   TABLE_CLIPBOARD_MIME,
   TableClipboardError,
 } from '../editor/table-clipboard';
-import { legendUsageCount } from '../editor/table-marker-authoring';
 import {
   annotationTargetForCell,
   annotationTargetForTable,
-  annotationUsageCount,
   DEFAULT_IMAGE_CELL_HEIGHT_U,
   DEFAULT_IMAGE_CELL_WIDTH_U,
   moveId,
   nextLegendUsageCellId,
 } from '../editor/table-semantic-authoring';
 import { prepareTableFitHeight } from '../editor/table-fit-height-authoring';
+import { INSPECTOR_FRAME_FIELDS, INSPECTOR_INVALID_NUMBER_MESSAGE, inspectorDraftFromFrame, inspectorDiscardedNotice, inspectorDraftIsDirty, inspectorErrorStatus, inspectorFieldLabel, planInspectorDraft, sameInspectorFrame, type InspectorFieldError, type InspectorFrameField } from '../editor/inspector-frame-draft';
+import { isCanvasKeyboardTarget, planKeyboardDelete, planKeyboardNudge, resolveEditorShortcut, type CellEditorMove, type EditorShortcut } from '../editor/editor-keyboard';
+import { InspectorNumberField } from './editor/InspectorNumberField';
+import { PagePanel } from './editor/PagePanel';
+import { PageTemplateGallery } from './editor/PageTemplateGallery';
 import {
   prepareAxisReorder,
   prepareColumnBoundaryDrag,
@@ -80,19 +94,14 @@ import {
   prepareAnnotationGapAction,
   prepareCellBorderPresetAction,
   prepareStyleAction,
-  prepareTablePresetAction,
   simpleBorderQuickPatch,
   type BorderQuickPreset,
   type TableStyleScope,
 } from '../editor/table-style-authoring';
 import {
-  changeTableCellDraftType,
-  clearTableCellDraft,
-  confirmTableCellDraftTypeChange,
   createTableCellDraft,
-  setTableCellDraftComposition,
+  startTableCellDraftByTyping,
   tableCellDraftRecoveryFields,
-  updateTableCellDraft,
   validateTableCellDraft,
   type EditableCellType,
   type TableCellDraft,
@@ -114,15 +123,38 @@ import {
   W2D_DIAGNOSTIC_CODES,
 } from './authoring-diagnostics';
 import { imageUploadLineage, uploadWorkspaceImage, type ImageUploadIntent } from './image-upload';
-import { alternateDemoAssetId, createInsertSpec, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { alternateDemoAssetId, createInsertSpec, DEFAULT_NEW_TABLE_SIZE, isValidNewTableSize, MAX_NEW_TABLE_COLUMNS, MAX_NEW_TABLE_ROWS, NEW_TABLE_PRESET_ID, W2C_DEMO_ASSET_URLS, type InsertTool } from './editor-defaults';
+import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
+import { createTableFromPastedText, decidePendingTableFit, describeRowsByColumns, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
+import { isTabularClipboardText } from '../editor/table-paste-import';
+import { successNotice, type EditorNoticeInput } from '../editor/editor-notices';
 import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
-import { PRESYS_PRESENTATION_PAGE_ID, PRESYS_SPECIFICATIONS_PAGE_ID } from '../library/presys-ta25n-starter';
+import { isPresysTa25nPageTemplate } from '../library/presys-ta25n-starter';
+import { PRESYS_DEFAULT_PAGE_MODEL_ID } from '../library/presys-page-models';
 import { fatherSaveExplanation, fatherSaveLabel } from './save-presentation';
 import { projectLayoutDiagnostics, type ProjectedLayoutDiagnostic } from './layout-diagnostics-projection';
 import { TableGridOverlay } from './table-grid-overlay';
-import { TableStyleInspector } from './TableStyleInspector';
+import { EditorNotices } from './editor/EditorNotices';
+import { SaveSummary } from './editor/SaveSummary';
+import { PhotoLoadingAnnouncer, PhotoStatusMark } from './editor/ImageRepairIndicator';
+import { SaveConflictDialog } from './editor/ConflictDialog';
+import { PublishAction } from './editor/PublishAction';
+import { useIssueNavigation, type EditorLocateRequest } from './editor/use-issue-navigation';
+import { CanvasHeader } from './editor/CanvasHeader';
+import { TableCellEditorSection } from './editor/TableCellEditorSection';
+import { CellInlineEditor } from './editor/CellInlineEditor';
+import { useStableGridPlan } from './editor/use-stable-grid-plan';
+import { runTableGridAxisCommand, type TableGridOutcome } from './editor/table-grid-actions';
+import type { TableGridCommand } from '../editor/table-grid-commands';
+import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
+import { TableInspectorPanel } from './editor/TableInspectorPanel';
+import { TextInspectorSection } from './editor/TextInspectorSection';
+import { TextEditToolbar } from './editor/TextEditToolbar';
+import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
+import { AssistantDock } from './editor/AssistantDock';
+import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -263,73 +295,6 @@ export interface EditorWorkspacePersistenceProps {
   readonly assetBridge?: AssetPersistenceBridge;
 }
 
-function LegendEditorRow({
-  entry,
-  usageCount,
-  canMoveUp,
-  canMoveDown,
-  mutationDisabled,
-  onUpdate,
-  onRemove,
-  onMoveUp,
-  onMoveDown,
-  onLocate,
-}: {
-  entry: TableLegendEntry;
-  usageCount: number;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  mutationDisabled: boolean;
-  onUpdate(markerCode: string, plainText?: string): void;
-  onRemove(): void;
-  onMoveUp(): void;
-  onMoveDown(): void;
-  onLocate(): void;
-}) {
-  const editableText = projectEditableRichText(entry.text);
-  const [markerCode, setMarkerCode] = React.useState(entry.markerCode);
-  const [plainText, setPlainText] = React.useState(editableText ?? '');
-  React.useEffect(() => {
-    setMarkerCode(entry.markerCode);
-    setPlainText(projectEditableRichText(entry.text) ?? '');
-  }, [entry]);
-  return (
-    <div className="vnext-legend-entry-editor" data-legend-entry-id={entry.id}>
-      <div className="vnext-legend-entry-heading">
-        <strong>{entry.markerCode}</strong>
-        <span>{usageCount} uso(s)</span>
-      </div>
-      <label>
-        <span>Código do marcador</span>
-        <input data-legend-marker-code={entry.id} value={markerCode} onChange={(event) => setMarkerCode(event.target.value)} />
-      </label>
-      <label>
-        <span>Descrição</span>
-        <textarea
-          data-legend-text={entry.id}
-          value={plainText}
-          disabled={editableText === null}
-          onChange={(event) => setPlainText(event.target.value.replace(/\r\n?/g, '\n'))}
-        />
-      </label>
-      {editableText === null && <p>Texto avançado preservado; edição simples bloqueada.</p>}
-      <div className="vnext-cell-edit-actions">
-        <button type="button" data-editor-action="update-legend" disabled={mutationDisabled} onClick={() => onUpdate(markerCode, editableText === null ? undefined : plainText)}>
-          Atualizar legenda
-        </button>
-        <button type="button" data-editor-action="move-legend-up" disabled={mutationDisabled || !canMoveUp} onClick={onMoveUp}>Mover para cima</button>
-        <button type="button" data-editor-action="move-legend-down" disabled={mutationDisabled || !canMoveDown} onClick={onMoveDown}>Mover para baixo</button>
-        <button type="button" data-editor-action="locate-legend-usage" disabled={usageCount === 0} onClick={onLocate}>
-          Localizar usos
-        </button>
-        <button type="button" data-editor-action="remove-legend" disabled={mutationDisabled || usageCount > 0} title={usageCount > 0 ? `Usado por ${usageCount} célula(s).` : undefined} onClick={onRemove}>
-          Excluir legenda
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const subscribeToNothing = (_listener: () => void): (() => void) => () => undefined;
 const idleConflictResolutionState = () => 'idle' as const;
 
@@ -340,6 +305,7 @@ export function EditorWorkspace({
   onRequestLibrary,
   onRequestTranslation,
   onRequestPublication,
+  locateRequest,
   demoAssets = false,
   simpleByDefault = false,
 }: {
@@ -351,6 +317,8 @@ export function EditorWorkspace({
   onRequestLibrary?: () => void;
   onRequestTranslation?: () => void;
   onRequestPublication?: () => void;
+  /** "Corrigir este item" from the publication review: go to the page and select the object or cell. */
+  locateRequest?: EditorLocateRequest;
 }) {
   const snapshot = useDocumentSession(session);
   const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
@@ -369,10 +337,12 @@ export function EditorWorkspace({
   const [multiSelectArmed, setMultiSelectArmed] = React.useState(false);
   const activePageIdRef = React.useRef(editorState.activePageId);
   activePageIdRef.current = editorState.activePageId;
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
-  const [assistantOpen, setAssistantOpen] = React.useState(false);
+  const [statusMessage, setStatusMessage] = React.useState<EditorNoticeInput | null>(null);
+  // FR-64: "Criar com IA a partir de arquivos" opens the catalog with `assistente=1`, so the files can be dropped at once.
+  const [assistantOpen, setAssistantOpen] = React.useState(() => Boolean(simpleByDefault) && assistantRequested());
+  React.useEffect(() => { forgetAssistantRequest(); }, []);
   const [assistantMode, setAssistantMode] = React.useState<'gemini' | 'tools'>('gemini');
-  const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_PRESENTATION_PAGE_ID);
+  const [pageTemplateChoice, setPageTemplateChoice] = React.useState(PRESYS_DEFAULT_PAGE_MODEL_ID);
   const [pageTemplateBusy, setPageTemplateBusy] = React.useState(false);
   const pageTemplateBusyRef = React.useRef(false);
   const officialPageReuse = hasPresysPageReuse(session);
@@ -380,8 +350,36 @@ export function EditorWorkspace({
   const [tableOptionsOpen, setTableOptionsOpen] = React.useState(!simpleByDefault);
   const [tableRowsToInsert, setTableRowsToInsert] = React.useState('10');
   const [newTableSizeOpen, setNewTableSizeOpen] = React.useState(false);
-  const [newTableRows, setNewTableRows] = React.useState('1');
-  const [newTableColumns, setNewTableColumns] = React.useState('1');
+  const [newTableRows, setNewTableRows] = React.useState(String(DEFAULT_NEW_TABLE_SIZE.rows));
+  const [newTableColumns, setNewTableColumns] = React.useState(String(DEFAULT_NEW_TABLE_SIZE.columns));
+  const [pasteTableAreaOpen, setPasteTableAreaOpen] = React.useState(false);
+  const [pasteGrowOffer, setPasteGrowOffer] = React.useState<(TablePasteGrowthOffer & { objectId: string; sourceRows: number; sourceColumns: number; source: TablePasteSource }) | null>(null);
+  const [pendingTableFit, setPendingTableFit] = React.useState<PendingTableFit | null>(null);
+  /** Same value as `pendingTableFit`, readable right after a draft is committed (before React renders). */
+  const pendingTableFitRef = React.useRef<PendingTableFit | null>(null);
+  pendingTableFitRef.current = pendingTableFit;
+  /**
+   * B-01 and "Salvar": Salvar commits an open draft (cell, title) and saves at once, but the growth of the table
+   * frame that belongs to that change lands only once the table is measured, after the save started. That growth
+   * is saved right after, so pressing Salvar never ends in "Alterações não salvas".
+   */
+  const saveAfterPendingFitRef = React.useRef<string | null>(null);
+  const [followUpSaveRequested, setFollowUpSaveRequested] = React.useState(false);
+  /**
+   * B-01: a row with text is taller than an empty one (6,5 → 7,8 mm in the house style), so typing, pasting or
+   * writing a note can make the table taller than its frame. The change runs under its own transaction and the
+   * measured "Ajustar altura" (grow only) joins it: one Desfazer takes back both.
+   */
+  const executeGrowingTable = (action: ApplicationAction, objectId: string) => {
+    const transactionId = newTableTransactionId();
+    const result = session.execute(action, { transactionId });
+    if (result.ok && result.metadata.changed) {
+      const pending = { objectId, transactionId, document: result.document, growOnly: true };
+      pendingTableFitRef.current = pending;
+      setPendingTableFit(pending);
+    }
+    return result;
+  };
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
@@ -629,15 +627,28 @@ export function EditorWorkspace({
   inspectorTargetRef.current = selectedObject
     ? { pageId: selectedPage.id, objectId: selectedObject.id, expectedFrame: selectedObject.frame }
     : null;
+  /** Numbers, not text: "88.0" and "88,0" are not a pending edit when X is 88. */
   const inspectorDraftIsPending = (): boolean => {
     const target = inspectorTargetRef.current;
-    if (!target) return false;
-    const draft = inspectorDraftRef.current;
-    return draft.x !== String(target.expectedFrame.xMm)
-      || draft.y !== String(target.expectedFrame.yMm)
-      || draft.width !== String(target.expectedFrame.widthMm)
-      || draft.height !== String(target.expectedFrame.heightMm);
+    return Boolean(target && inspectorDraftIsDirty(inspectorDraftRef.current, target.expectedFrame));
   };
+  /** `frame` is the object's frame when the error was shown: once Desfazer/Refazer changes it, the hint is stale. */
+  const [inspectorFieldError, setInspectorFieldError] = React.useState<(InspectorFieldError & { objectId: string; frame?: EditorialObject['frame'] }) | null>(null);
+  /** Plain notice about a typed value that was put back, kept until its field leaves the screen. */
+  const settleNoticeRef = React.useRef<string | null>(null);
+  const withSettleNotice = (message: string | null) => (
+    settleNoticeRef.current ? (message ? `${message} ${settleNoticeRef.current}` : settleNoticeRef.current) : message
+  );
+  React.useEffect(() => {
+    settleNoticeRef.current = null;
+    setInspectorFieldError((current) => (current && current.objectId !== selectedObjectId ? null : current));
+  }, [selectedObjectId]);
+  const selectedFrame = selectedObject?.frame;
+  React.useEffect(() => {
+    if (!inspectorFieldError?.frame || !selectedFrame || sameInspectorFrame(inspectorFieldError.frame, selectedFrame)) return;
+    settleNoticeRef.current = null;
+    setInspectorFieldError(null);
+  }, [inspectorFieldError, selectedFrame]);
 
   const tableTitleBaselineText = (title: RichText | null): string | null => (
     title === null ? '' : projectEditableRichText(title)
@@ -665,10 +676,7 @@ export function EditorWorkspace({
     : selectedTableTitleProjected ?? '';
   const updateTableTitleDraft = (value: string) => {
     if (!selectedTableObject) return;
-    if (inspectorDraftIsPending()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
-      return;
-    }
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     const normalized = value.replace(/\r\n?/g, '\n');
     const current = tableTitleDraftRef.current;
     const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
@@ -685,10 +693,7 @@ export function EditorWorkspace({
   };
   const setTableTitleComposition = (composing: boolean, value: string) => {
     if (!selectedTableObject) return;
-    if (inspectorDraftIsPending()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de editar o título.');
-      return;
-    }
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     const normalized = value.replace(/\r\n?/g, '\n');
     const current = tableTitleDraftRef.current;
     const sameTarget = Boolean(current && sameTableTitleTarget(current, selectedPage.id, selectedTableObject.id, selectedTableObject.table.id));
@@ -814,7 +819,7 @@ export function EditorWorkspace({
       setInspectorDraft(empty);
       return;
     }
-    const next = { x: String(selectedObject.frame.xMm), y: String(selectedObject.frame.yMm), width: String(selectedObject.frame.widthMm), height: String(selectedObject.frame.heightMm) };
+    const next = inspectorDraftFromFrame(selectedObject.frame);
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
   }, [selectedObject]);
@@ -827,12 +832,15 @@ export function EditorWorkspace({
     return () => window.removeEventListener('blur', cancelOnWindowBlur);
   }, [controller]);
 
+  // FR-30: closing the cell editor always gives the grid back; 'cell-edit' never stays on without an editor.
+  const releaseCellEditMode = () => setEditorState((current) => (current.mode === 'cell-edit' ? { ...current, mode: 'table-grid' } : current));
   const finishCellDraftForContextChange = (): boolean => {
     const draft = cellDraftRef.current;
     if (!draft) return true;
     if (!draft.dirty) {
       cellDraftRef.current = null;
       setCellDraft(null);
+      releaseCellEditMode();
       persistence?.runtime.workspace.notifyDraftStateChanged();
       return true;
     }
@@ -845,13 +853,13 @@ export function EditorWorkspace({
       setStatusMessage(validation.message);
       return false;
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cell.setContent',
       ...draft.identity,
       expectedContent: draft.originalContent,
       content: validation.input,
       ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-    });
+    }, draft.identity.objectId);
     if (!result.ok) {
       setStatusMessage(result.error.code === 'TARGET_STALE'
         ? 'A célula mudou. O rascunho foi preservado para revisão.'
@@ -860,6 +868,7 @@ export function EditorWorkspace({
     }
     cellDraftRef.current = null;
     setCellDraft(null);
+    releaseCellEditMode();
     persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
   };
@@ -881,7 +890,7 @@ export function EditorWorkspace({
     setTableSelection(null);
     setMultiSelectArmed(false);
     setEditorState({ activePageId: pageId, selectedObjectIds: [], mode: 'select' });
-    setStatusMessage(null);
+    setStatusMessage(withSettleNotice(null));
   };
 
   const selectObject = (objectId: string) => {
@@ -935,9 +944,12 @@ export function EditorWorkspace({
     return true;
   };
 
+  // FR-22: an open text box is an unsaved change only once its text differs (or an accent is being composed).
+  const textEditIsDirty = (edit: TextEditSession) => compositionRef.current
+    || edit.draft !== (projectEditableRichText(edit.expectedText) ?? '');
   const prepareTextDraftForSave = (): AuthoringBarrierResult => {
     const edit = textEditRef.current;
-    if (!edit) return { ok: true };
+    if (!edit || !textEditIsDirty(edit)) return { ok: true };
     if (compositionRef.current) {
       return {
         ok: false,
@@ -993,14 +1005,14 @@ export function EditorWorkspace({
       setStatusMessage('A tabela do título não está mais disponível. O rascunho foi preservado.');
       return { ok: false, reason: 'STALE_DRAFT', message: 'O alvo do título mudou e o rascunho foi preservado.' };
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.title.set',
       pageId: draft.pageId,
       objectId: draft.objectId,
       tableId: draft.tableId,
       expectedTitle: draft.expectedTitle,
       plainText: draft.draft,
-    });
+    }, draft.objectId);
     if (!result.ok) {
       const stale = result.error.code === 'TARGET_STALE';
       setStatusMessage(stale
@@ -1018,22 +1030,13 @@ export function EditorWorkspace({
   };
   const captureInspectorRecoveryOverlay = (): AuthoringRecoveryOverlay | undefined => {
     const target = inspectorTargetRef.current;
-    if (!target) return undefined;
-    const draft = inspectorDraftRef.current;
-    const canonical = {
-      x: String(target.expectedFrame.xMm),
-      y: String(target.expectedFrame.yMm),
-      width: String(target.expectedFrame.widthMm),
-      height: String(target.expectedFrame.heightMm),
-    };
-    if (draft.x === canonical.x && draft.y === canonical.y
-      && draft.width === canonical.width && draft.height === canonical.height) return undefined;
+    if (!target || !inspectorDraftIsPending()) return undefined;
     return {
       kind: 'INSPECTOR_FRAME_DRAFT_V1',
       pageId: target.pageId,
       objectId: target.objectId,
       expectedFrame: target.expectedFrame,
-      draft,
+      draft: inspectorDraftRef.current,
     };
   };
   const prepareAuthoringForContextChange = (): boolean => {
@@ -1041,10 +1044,8 @@ export function EditorWorkspace({
     if (textEditRef.current && !commitTextEdit()) return false;
     const titleResult = applyTableTitleDraft();
     if (!titleResult.ok) return false;
-    if (captureInspectorRecoveryOverlay()) {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
-      return false;
-    }
+    // Position/size fields never block: valid values are applied, invalid ones go back with a message.
+    if (inspectorDraftIsPending()) settleInspectorDraft();
     return true;
   };
   prepareAuthoringForContextChangeRef.current = prepareAuthoringForContextChange;
@@ -1067,7 +1068,7 @@ export function EditorWorkspace({
       };
     }
     const edit = textEditRef.current;
-    if (edit) {
+    if (edit && textEditIsDirty(edit)) {
       return {
         kind: 'TEXT_DRAFT_V1',
         pageId: edit.pageId,
@@ -1089,28 +1090,7 @@ export function EditorWorkspace({
         compositionWasActive: title.composing,
       };
     }
-    const target = inspectorTargetRef.current;
-    if (!target) return undefined;
-    const draft = inspectorDraftRef.current;
-    const canonical = {
-      x: String(target.expectedFrame.xMm),
-      y: String(target.expectedFrame.yMm),
-      width: String(target.expectedFrame.widthMm),
-      height: String(target.expectedFrame.heightMm),
-    };
-    if (
-      draft.x === canonical.x
-      && draft.y === canonical.y
-      && draft.width === canonical.width
-      && draft.height === canonical.height
-    ) return undefined;
-    return {
-      kind: 'INSPECTOR_FRAME_DRAFT_V1',
-      pageId: target.pageId,
-      objectId: target.objectId,
-      expectedFrame: target.expectedFrame,
-      draft,
-    };
+    return captureInspectorRecoveryOverlay();
   };
   const captureRecoveryOverlayRef = React.useRef(captureRecoveryOverlay);
   captureRecoveryOverlayRef.current = captureRecoveryOverlay;
@@ -1125,13 +1105,13 @@ export function EditorWorkspace({
         setStatusMessage(validation.message);
         return { ok: false, reason: 'INVALID_DRAFT', message: 'O rascunho da célula foi preservado porque ainda é inválido.' };
       }
-      const result = session.execute({
+      const result = executeGrowingTable({
         type: 'table.cell.setContent',
         ...cell.identity,
         expectedContent: cell.originalContent,
         content: validation.input,
         ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-      });
+      }, cell.identity.objectId);
       if (!result.ok) {
         const stale = result.error.code === 'TARGET_STALE';
         setStatusMessage(stale
@@ -1147,19 +1127,18 @@ export function EditorWorkspace({
       setCellDraft(null);
       setEditorState((current) => ({ ...current, mode: 'table-grid' }));
       persistence?.runtime.workspace.notifyDraftStateChanged();
+      // FR-30: Ctrl+S while typing in a cell keeps the keys going to the grid.
+      if (cell.identity.objectId === selectedTableObject?.id) {
+        queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+      }
     }
     const textResult = prepareTextDraftForSaveRef.current();
     if (!textResult.ok) return textResult;
     const titleResult = applyTableTitleDraft();
     if (!titleResult.ok) return titleResult;
-    if (captureRecoveryOverlayRef.current()?.kind === 'INSPECTOR_FRAME_DRAFT_V1') {
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de salvar.');
-      return {
-        ok: false,
-        reason: 'INVALID_DRAFT',
-        message: 'O rascunho do Inspector foi preservado e precisa ser concluído antes de salvar.',
-      };
-    }
+    // A typed position/size is applied (or put back if invalid) before saving; it never blocks Save.
+    if (inspectorDraftIsPending()) settleInspectorDraft();
+    saveAfterPendingFitRef.current = pendingTableFitRef.current?.transactionId ?? null;
     return { ok: true };
   };
   const prepareAuthoringForSaveRef = React.useRef(prepareAuthoringForSave);
@@ -1170,7 +1149,8 @@ export function EditorWorkspace({
     if (!persistenceRuntime || !persistenceOpenSessionId) return undefined;
     return persistenceRuntime.registerAuthoringBarrier(persistenceOpenSessionId, {
       prepareForSave: () => prepareAuthoringForSaveRef.current(),
-      hasPendingDraft: () => Boolean(cellDraftRef.current) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
+      // FR-22: opening a cell or a text box without changing it is not an unsaved change (dirty only when it differs).
+      hasPendingDraft: () => Boolean(cellDraftRef.current?.dirty) || Boolean(tableTitleDraftRef.current) || Boolean(captureRecoveryOverlayRef.current()),
       captureRecoveryOverlay: () => captureRecoveryOverlayRef.current(),
     });
   }, [persistenceOpenSessionId, persistenceRuntime]);
@@ -1342,7 +1322,8 @@ export function EditorWorkspace({
     return ids.length === 1 ? object.table.cells.find((cell) => cell.id === ids[0]) : undefined;
   };
 
-  const startCellEdit = (point?: { rowId: string; columnId: string }): boolean => {
+  /** `typed` (FR-30): the key that started the edit replaces the content, as in Excel. */
+  const startCellEdit = (point?: { rowId: string; columnId: string }, typed?: string): boolean => {
     const object = selectedTableObject;
     if (!object || object.locked) {
       setStatusMessage('Tabela bloqueada não pode ser editada.');
@@ -1359,13 +1340,13 @@ export function EditorWorkspace({
     tableSelectionRef.current = selection;
     tableHistoryContextRef.current = { table: object.table, selection };
     setTableSelection(selection);
-    const draft = createTableCellDraft({
+    const opened = createTableCellDraft({
       pageId: selectedPage.id,
       objectId: object.id,
       tableId: object.table.id,
       cellId: cell.id,
     }, cell.content);
-    notifyCellDraftChanged(draft);
+    notifyCellDraftChanged(typed === undefined ? opened : startTableCellDraftByTyping(opened, typed));
     setMultiSelectArmed(false);
     setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'cell-edit' });
     setStatusMessage(cell.content.type === 'marker' || cell.content.type === 'image'
@@ -1387,13 +1368,13 @@ export function EditorWorkspace({
   const applyCellDraft = (draft: TableCellDraft) => {
     const validation = validateTableCellDraft(draft);
     if (!validation.ok) return { ok: false as const, validation };
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cell.setContent',
       ...draft.identity,
       expectedContent: draft.originalContent,
       content: validation.input,
       ...(validation.allowTypeChange ? { allowTypeChange: true as const } : {}),
-    });
+    }, draft.identity.objectId);
     return result.ok ? { ok: true as const, result } : { ok: false as const, result };
   };
 
@@ -1417,6 +1398,51 @@ export function EditorWorkspace({
     setStatusMessage(applied.result.metadata.changed ? 'Conteúdo da célula atualizado.' : 'Conteúdo da célula sem alterações.');
     queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
     return true;
+  };
+
+  // FR-30: the grid (and its focus) stays on screen while a saved cell is being measured again.
+  const gridPlan = useStableGridPlan(selectedTableObject?.table, selectedTableObject && plans.get(selectedTableObject.table.id));
+
+  const applyGridSelection = (table: TableModel, selection: TableSelection) => {
+    tableSelectionRef.current = selection;
+    tableHistoryContextRef.current = { table, selection };
+    setTableSelection(selection);
+  };
+
+  /** FR-34: "+" and the grid menu compose the existing axis actions; rows inserted grow the frame in the same step. */
+  const applyGridOutcome = (outcome: TableGridOutcome, objectId: string, transactionId: string) => {
+    if (!outcome.ok) {
+      setStatusMessage(outcome.message);
+      return;
+    }
+    applyGridSelection(outcome.table, outcome.selection);
+    if (outcome.fitHeight) setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(outcome.message));
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+
+  const runGridCommand = (command: TableGridCommand) => {
+    if (command.type === 'merge') return runTableMerge();
+    if (command.type === 'unmerge') return runTableUnmerge();
+    const live = cellDraftRef.current ? undefined : currentSelectedTableForStructure();
+    if (!live || live.object.locked) return;
+    const transactionId = newTableTransactionId();
+    applyGridOutcome(runTableGridAxisCommand(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, command, transactionId), live.object.id, transactionId);
+  };
+
+  /** FR-30: Enter saves and goes down, Tab goes right (a new row after the last cell); a click elsewhere selects it. */
+  const commitCellEditAndMove = (move?: CellEditorMove, point?: { rowId: string; columnId: string }) => {
+    if (!commitCellEdit()) return;
+    const live = currentSelectedTableForStructure();
+    if (!live) return;
+    if (point) return applyGridSelection(live.object.table, tableCellSelection(live.selection.identity, point));
+    if (!move) return;
+    const navigation = navigateTableSelection(live.object.table, live.selection,
+      move === 'down' ? 'ArrowDown' : move === 'up' ? 'ArrowUp' : 'Tab', { backwards: move === 'left' });
+    if (!navigation.exited) return applyGridSelection(live.object.table, navigation.selection);
+    if (move === 'right') {
+      runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: live.object.table.rows[live.object.table.rows.length - 1].id, selectFirstCell: true });
+    }
   };
 
   const runCellPropertyPatch = (patch: CellPropertyPatch) => {
@@ -1447,7 +1473,7 @@ export function EditorWorkspace({
         : 'Não foi possível aplicar as propriedades da célula.');
   };
 
-  const leaveTableGrid = (message = 'Manipulação do objeto restaurada.') => {
+  const leaveTableGrid = (message = 'Você saiu da edição da tabela.') => {
     setTableRangeExtensionArmed(false);
     tableSelectionRef.current = null;
     tableHistoryContextRef.current = null;
@@ -1458,7 +1484,7 @@ export function EditorWorkspace({
 
   const tableActionMessage = (code: string): string => {
     if (code === 'TABLE_LAST_AXIS') return 'A última linha ou coluna não pode ser removida.';
-    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover o eixo.';
+    if (code === 'MERGE_INTERSECTION') return 'A remoção cruza uma célula mesclada. Desfaça a mesclagem antes de remover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Não é possível mesclar cabeçalho e corpo.';
     if (code === 'MERGE_OVERLAP') return 'Desmescle as células existentes antes de criar uma nova mesclagem.';
     if (code === 'MERGE_WOULD_DISCARD_CONTENT') return 'Não é possível mesclar porque outra célula contém conteúdo ou anotação.';
@@ -1467,93 +1493,98 @@ export function EditorWorkspace({
     return 'Não foi possível alterar a estrutura da tabela.';
   };
 
+  /**
+   * FR-34: rows and columns come from the selected cell or range ("Linha abaixo" goes under the last selected row).
+   * New rows make the frame grow by itself, in the same undo step, while the table still fits the page.
+   */
   const runTableAxisInsert = (axis: 'row' | 'column', position: 'before' | 'after', count = 1) => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
     if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
       setStatusMessage('Informe uma quantidade entre 1 e 100 linhas.');
       return;
     }
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para usar esta ação.`);
+    const { object, selection } = live;
+    const axisIds = tableSelectionAxisIds(object.table, selection, axis);
+    if (axisIds.length === 0) {
+      setStatusMessage(tableAxisRefusalMessage('NO_AXIS', axis));
       return;
     }
-    const referenceAxisId = axisIds[0];
-    const referenceRow = axis === 'row' ? object.table.rows.find((row) => row.id === referenceAxisId) : undefined;
-    const result = session.execute(axis === 'row' ? {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
+    const referenceAxisId = position === 'before' ? axisIds[0] : axisIds[axisIds.length - 1];
+    const transactionId = newTableTransactionId();
+    const outcome = insertTableAxes(session, { pageId: selection.identity.pageId, object }, {
       axis,
       referenceAxisId,
       position,
-      count,
-      properties: { role: referenceRow?.role === 'header' ? 'header' : 'body', heightPolicy: { mode: 'AUTO' } },
-      expectedTable: object.table,
-    } : {
-      type: 'table.axis.insert',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      referenceAxisId,
-      position,
-      properties: { width: { mode: 'flex', weight: 1 }, minMm: 1 },
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+      ...(axis === 'row' ? { count } : {}),
+      properties: axis === 'row'
+        ? { role: insertedRowRole(object.table, referenceAxisId, position), heightPolicy: { mode: 'AUTO' } }
+        : { width: { mode: 'flex', weight: 1 }, minMm: 1 },
+    }, transactionId);
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    const axes = axis === 'row' ? nextObject?.table.rows : nextObject?.table.columns;
-    const insertedId = axes?.find((candidate) => result.metadata.createdIds.includes(candidate.id))?.id;
+    const insertedId = outcome.insertedAxisIds[0];
     if (insertedId) {
-      const nextSelection = selectionAfterAxisInsert(selection.identity, axis, insertedId);
+      const nextSelection = selectionAfterTableAxisInsert(outcome.table, selection, axis, insertedId);
       tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject!.table, selection: nextSelection };
+      tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
       setTableSelection(nextSelection);
     }
-    setStatusMessage(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.');
+    if (axis === 'row') setPendingTableFit({ objectId: object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
+    setStatusMessage(successNotice(axis === 'row' ? count === 1 ? 'Linha inserida.' : `${count} linhas inseridas. Use Desfazer para remover o lote.` : 'Coluna inserida.'));
   };
 
+  /** FR-34: every selected row (or column) is removed at once, as one undo step; nothing changes when one cannot go. */
   const runTableAxisRemove = (axis: 'row' | 'column') => {
-    const object = selectedTableObject;
-    const selection = tableSelectionRef.current;
-    if (!object || !selection || editorState.mode !== 'table-grid') return;
-    const axisIds = explicitTableAxisIds(object.table, selection, axis);
-    if (axisIds.length !== 1) {
-      setStatusMessage(`Selecione uma única ${axis === 'row' ? 'linha' : 'coluna'} pelo seletor para remover.`);
+    const live = currentSelectedTableForStructure();
+    if (!live || editorState.mode !== 'table-grid') return;
+    const { object, selection } = live;
+    const plan = planTableAxisRemoval(object.table, axis, tableSelectionAxisIds(object.table, selection, axis));
+    if (!plan.ok) {
+      setStatusMessage(tableAxisRefusalMessage(plan.code, axis));
       return;
     }
-    const axisId = axisIds[0];
-    const removedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === axisId);
-    const result = session.execute({
-      type: 'table.axis.remove',
-      pageId: selectedPage.id,
-      objectId: object.id,
-      tableId: object.table.id,
-      axis,
-      axisId,
-      expectedTable: object.table,
-    });
-    if (!result.ok) {
-      setStatusMessage(tableActionMessage(result.error.code));
+    const firstRemovedIndex = (axis === 'row' ? object.table.rows : object.table.columns).findIndex((entry) => entry.id === plan.axisIds[0]);
+    const focusBefore = tableSelectionFocusPoint(object.table, selection);
+    const outcome = removeTableAxes(session, { pageId: selection.identity.pageId, object }, axis, plan.axisIds, newTableTransactionId());
+    if (!outcome.ok) {
+      setStatusMessage(tableAxisRefusalMessage(outcome.code, axis));
       return;
     }
-    const nextObject = result.document.pages.find((page) => page.id === selectedPage.id)?.objects
-      .find((candidate): candidate is TableObject => candidate.id === object.id && candidate.type === 'table');
-    if (nextObject) {
-      const nextSelection = selectionAfterAxisRemove(selection.identity, axis, removedIndex, nextObject.table);
-      tableSelectionRef.current = nextSelection;
-      tableHistoryContextRef.current = { table: nextObject.table, selection: nextSelection };
-      setTableSelection(nextSelection);
+    const nextSelection = selectionAfterTableAxisRemove(outcome.table, selection, axis, firstRemovedIndex, focusBefore);
+    tableSelectionRef.current = nextSelection;
+    tableHistoryContextRef.current = { table: outcome.table, selection: nextSelection };
+    setTableSelection(nextSelection);
+    const count = plan.axisIds.length;
+    setStatusMessage(successNotice(count === 1
+      ? (axis === 'row' ? 'Linha excluída.' : 'Coluna excluída.')
+      : `${count} ${axis === 'row' ? 'linhas excluídas' : 'colunas excluídas'}. Para voltar, use Desfazer.`));
+  };
+
+  /** FR-33 "Notas": a note under the table in one click, starting as "A COMPLETAR" (one undo step). */
+  const addQuickNote = (): boolean => {
+    const live = semanticMutationTable();
+    if (!live) return false;
+    const transactionId = newTableTransactionId();
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, [quickNoteCreateStep()], transactionId);
+    // B-01: the note prints under the grid; the frame grows to hold it, in the same Desfazer.
+    if (outcome.ok && outcome.changed) {
+      setPendingTableFit({ objectId: live.object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
     }
-    setStatusMessage(axis === 'row' ? 'Linha removida.' : 'Coluna removida.');
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota adicionada abaixo da tabela. Escreva o texto no lugar de "A COMPLETAR".')
+      : 'A nota não pôde ser adicionada. Nada foi alterado.');
+    return outcome.ok && outcome.changed;
+  };
+  const removeQuickNote = (annotation: TableAnnotation) => {
+    const live = semanticMutationTable();
+    if (!live) return;
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, quickNoteRemoveSteps(annotation.id), newTableTransactionId());
+    setStatusMessage(outcome.ok && outcome.changed
+      ? successNotice('Nota excluída. Para voltar, use Desfazer.')
+      : 'A nota não pôde ser excluída. Nada foi alterado.');
   };
 
   const currentSelectedTableForStructure = (): { object: TableObject; selection: TableSelection } | undefined => {
@@ -1600,7 +1631,7 @@ export function EditorWorkspace({
   ): boolean => {
     const live = currentSelectedTableForStructure();
     if (!live || editorState.mode !== 'table-grid') return false;
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.cells.setContents',
       pageId: live.selection.identity.pageId,
       objectId: live.object.id,
@@ -1609,7 +1640,7 @@ export function EditorWorkspace({
       targets: prepared.targets,
       ...(prepared.legendCreates ? { legendCreates: prepared.legendCreates } : {}),
       ...(prepared.expectedLegend ? { expectedLegend: prepared.expectedLegend } : {}),
-    });
+    }, live.object.id);
     if (!result.ok) {
       setStatusMessage(tableBulkActionMessage(result.error.code));
       return false;
@@ -1655,32 +1686,133 @@ export function EditorWorkspace({
     }
   };
 
+  const describePasteError = (error: unknown): string => {
+    if (error instanceof TableBulkAuthoringError) return tableBulkActionMessage(error.code);
+    if (error instanceof TableTsvError) return error.code === 'TSV_ROW_WIDTH_MISMATCH'
+      ? 'As linhas coladas têm quantidades diferentes de colunas. Copie uma área retangular da planilha, incluindo as células vazias. Nada foi alterado.'
+      : 'O conteúdo colado tem aspas incompletas ou fora de posição. Copie novamente as células da planilha. Nada foi alterado.';
+    if (error instanceof TableClipboardError) return 'O conteúdo interno copiado não é válido para esta tabela.';
+    return 'Não foi possível interpretar o conteúdo colado.';
+  };
+
   const runPreparedPaste = (typedText: string, plainText: string): boolean => {
     const live = currentSelectedTableForStructure();
     if (!live || editorState.mode !== 'table-grid') return false;
+    setPasteGrowOffer(null);
     try {
       const prepared = typedText
         ? prepareTypedTablePaste(live.object.table, live.selection, parseTypedTableClipboard(typedText))
         : prepareExternalTsvPaste(live.object.table, live.selection, parseTsv(plainText));
       const count = prepared.targets.length;
-      return executePreparedTableBulk(prepared, `${count} célula(s) colada(s).`);
+      return executePreparedTableBulk(prepared, count === 1 ? '1 célula colada.' : `${count} células coladas.`);
     } catch (error) {
       if (error instanceof TablePasteGeometryError) {
-        const source = `${error.sourceRows} linha(s) × ${error.sourceColumns} coluna(s)`;
-        const destination = `${error.destinationRows} linha(s) × ${error.destinationColumns} coluna(s)`;
+        const source = describeRowsByColumns(error.sourceRows, error.sourceColumns);
+        const destination = describeRowsByColumns(error.destinationRows, error.destinationColumns);
+        // FR-31: a paste larger than the room left offers to grow the table in the same step.
+        const offer = error.destinationKind === 'capacity'
+          ? tablePasteGrowthOffer(live.object.table, live.selection, error.sourceRows, error.sourceColumns)
+          : undefined;
+        if (offer) setPasteGrowOffer({ ...offer, objectId: live.object.id, sourceRows: error.sourceRows, sourceColumns: error.sourceColumns, source: { typedText, plainText } });
         setStatusMessage(error.destinationKind === 'capacity'
-          ? `Os dados têm ${source}, mas a partir desta célula só cabem ${destination}. Adicione linhas ou colunas, ou escolha outra célula inicial. Nada foi alterado.`
+          ? `Os dados têm ${source}, mas a partir desta célula só cabem ${destination}. ${offer ? `Clique em "${offer.label}" ou escolha outra célula inicial.` : 'Adicione linhas ou colunas, ou escolha outra célula inicial.'} Nada foi alterado.`
           : `Os dados têm ${source}, e a seleção tem ${destination}. Selecione uma única célula inicial ou uma área do mesmo tamanho dos dados. Nada foi alterado.`);
-      }
-      else if (error instanceof TableBulkAuthoringError) setStatusMessage(tableBulkActionMessage(error.code));
-      else if (error instanceof TableTsvError) setStatusMessage(error.code === 'TSV_ROW_WIDTH_MISMATCH'
-        ? 'As linhas coladas têm quantidades diferentes de colunas. Copie uma área retangular da planilha, incluindo as células vazias. Nada foi alterado.'
-        : 'O conteúdo colado tem aspas incompletas ou fora de posição. Copie novamente as células da planilha. Nada foi alterado.');
-      else if (error instanceof TableClipboardError) setStatusMessage('O conteúdo interno copiado não é válido para esta tabela.');
-      else setStatusMessage('Não foi possível interpretar o conteúdo colado.');
+      } else setStatusMessage(describePasteError(error));
       return false;
     }
   };
+
+  const runGrowAndPaste = () => {
+    const offer = pasteGrowOffer;
+    const live = currentSelectedTableForStructure();
+    setPasteGrowOffer(null);
+    if (!offer || !live || editorState.mode !== 'table-grid' || live.object.id !== offer.objectId) return;
+    const current = tablePasteGrowthOffer(live.object.table, live.selection, offer.sourceRows, offer.sourceColumns);
+    if (!current) {
+      if (runPreparedPaste(offer.source.typedText, offer.source.plainText)) setTablePasteFallbackOpen(false);
+      return;
+    }
+    const transactionId = newTableTransactionId();
+    const outcome = growTableAndPaste(session, { pageId: live.selection.identity.pageId, object: live.object, selection: live.selection }, offer.source, current.plan, transactionId);
+    if (!outcome.ok) {
+      setStatusMessage(outcome.message ?? describePasteError(outcome.error));
+      return;
+    }
+    tableSelectionRef.current = outcome.prepared.selectionAfter;
+    tableHistoryContextRef.current = { table: outcome.table, selection: outcome.prepared.selectionAfter };
+    setTableSelection(outcome.prepared.selectionAfter);
+    setTablePasteFallbackOpen(false);
+    setTablePasteFallbackText('');
+    setStatusMessage(successNotice(outcome.message));
+    // The new rows need room: fit the frame to the measured table inside the same undo step, as for a new table.
+    setPendingTableFit({ objectId: live.object.id, transactionId, document: session.getSnapshot().document, growOnly: true });
+    queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+  };
+  React.useEffect(() => setPasteGrowOffer(null), [tableSelection]);
+
+  /** FR-31: pasted spreadsheet text becomes a styled table on the open page, in one undoable step. */
+  const createTableFromText = (text: string, header?: boolean): boolean => {
+    if (!prepareAuthoringForContextChangeRef.current()) return false;
+    controller.cancel('superseded');
+    const transactionId = newTableTransactionId();
+    const outcome = createTableFromPastedText(session, editorState.activePageId, text, { header, transactionId });
+    setStatusMessage(outcome.ok ? successNotice(outcome.message) : outcome.message);
+    if (!outcome.ok) return false;
+    selectObject(outcome.objectId);
+    setPasteTableAreaOpen(false);
+    setPendingTableFit({ objectId: outcome.objectId, transactionId, document: outcome.document });
+    return true;
+  };
+
+  // Ctrl+V of an Excel block on the page (nothing editable focused, no table selected) creates the table.
+  const pagePasteRef = React.useRef<(event: ClipboardEvent) => void>(() => undefined);
+  pagePasteRef.current = (event) => {
+    if (event.defaultPrevented || editorState.mode !== 'select' || !isPageLevelPasteTarget(event.target, globalThis.document.body)) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!isTabularClipboardText(text)) return;
+    event.preventDefault();
+    if (selectedTableObject) {
+      setStatusMessage('Para colar dentro desta tabela, clique em Editar tabela e escolha a primeira célula. Para criar uma tabela nova, clique numa parte vazia da página e cole de novo.');
+      return;
+    }
+    createTableFromText(text);
+  };
+  React.useEffect(() => {
+    const listener = (event: ClipboardEvent) => pagePasteRef.current(event);
+    globalThis.addEventListener('paste', listener);
+    return () => globalThis.removeEventListener('paste', listener);
+  }, []);
+
+  // The table waiting for its automatic fit, measured on its own: the open cell editor (typing the next cell) or a
+  // click elsewhere does not stop the frame from growing to what was already saved (B-01).
+  const pendingFitPreparation = React.useMemo(() => {
+    if (!pendingTableFit) return null;
+    const page = document.pages.find((entry) => entry.objects.some((object) => object.id === pendingTableFit.objectId));
+    return prepareTableFitHeight(document, page?.id ?? '', pendingTableFit.objectId, measuredLayout?.source === document ? measuredLayout : null);
+  }, [document, measuredLayout, pendingTableFit]);
+  // New tables start with an estimated height; once measured, fit it exactly inside the same undo step.
+  React.useEffect(() => {
+    if (!pendingTableFit) return;
+    const decision = decidePendingTableFit(pendingTableFit, session.getSnapshot().document, selectedTableObject?.id, pendingFitPreparation, inspectorDraftIsPending());
+    if (decision.kind === 'wait') return;
+    pendingTableFitRef.current = null;
+    setPendingTableFit(null);
+    const savedBeforeFit = saveAfterPendingFitRef.current === pendingTableFit.transactionId;
+    if (savedBeforeFit) saveAfterPendingFitRef.current = null;
+    if (decision.kind !== 'fit') return;
+    const fitted = session.execute(decision.action, { transactionId: pendingTableFit.transactionId });
+    if (savedBeforeFit && fitted.ok && fitted.metadata.changed) setFollowUpSaveRequested(true);
+  }, [pendingFitPreparation, pendingTableFit, selectedTableObject?.id, session]);
+  // The follow-up save waits for the save in flight; after a failed save the father already sees why, and his next
+  // Salvar includes the growth, so nothing is retried behind his back.
+  const savePhase = persistence?.save.phase;
+  const saveDirty = persistence?.save.dirty;
+  React.useEffect(() => {
+    if (!followUpSaveRequested || !persistenceRuntime) return;
+    if (savePhase === 'saving') return;
+    setFollowUpSaveRequested(false);
+    if (savePhase === 'idle' && saveDirty) void persistenceRuntime.manualSave();
+  }, [followUpSaveRequested, persistenceRuntime, saveDirty, savePhase]);
 
   const handleTablePasteClipboard = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (editorState.mode !== 'table-grid') return;
@@ -1702,7 +1834,7 @@ export function EditorWorkspace({
         return;
       }
       await globalThis.navigator.clipboard.writeText(clipboard.tsv);
-      setStatusMessage('Conteúdo TSV copiado. Ctrl/Cmd+C na grade também preserva os tipos internos.');
+      setStatusMessage(successNotice('Conteúdo copiado. Ele pode ser colado no Excel, no Google Planilhas ou em outra tabela do catálogo.'));
     } catch (error) {
       setStatusMessage(error instanceof TableClipboardError && error.code === 'COPY_MERGE_INTERSECTION'
         ? 'Não foi possível copiar: a seleção cruza células mescladas.'
@@ -1715,7 +1847,7 @@ export function EditorWorkspace({
     if (!live || editorState.mode !== 'table-grid') return;
     try {
       const prepared = prepareBulkClear(live.object.table, live.selection);
-      executePreparedTableBulk(prepared, `Conteúdo limpo em ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Conteúdo limpo em ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1732,7 +1864,7 @@ export function EditorWorkspace({
         live.selection,
         markerLegendChoice
       );
-      executePreparedTableBulk(prepared, `Marcador aplicado a ${prepared.targets.length} célula(s).`);
+      executePreparedTableBulk(prepared, `Marcador aplicado a ${cellCountText(prepared.targets.length)}.`);
     } catch (error) {
       setStatusMessage(error instanceof TableBulkAuthoringError
         ? tableBulkActionMessage(error.code)
@@ -1756,7 +1888,7 @@ export function EditorWorkspace({
       );
       const applied = executePreparedTableBulk(
         prepared,
-        `Novo marcador criado e aplicado a ${prepared.targets.length} célula(s).`
+        `Novo marcador criado e aplicado a ${cellCountText(prepared.targets.length)}.`
       );
       if (applied) {
         setNewMarkerCode('');
@@ -1851,7 +1983,7 @@ export function EditorWorkspace({
     );
     if (!page || !object) return undefined;
     if (object.locked) {
-      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar superfícies semânticas.');
+      setStatusMessage('Tabela bloqueada. Desbloqueie a tabela para alterar título, notas, legenda ou imagem.');
       return undefined;
     }
     return { pageId: page.id, object };
@@ -1871,14 +2003,14 @@ export function EditorWorkspace({
     const pending = tableTitleDraftRef.current;
     const samePendingTarget = Boolean(pending
       && sameTableTitleTarget(pending, live.pageId, live.object.id, live.object.table.id));
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.title.set',
       pageId: live.pageId,
       objectId: live.object.id,
       tableId: live.object.table.id,
       expectedTitle: samePendingTarget ? pending!.expectedTitle : current ?? null,
       plainText,
-    });
+    }, live.object.id);
     if (result.ok && samePendingTarget) publishTableTitleDraft(null);
     setStatusMessage(result.ok
       ? (result.metadata.changed ? (plainText === null ? 'Título da tabela removido.' : 'Título da tabela atualizado.') : 'Título da tabela sem alterações.')
@@ -1938,7 +2070,7 @@ export function EditorWorkspace({
       setStatusMessage('A anotação não existe mais.');
       return;
     }
-    const result = session.execute({
+    const result = executeGrowingTable({
       type: 'table.annotation.update',
       pageId: live.pageId,
       objectId: live.object.id,
@@ -1946,7 +2078,7 @@ export function EditorWorkspace({
       annotationId: current.id,
       expectedAnnotation: current,
       plainText: plainText.replace(/\r\n?/g, '\n'),
-    });
+    }, live.object.id);
     setStatusMessage(result.ok
       ? (result.metadata.changed ? 'Anotação atualizada.' : 'Anotação sem alterações.')
       : result.error.code === 'TARGET_STALE'
@@ -2311,7 +2443,7 @@ export function EditorWorkspace({
     if (pageTemplateBusyRef.current) return;
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('superseded');
-    if (officialPageReuse) {
+    if (officialPageReuse && isPresysTa25nPageTemplate(pageTemplateChoice)) {
       const targetPageId = selectedPage.id;
       pageTemplateBusyRef.current = true;
       setPageTemplateBusy(true);
@@ -2324,6 +2456,7 @@ export function EditorWorkspace({
           return;
         }
         setActivePage(result.pageId);
+        if (simpleByDefault) setPageReuseOpen(false);
         setStatusMessage(activePageIdRef.current === result.pageId
           ? 'Modelo PRESYS inserido como página independente.'
           : 'Modelo PRESYS inserido. Conclua ou cancele a edição pendente para abrir a nova página.');
@@ -2333,25 +2466,49 @@ export function EditorWorkspace({
       }
       return;
     }
+    // FR-80: the PRESYS archetypes are ordinary page templates of the production registry.
     const result = session.execute({
       type: 'page.template.insert',
-      templateId: W2E_PAGE_TEMPLATE_ID,
+      templateId: officialPageReuse ? pageTemplateChoice : W2E_PAGE_TEMPLATE_ID,
       afterPageId: selectedPage.id,
     });
     if (!result.ok) { setStatusMessage('Não foi possível inserir o modelo.'); return; }
     const createdPageId = result.metadata.createdIds[0];
     if (createdPageId) setActivePage(createdPageId);
-    setStatusMessage('Modelo inserido como página independente.');
+    if (simpleByDefault) setPageReuseOpen(false);
+    setStatusMessage(officialPageReuse ? 'Modelo inserido como página nova, depois da página atual. Para voltar, use Desfazer.' : 'Modelo inserido como página independente.');
   };
 
+  /** FR-30: after Desfazer/Refazer from the cell editor (key or button) the grid keeps the keys. */
+  const focusGridAfterCellEdit = () => queueMicrotask(() => globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')?.focus());
+
+  /**
+   * FR-30: Desfazer (Ctrl+Z or the button) while typing in a cell takes the cell back to what it was, and Refazer
+   * brings the typing back (the typing is saved first, then undone: nothing is lost). With nothing typed it closes
+   * the editor and undoes the last change. Typing that cannot be saved (e.g. an empty code) is thrown away, as Esc.
+   */
   const undo = () => {
+    const typing = cellDraftRef.current;
+    if (typing?.dirty && !typing.composing && !validateTableCellDraft(typing).ok) {
+      cancelCellEdit('Digitação desfeita.');
+      return;
+    }
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.undo();
-    setStatusMessage(result.ok ? 'Alteração desfeita.' : 'Não há alterações para desfazer.');
+    setStatusMessage(!result.ok ? 'Não há alterações para desfazer.'
+      : typing?.dirty ? 'Digitação desfeita. Para trazer de volta, use Refazer.' : 'Alteração desfeita.');
+    if (typing) focusGridAfterCellEdit();
   };
 
   const redo = () => {
+    const typing = cellDraftRef.current;
+    if (typing?.dirty) {
+      // Saving the typing would replace what Refazer could bring back.
+      setStatusMessage('Para refazer, primeiro cancele a digitação com Esc.');
+      return;
+    }
+    if (typing) focusGridAfterCellEdit();
     if (!prepareAuthoringForContextChangeRef.current()) return;
     controller.cancel('history');
     const result = session.redo();
@@ -2361,7 +2518,7 @@ export function EditorWorkspace({
   const insertObject = (tool: InsertTool) => {
     const tableSize = newTableSizeOpen
       ? { rows: Number(newTableRows), columns: Number(newTableColumns) }
-      : { rows: 1, columns: 1 };
+      : DEFAULT_NEW_TABLE_SIZE;
     if (tool === 'table' && !isValidNewTableSize(tableSize)) {
       setStatusMessage(`Informe quantidades inteiras: de 1 a ${MAX_NEW_TABLE_ROWS} linhas e de 1 a ${MAX_NEW_TABLE_COLUMNS} colunas. Nenhuma tabela foi criada.`);
       return;
@@ -2374,14 +2531,23 @@ export function EditorWorkspace({
       requestImageUpload({ type: 'insert', pageId: currentPage.id });
       return;
     }
-    const result = session.execute({ type: 'object.insert', pageId: currentPage.id, object: createInsertSpec(tool, currentPage, tableSize) });
+    const insert = { type: 'object.insert' as const, pageId: currentPage.id, object: createInsertSpec(tool, currentPage, tableSize, session.getSnapshot().document.style) };
+    // A new table and its measured "Ajustar altura" share one transaction, so one Desfazer removes both.
+    const transactionId = tool === 'table' ? newTableTransactionId() : undefined;
+    const result = transactionId ? session.execute(insert, { transactionId }) : session.execute(insert);
     if (!result.ok) { setStatusMessage('Não foi possível inserir o objeto.'); return; }
     const objectId = result.metadata.createdIds[0];
     if (objectId) selectObject(objectId);
     const names: Record<InsertTool, string> = { text: 'Texto', image: 'Imagem', table: 'Tabela', shape: 'Forma', line: 'Linha' };
     if (tool === 'table') setNewTableSizeOpen(false);
-    setStatusMessage(tool === 'table' && (tableSize.rows > 1 || tableSize.columns > 1)
-      ? `Tabela de ${tableSize.rows} linhas × ${tableSize.columns} colunas adicionada. Confira a altura e os limites A4 antes de publicar.`
+    if (tool === 'table' && objectId && transactionId) {
+      // FR-33: the new table gets the whole "Especificações" look (names in bold, 68 mm) in the same undo step.
+      completeNewTableLook(session, { pageId: currentPage.id, objectId }, NEW_TABLE_PRESET_ID, transactionId);
+      setPendingTableFit({ objectId, transactionId, document: session.getSnapshot().document });
+    }
+    // "clique em Editar tabela" is a tip, not a problem: the new table is a finished change (FR-12).
+    setStatusMessage(tool === 'table'
+      ? successNotice(`Tabela de ${tableSize.rows} ${tableSize.rows === 1 ? 'linha' : 'linhas'} × ${tableSize.columns} ${tableSize.columns === 1 ? 'coluna' : 'colunas'} adicionada${tableSize.rows > 1 ? ', com a primeira linha como cabeçalho' : ''}. Para escrever nela, clique em Editar tabela.`)
       : names[tool] + (tool === 'text' ? ' adicionado.' : ' adicionada.'));
   };
 
@@ -2872,37 +3038,119 @@ export function EditorWorkspace({
   const cancelPointerGesture = () => { if (controller.cancel('pointercancel')) setStatusMessage('Gesto cancelado.'); };
   const cancelCaptureLoss = () => { if (controller.cancel('capture-loss')) setStatusMessage('Gesto cancelado.'); };
 
-  const commitInspector = (field: keyof InspectorDraft) => {
-    if (!selectedObject) return;
-    if (selectedMutationLocked) {
-      setStatusMessage(groupHasLockedDescendant(selectedObject)
-        ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
-        : 'Objeto bloqueado. Desbloqueie para alterar a geometria.');
-      return;
+  const liveInspectorObject = (): EditorialObject | undefined => {
+    const target = inspectorTargetRef.current;
+    if (!target) return undefined;
+    return session.getSnapshot().document.pages.find((page) => page.id === target.pageId)
+      ?.objects.find((object) => object.id === target.objectId);
+  };
+  const resetInspectorDraft = () => {
+    const frame = liveInspectorObject()?.frame ?? inspectorTargetRef.current?.expectedFrame;
+    if (!frame) return;
+    inspectorDraftRef.current = inspectorDraftFromFrame(frame);
+    setInspectorDraft(inspectorDraftRef.current);
+    persistence?.runtime.workspace.notifyDraftStateChanged();
+  };
+  /** Applies valid typed values ("12,5" or "12.5") and puts back invalid ones. Never leaves a blocking draft. */
+  const settleInspectorDraft = (fields: readonly InspectorFrameField[] = INSPECTOR_FRAME_FIELDS) => {
+    const object = liveInspectorObject();
+    if (!object) { resetInspectorDraft(); return; }
+    const plan = planInspectorDraft(inspectorDraftRef.current, object.frame, fields, { sizeLocked: object.type === 'group' });
+    const errors = [...plan.errors];
+    const { x, y, width, height } = plan.changes;
+    if (x !== undefined || y !== undefined || width !== undefined || height !== undefined) {
+      if (objectClosureLockedId(object)) {
+        setStatusMessage('Objeto bloqueado. Desbloqueie para alterar a posição ou o tamanho.');
+      } else {
+        controller.cancel('superseded');
+        const current = frameToU(object.frame);
+        let action: ApplicationAction | undefined;
+        try {
+          action = width !== undefined || height !== undefined
+            ? { type: 'object.resize', objectId: object.id, xU: x === undefined ? current.xU : mmToU(x), yU: y === undefined ? current.yU : mmToU(y), widthU: width === undefined ? current.widthU : mmToU(width), heightU: height === undefined ? current.heightU : mmToU(height) }
+            : { type: 'object.move', objectId: object.id, xU: x === undefined ? current.xU : mmToU(x), yU: y === undefined ? current.yU : mmToU(y) };
+        } catch {
+          errors.push({ field: fields.find((field) => plan.changes[field] !== undefined) ?? 'x', message: INSPECTOR_INVALID_NUMBER_MESSAGE });
+        }
+        if (action) {
+          const result = session.execute(action);
+          setStatusMessage(result.ok ? 'Posição e tamanho atualizados.' : 'Não foi possível alterar a posição ou o tamanho. O valor anterior foi mantido.');
+        }
+      }
     }
+    setInspectorFieldError(errors[0] ? { objectId: object.id, ...errors[0], frame: liveInspectorObject()?.frame ?? object.frame } : null);
+    settleNoticeRef.current = errors[0] ? inspectorDiscardedNotice(errors[0]) : null;
+    if (errors[0]) setStatusMessage(inspectorErrorStatus(errors[0]));
+    resetInspectorDraft();
+  };
+  /** Leaving a field settles every typed field at once (one coherent change), so none is silently dropped. */
+  const commitInspector = () => {
+    if (!inspectorDraftIsPending()) { resetInspectorDraft(); return; } // "88.0" means 88: just show "88".
     if (!finishCellDraftForContextChange()) return;
     if (textEditRef.current && !commitTextEdit()) return;
-    const titleResult = applyTableTitleDraft();
-    if (!titleResult.ok) return;
-    if (selectedObject.type === 'group' && (field === 'width' || field === 'height')) return;
-    controller.cancel('superseded');
-    const raw = inspectorDraft[field].trim();
-    const numeric = Number(raw);
-    if (raw.length === 0 || !Number.isFinite(numeric)) { setStatusMessage('Informe um valor numérico válido em milímetros.'); return; }
-    let valueU: number;
-    try { valueU = mmToU(numeric); }
-    catch { setStatusMessage('Informe um valor numérico válido em milímetros.'); return; }
-    const current = frameToU(selectedObject.frame);
-    let action: ApplicationAction;
-    if (field === 'x' || field === 'y') {
-      action = { type: 'object.move', objectId: selectedObject.id, xU: field === 'x' ? valueU : current.xU, yU: field === 'y' ? valueU : current.yU };
-    } else {
-      if (valueU < 1) { setStatusMessage('Largura e altura devem ser maiores que zero.'); return; }
-      action = { type: 'object.resize', objectId: selectedObject.id, xU: current.xU, yU: current.yU, widthU: field === 'width' ? valueU : current.widthU, heightU: field === 'height' ? valueU : current.heightU };
-    }
-    const result = session.execute(action);
-    setStatusMessage(result.ok ? 'Geometria atualizada.' : 'Não foi possível atualizar a geometria.');
+    if (!applyTableTitleDraft().ok) return;
+    settleInspectorDraft();
   };
+  const revertInspectorField = (field: InspectorFrameField) => {
+    setInspectorFieldError(null);
+    settleNoticeRef.current = null;
+    if (!inspectorDraftIsPending()) return;
+    resetInspectorDraft();
+    setStatusMessage(`${inspectorFieldLabel(field)}: valor anterior restaurado.`);
+  };
+
+  const runObjectShortcut = (shortcut: Exclude<EditorShortcut, { type: 'save' }>) => {
+    if (shortcut.type === 'duplicate') {
+      if (editorState.selectedObjectIds.length !== 1) setStatusMessage('Selecione um só objeto para duplicar.');
+      else duplicateSelected();
+      return;
+    }
+    if (!finishTextEditBeforeCommand()) return;
+    const page = session.getSnapshot().document.pages.find((entry) => entry.id === editorState.activePageId);
+    if (!page) return;
+    const ids = editorState.selectedObjectIds;
+    const plan = shortcut.type === 'delete' ? planKeyboardDelete(page, ids) : planKeyboardNudge(page, ids, shortcut.dxMm, shortcut.dyMm);
+    if (!plan.ok) {
+      if (plan.reason === 'LOCKED') setStatusMessage(`Objeto bloqueado. Desbloqueie para ${shortcut.type === 'delete' ? 'excluir' : 'mover'}.`);
+      return;
+    }
+    controller.cancel('superseded');
+    const transactionId = `teclado:${shortcut.type}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const ok = plan.actions.every((action) => session.execute(action, { transactionId }).ok);
+    if (shortcut.type === 'delete' && ok) setEditorState((current) => ({ ...current, selectedObjectIds: [] }));
+    const many = plan.actions.length > 1;
+    setStatusMessage(!ok
+      ? `Não foi possível ${shortcut.type === 'delete' ? 'excluir' : 'mover'} ${many ? 'todos os objetos' : 'o objeto'}.`
+      : shortcut.type === 'delete' ? `${many ? 'Objetos excluídos' : 'Objeto excluído'}. Para recuperar, use Desfazer.` : (many ? 'Objetos movidos.' : 'Objeto movido.'));
+  };
+
+  // Ctrl+S saves the catalog anywhere in the editor and never opens the browser's "Save page as".
+  // When focus fell to the page body (e.g. the deleted object had it), only Ctrl+Z/Ctrl+Y still work:
+  // Delete, arrows and Ctrl+D act only from an object on the page (see cancelOnRootKey).
+  const windowShortcutRef = React.useRef<(event: KeyboardEvent) => void>(() => undefined);
+  windowShortcutRef.current = (event) => {
+    if (resolveEditorShortcut(event, { typingInField: true, mode: 'select', hasSelection: false })?.type === 'save') {
+      event.preventDefault();
+      if (event.repeat) return;
+      if (!persistence) setStatusMessage('Este rascunho fica só nesta aba e não é salvo.');
+      else if (persistence.save.phase === 'saving') setStatusMessage('Salvando… aguarde um instante.');
+      else if (persistence.save.canSave) void persistence.runtime.manualSave();
+      else setStatusMessage(persistence.save.phase === 'idle' ? 'Não é possível salvar agora.' : fatherSaveExplanation(persistence.save));
+      return;
+    }
+    const doc = window.document;
+    if ((event.target !== doc.body && event.target !== doc.documentElement) || doc.querySelector('[aria-modal="true"]')) return;
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'y')) {
+      event.preventDefault();
+      if (key === 'y' || event.shiftKey) redo(); else undo();
+    }
+  };
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => windowShortcutRef.current(event);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
 
   const objectPreviewFrame = (object: EditorialObject): FrameU => {
     if (preview?.objectId === object.id && preview.pageId === selectedPage.id) return preview.frameU;
@@ -2955,9 +3203,10 @@ export function EditorWorkspace({
     if (textEditRef.current) {
       if (compositionRef.current) return;
       if (event.key === 'Escape') {
+        // Like PowerPoint: Esc leaves the text box keeping what was typed ("Cancelar" discards).
         event.preventDefault();
         event.stopPropagation();
-        cancelTextEdit();
+        commitTextEdit();
         return;
       }
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -3000,7 +3249,11 @@ export function EditorWorkspace({
           event.key as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Tab',
           { extend: event.shiftKey && event.key !== 'Tab', backwards: event.shiftKey && event.key === 'Tab' }
         );
-        if (navigation.exited) {
+        if (navigation.exited && event.key === 'Tab' && !event.shiftKey) {
+          // FR-30, as in Excel: Tab on the last cell adds a row, also when the cell is only selected.
+          const rows = selectedTableObject.table.rows;
+          runGridCommand({ type: 'insert', axis: 'row', position: 'after', referenceAxisId: rows[rows.length - 1].id, selectFirstCell: true });
+        } else if (navigation.exited) {
           leaveTableGrid('Fim da grade; manipulação do objeto restaurada.');
         } else {
           tableSelectionRef.current = navigation.selection;
@@ -3009,6 +3262,18 @@ export function EditorWorkspace({
         }
         return;
       }
+    }
+    // Only an object on the page (focused by clicking it) takes Delete, arrows and Ctrl+D;
+    // buttons, the page list and the side panels never act on the selection.
+    const shortcut = resolveEditorShortcut(event, {
+      typingInField: !isCanvasKeyboardTarget(target),
+      mode: editorState.mode,
+      hasSelection: editorState.selectedObjectIds.length > 0,
+    });
+    if (shortcut && shortcut.type !== 'save') {
+      event.preventDefault();
+      runObjectShortcut(shortcut);
+      return;
     }
     if (event.key === 'Enter' && selectedObject?.type === 'text') {
       if (!['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(target.tagName)) {
@@ -3070,14 +3335,9 @@ export function EditorWorkspace({
         return;
       }
     }
-    if (captureInspectorRecoveryOverlay()) {
-      if (target.closest('[data-inspector-authoring]')) return;
-      if (target.closest('[data-persistence-save-action]')) return;
-      if (target.closest('[data-editor-action="undo"], [data-editor-action="redo"]')) return;
-      setStatusMessage('Conclua ou reverta a edição do Inspector antes de mudar de contexto.');
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    // Clicking away from a position/size field applies a valid value and puts
+    // back an invalid one (with a visible message). It never blocks the click.
+    if (inspectorDraftIsPending() && !target.closest('[data-inspector-authoring]')) settleInspectorDraft();
   };
 
   const updateTextDraft = (value: string) => {
@@ -3118,6 +3378,8 @@ export function EditorWorkspace({
     const next = { ...inspectorDraftRef.current, [field]: value };
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
+    if (inspectorFieldError?.field === field) setInspectorFieldError(null);
+    settleNoticeRef.current = null;
     persistence?.runtime.workspace.notifyDraftStateChanged();
   };
 
@@ -3145,48 +3407,10 @@ export function EditorWorkspace({
     selectedSemanticCell?.content,
     selectedSemanticCell?.contentPresentation?.image,
   ]);
-  function commonCellStyleValue<K extends keyof NonNullable<Cell['style']>>(
-    key: K
-  ): NonNullable<Cell['style']>[K] | undefined {
-    if (selectedAnchorCells.length === 0) return undefined;
-    const first = selectedAnchorCells[0].style?.[key];
-    return selectedAnchorCells.every((cell) => JSON.stringify(cell.style?.[key]) === JSON.stringify(first))
-      ? first
-      : undefined;
-  }
   const commonWrapPolicy = selectedAnchorCells.length > 0
     && selectedAnchorCells.every((cell) => cell.contentPresentation?.wrapPolicy === selectedAnchorCells[0].contentPresentation?.wrapPolicy)
     ? selectedAnchorCells[0].contentPresentation?.wrapPolicy
     : undefined;
-  const propertySelectionKey = selectedAnchorCells
-    .map((cell) => [cell.id, JSON.stringify(cell.style), JSON.stringify(cell.contentPresentation)].join(':'))
-    .join('|');
-
-  const commitCellColor = (key: 'color' | 'background', raw: string) => {
-    if (raw === '') {
-      runCellPropertyPatch({ [key]: null } as CellPropertyPatch);
-      return;
-    }
-    if (!/^#[0-9a-fA-F]{6}$/.test(raw)) {
-      setStatusMessage('Informe uma cor hexadecimal válida, como #1A2B3C.');
-      return;
-    }
-    runCellPropertyPatch({ [key]: raw } as CellPropertyPatch);
-  };
-
-  const commitCellPadding = (edge: 'top' | 'right' | 'bottom' | 'left', raw: string) => {
-    if (raw.trim() === '') {
-      runCellPropertyPatch({ paddingMm: { [edge]: null } } as CellPropertyPatch);
-      return;
-    }
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value < 0) {
-      setStatusMessage('Informe um padding válido em milímetros, igual ou maior que zero.');
-      return;
-    }
-    runCellPropertyPatch({ paddingMm: { [edge]: value } } as CellPropertyPatch);
-  };
-
   const tableStyleScope: TableStyleScope | undefined = selectedTableObject
     ? tableStyleRoleScope
       ? { kind: 'role', role: tableStyleRoleScope }
@@ -3291,14 +3515,18 @@ export function EditorWorkspace({
     }
   };
 
-  const runTablePreset = (presetId: TablePresetId) => {
+  /** FR-33 "Estilo": a preset, a switch or the text size, as one undo step built from existing actions. */
+  const runTableLook = (request: TableLookRequest, successMessage: string) => {
     const live = currentSelectedTableForPresentation();
     if (!live) return;
-    const identity = tableSelectionIdentity(live.pageId, live.object.id, live.object.table.id);
-    executeTableStyleAction(
-      prepareTablePresetAction(identity, live.object.table, presetId),
-      'Estilo de tabela aplicado.'
-    );
+    if (cellDraftRef.current || editorState.mode === 'cell-edit') {
+      setStatusMessage('Conclua ou cancele a edição da célula para alterar a apresentação da tabela.');
+      return;
+    }
+    const steps = tableLookSteps(request, projectTableLook(live.object.table, live.document.style), live.document.style);
+    const outcome = runTableSteps(session, { pageId: live.pageId, objectId: live.object.id }, steps, newTableTransactionId());
+    if (!outcome.ok) setStatusMessage(tableStyleActionMessage(outcome.code));
+    else setStatusMessage(outcome.changed ? successNotice(successMessage) : 'Sem alterações.');
   };
 
   const runAnnotationGap = (annotationGapMm: number) => {
@@ -3318,12 +3546,10 @@ export function EditorWorkspace({
     ? explicitTableAxisIds(selectedTableObject.table, tableSelection, 'column')
     : [];
   const selectedRowDimensionKey = selectedRowAxisIds.join('\u0000');
-  const rowAxisReason = selectedRowAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única linha pelo seletor lateral.';
-  const columnAxisReason = selectedColumnAxisIds.length === 1
-    ? undefined
-    : 'Selecione uma única coluna pelo seletor superior.';
+  // FR-34: the bar above the page and "Estrutura" share one rule (rows and columns of the selected cell or range).
+  const tableStructure = selectedTableObject
+    ? tableStructureAvailability(selectedTableObject.table, tableSelection, editorState.mode === 'cell-edit')
+    : undefined;
   const rowDimensionProjection = (() => {
     if (!selectedTableObject || !tableSelection || tableSelection.kind !== 'rows') return undefined;
     try { return projectRowDimensions(selectedTableObject.table, tableSelection); } catch { return undefined; }
@@ -3336,14 +3562,14 @@ export function EditorWorkspace({
     ? pendingRowHeightMode.mode
     : rowDimensionProjection?.heightMode;
   const tableDimensionMessage = (code: string): string => {
-    if (code === 'TARGET_STALE') return 'A dimensão mudou enquanto a ação era preparada. Nada foi alterado.';
+    if (code === 'TARGET_STALE') return 'A tabela mudou enquanto a alteração era preparada. Nada foi alterado.';
     if (code === 'TABLE_WIDTH_INFEASIBLE' || code === 'COLUMN_LIMIT_INVALID') return 'As larguras e limites atuais não cabem na largura da tabela.';
-    if (code === 'COLUMN_WEIGHT_INVALID') return 'O peso flexível deve ser um inteiro positivo.';
-    if (code === 'MERGE_INTERSECTION') return 'Esta movimentação cruza uma célula mesclada. Desmescle explicitamente antes de reordenar.';
+    if (code === 'COLUMN_WEIGHT_INVALID') return 'A proporção da largura deve ser um número inteiro maior que zero.';
+    if (code === 'MERGE_INTERSECTION') return 'Esta mudança cruza uma célula mesclada. Desfaça a mesclagem antes de mover a linha ou coluna.';
     if (code === 'MERGE_HEADER_BOUNDARY') return 'Esta alteração faria uma célula mesclada cruzar cabeçalho e corpo.';
     if (code === 'OBJECT_LOCKED') return 'Tabela bloqueada não pode ser alterada.';
     if (code === 'AXIS_ORDER_INVALID') return 'A nova ordem de linhas ou colunas é inválida.';
-    return 'Não foi possível aplicar a dimensão da tabela com segurança.';
+    return 'Não foi possível aplicar esta alteração na tabela. Nada foi alterado.';
   };
   const executeTableDimensionAction = (action: ApplicationAction, successMessage: string): boolean => {
     if (cellDraftRef.current || editorState.mode !== 'table-grid') {
@@ -3475,8 +3701,8 @@ export function EditorWorkspace({
       return;
     }
     if (field === 'weight') {
-      if (!Number.isSafeInteger(value)) { setStatusMessage('O peso flexível deve ser um inteiro positivo.'); return; }
-      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Peso flexível atualizado.');
+      if (!Number.isSafeInteger(value)) { setStatusMessage('A proporção da largura deve ser um número inteiro maior que zero.'); return; }
+      runColumnProperties({ width: { mode: 'flex', weight: value } }, 'Proporção da largura atualizada.');
       return;
     }
     const valueU = mmToU(value);
@@ -3507,7 +3733,7 @@ export function EditorWorkspace({
         axis === 'row' ? 'Linha movida.' : 'Coluna movida.'
       );
     } catch (error) {
-      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível reordenar o eixo.');
+      setStatusMessage(error instanceof TableDimensionAuthoringError ? error.message : 'Não foi possível mover a linha ou coluna.');
     }
   };
   const runColumnBoundaryDrag = (leftColumnIndex: number, deltaU: number) => {
@@ -3642,8 +3868,14 @@ export function EditorWorkspace({
       `[data-editor-object-id="${CSS.escape(object.id)}"]`
     )?.focus());
   };
+  const goToIssue = useIssueNavigation({ document, request: locateRequest, prepare: () => prepareAuthoringForContextChangeRef.current(),
+    // FR-17: a problem chosen on purpose shows "Propriedades", where its list opens (the assistant stays mounted).
+    locate: (target) => { setAssistantOpen(false); locateLayoutDiagnostic(target); },
+    showPage: setActivePage, openDiagnostics: () => setDiagnosticsOpen(true), announce: setStatusMessage,
+    selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
   return (
+    <>
     <div
       className="vnext-shell"
       data-vnext-shell=""
@@ -3660,12 +3892,9 @@ export function EditorWorkspace({
           <div className="vnext-brand-mark" aria-hidden="true">P</div>
           <div>
             <div className="vnext-product-line">PRESYS · Catalog Builder</div>
-            <div className="vnext-title-row"><h1>{document.title}</h1></div>
-            {simpleByDefault && persistence && (
-              <span className="vnext-save-summary" role="status" data-save-state="" data-save-phase={persistence.save.phase}>
-                {fatherSaveLabel(persistence.save.label)}
-              </span>
-            )}
+            <div className="vnext-title-row"><CatalogTitleButton session={session} title={document.title} /></div>
+            {simpleByDefault && persistence && <SaveSummary save={persistence.save} />}
+            {persistence && <LibraryNavigationNotice runtime={persistence.runtime} />}
           </div>
         </div>
         <div className="vnext-actions" aria-label="Ações do documento">
@@ -3685,7 +3914,7 @@ export function EditorWorkspace({
               aria-label="Voltar aos catálogos"
             >
               <FolderOpen size={17} aria-hidden="true" />
-              <span>Catálogos</span>
+              <span>{LIBRARY_BUTTON_LABEL}</span>
             </button>
           )}
           {persistence && (
@@ -3708,22 +3937,18 @@ export function EditorWorkspace({
           </span>
           {onRequestTranslation && <button type="button" className="vnext-action-translate" data-editor-action="translate" data-authoring-context-transition=""
             onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestTranslation(); }}>Traduzir</button>}
-          {onRequestPublication && <button type="button" className="vnext-action-publish" data-editor-action="publish" data-authoring-context-transition=""
-            onClick={() => { if (prepareAuthoringForContextChangeRef.current()) onRequestPublication(); }}>Publicar / PDF</button>}
+          {onRequestPublication && <PublishAction prepare={() => prepareAuthoringForContextChangeRef.current()} onOpen={onRequestPublication} onMessage={setStatusMessage}
+            save={persistence && { phase: persistence.save.phase, run: () => persistence.runtime.manualSave() }} />}
         </div>
       </header>
+      <EditorNotices message={statusMessage} onDismissMessage={() => setStatusMessage(null)}
+        save={persistence?.save} localProtectionUnavailable={persistence?.localProtection === 'unavailable'} />
 
       <div className="vnext-workspace">
-        <aside className="vnext-pages" aria-label="Páginas do catálogo">
-          <div className="vnext-panel-heading"><span>Páginas</span><span>{document.pages.length}</span></div>
-          <nav className="vnext-page-list" aria-label="Navegação de páginas">
-            {document.pages.map((page, index) => (
-              <button key={page.id} type="button" data-authoring-context-transition="" className={page.id === selectedPage.id ? 'is-current' : undefined} aria-current={page.id === selectedPage.id ? 'page' : undefined} onClick={() => setActivePage(page.id)}>
-                <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span><span>Página {index + 1}</span>
-              </button>
-            ))}
-          </nav>
-          <button type="button" className="vnext-add-page" data-authoring-context-transition="" onClick={addPage} aria-label="Adicionar nova página após a página atual"><Plus size={17} aria-hidden="true" />Adicionar página</button>
+        <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
+          prepareForChange={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+          onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}
+          thumbnails={{ document, assetUrls: persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS }}>
           {simpleByDefault && (
             <button
               type="button"
@@ -3738,36 +3963,25 @@ export function EditorWorkspace({
           )}
           {pageReuseOpen && (
             <div id="vnext-page-reuse" className="vnext-page-reuse">
-              {officialPageReuse && <select aria-label="Modelo de página PRESYS" value={pageTemplateChoice} onChange={event => setPageTemplateChoice(event.target.value)} disabled={pageTemplateBusy}>
-                <option value={PRESYS_PRESENTATION_PAGE_ID}>TA-25N · Apresentação</option>
-                <option value={PRESYS_SPECIFICATIONS_PAGE_ID}>TA-25N · Especificações</option>
-              </select>}
+              {officialPageReuse && <PageTemplateGallery value={pageTemplateChoice} onChange={setPageTemplateChoice} disabled={pageTemplateBusy} onClose={simpleByDefault ? () => setPageReuseOpen(false) : undefined} />}
               <button type="button" className="vnext-page-reuse-action" data-editor-action="insert-template" data-authoring-context-transition="" onClick={() => { void insertPageTemplate(); }} disabled={pageTemplateBusy} aria-label="Inserir modelo após a página atual"><Plus size={17} aria-hidden="true" />{pageTemplateBusy ? 'Preparando imagem…' : 'Inserir modelo'}</button>
             </div>
           )}
-        </aside>
+        </PagePanel>
 
         <main className="vnext-canvas-area">
-          <div className="vnext-canvas-meta">
-            <div><strong>Página {selectedPageIndex + 1} de {document.pages.length}</strong><span>A4 · 210 × 297 mm</span></div>
-            <div className="vnext-canvas-statuses">
-              {pageDiagnostics.length > 0 && (
-                <span
-                  className={'vnext-diagnostic-summary ' + (pageDiagnostics.some((diagnostic) => diagnostic.severity === 'ERROR') ? 'is-error' : 'is-warning')}
-                  data-page-diagnostic-summary=""
-                >
-                  {simpleByDefault ? `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} a corrigir · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} para revisar` : `${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'ERROR').length} erro(s) · ${pageDiagnostics.filter((diagnostic) => diagnostic.severity === 'WARNING').length} aviso(s)`}
-                </span>
-              )}
-              {!simpleByDefault && <span className="vnext-memory-status" data-save-state="">{persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}</span>}
-            </div>
-          </div>
+          <CanvasHeader pageNumber={selectedPageIndex + 1} pageCount={document.pages.length} pageWidthMm={selectedPage.widthMm}
+            issues={{ document, diagnostics: canonicalDiagnostics, simple: simpleByDefault, onLocate: goToIssue, session,
+              measurement: measuredLayout?.source === document ? measuredLayout : null,
+              prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
+            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'} />
           <div className="vnext-authoring-toolbar" aria-label="Ferramentas de edição">
             <div className="vnext-tool-group vnext-toolbar-primary" aria-label="Adicionar conteúdo">
               <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
               <button type="button" data-editor-action="add-image" onClick={() => insertObject('image')}>{simpleByDefault ? 'Imagem' : 'Adicionar imagem'}</button>
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
               <button type="button" className="vnext-more-options" data-editor-action="new-table-size" aria-expanded={newTableSizeOpen} aria-controls="vnext-new-table-size" onClick={() => setNewTableSizeOpen((open) => !open)}>Tamanho da nova tabela</button>
+              <button type="button" data-editor-action="paste-table-from-excel" aria-expanded={pasteTableAreaOpen} aria-controls="vnext-paste-table-area" onClick={() => setPasteTableAreaOpen((open) => !open)}>Colar tabela do Excel</button>
               {(!simpleByDefault || selectedObject) && (
                 <>
                   <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
@@ -3832,7 +4046,7 @@ export function EditorWorkspace({
               type="file"
               ref={fileInputRef}
               data-editor-action="upload-image-input"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif"
               style={{ display: 'none' }}
               onChange={handleImageFileChange}
               aria-hidden="true"
@@ -3847,94 +4061,37 @@ export function EditorWorkspace({
             </div>
           )}
 
+          {pasteTableAreaOpen && (
+            <PasteTableArea onCreate={(text, header) => createTableFromText(text, header)} onCancel={() => setPasteTableAreaOpen(false)} />
+          )}
+
+          {pasteGrowOffer && editorState.mode === 'table-grid' && selectedTableObject?.id === pasteGrowOffer.objectId && (
+            <PasteGrowOffer label={pasteGrowOffer.label} onConfirm={runGrowAndPaste} onCancel={() => setPasteGrowOffer(null)} />
+          )}
+
           {(editorState.mode === 'table-grid' || editorState.mode === 'cell-edit') && selectedTableObject && !selectedTableObject.locked && (
-            <div className="vnext-table-axis-toolbar" data-table-axis-toolbar="" aria-label="Estrutura da tabela">
-              <strong>{simpleByDefault ? 'Editar tabela' : 'Grade da tabela'}</strong>
-              {simpleByDefault && <p className="vnext-disclosure-help">Clique em uma célula para selecionar. Dê dois cliques ou pressione Enter para editar. Em Opções da tabela, organize linhas, colunas e mesclagens.</p>}
-              {simpleByDefault && (
-                <button
-                  type="button"
-                  className="vnext-table-options-toggle"
-                  data-editor-action="toggle-table-options"
-                  aria-expanded={tableOptionsOpen}
-                  onClick={() => setTableOptionsOpen((open) => !open)}
-                >
-                  {tableOptionsOpen ? 'Ocultar opções da tabela' : 'Opções da tabela'}
-                </button>
-              )}
-              {(!simpleByDefault || tableOptionsOpen) && <>
-              <div className="vnext-tool-group" aria-label="Ações de linha">
-                <button type="button" data-editor-action="insert-row-before" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'before')}>Linha antes</button>
-                <button type="button" data-editor-action="insert-row-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after')}>Linha depois</button>
-                <button type="button" data-editor-action="remove-row" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisRemove('row')}>Remover linha</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Adicionar várias linhas">
-                <label>Quantidade de linhas <input type="number" min="1" max="100" step="1" aria-label="Quantidade de linhas para adicionar" data-table-row-count="" value={tableRowsToInsert} onChange={event => setTableRowsToInsert(event.target.value)} style={{ width: '64px' }} /></label>
-                <button type="button" data-editor-action="insert-rows-after" disabled={editorState.mode !== 'table-grid' || Boolean(rowAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : rowAxisReason} onClick={() => runTableAxisInsert('row', 'after', Number(tableRowsToInsert))}>Adicionar linhas depois</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Ações de coluna">
-                <button type="button" data-editor-action="insert-column-before" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'before')}>Coluna antes</button>
-                <button type="button" data-editor-action="insert-column-after" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisInsert('column', 'after')}>Coluna depois</button>
-                <button type="button" data-editor-action="remove-column" disabled={editorState.mode !== 'table-grid' || Boolean(columnAxisReason)} title={editorState.mode === 'cell-edit' ? 'Conclua a edição da célula antes de alterar eixos.' : columnAxisReason} onClick={() => runTableAxisRemove('column')}>Remover coluna</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Mesclagem de células">
-                <button
-                  type="button"
-                  data-editor-action="merge-cells"
-                  disabled={!currentMergeEligibility.enabled}
-                  title={currentMergeEligibility.reason}
-                  onClick={runTableMerge}
-                >Mesclar células</button>
-                <button
-                  type="button"
-                  data-editor-action="unmerge-cell"
-                  disabled={!currentUnmergeEligibility.enabled}
-                  title={currentUnmergeEligibility.reason}
-                  onClick={runTableUnmerge}
-                >Desmesclar células</button>
-              </div>
-              <div className="vnext-tool-group" aria-label="Conteúdo em lote">
-                <button
-                  type="button"
-                  data-editor-action="extend-table-selection"
-                  aria-pressed={tableRangeExtensionArmed}
-                  className={tableRangeExtensionArmed ? 'is-active' : undefined}
-                  disabled={editorState.mode !== 'table-grid' || !tableSelection || tableSelection.kind === 'table'}
-                  onClick={toggleTableRangeExtension}
-                >Estender seleção</button>
-                <button type="button" data-editor-action="clear-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={runTableBulkClear}>Limpar conteúdo</button>
-                <button type="button" data-editor-action="marker-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Notas e legenda</button>
-                <button type="button" data-editor-action="legend-panel" disabled={editorState.mode !== 'table-grid'} onClick={() => setMarkerPanelOpen(true)}>Legenda</button>
-              </div>
-              </>}
-              <div className="vnext-tool-group" aria-label="Copiar e colar dados">
-                <button type="button" data-editor-action="copy-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => { void runVisibleTableCopy(); }}>Copiar</button>
-                <button type="button" data-editor-action="paste-table-cells" disabled={editorState.mode !== 'table-grid'} onClick={() => setTablePasteFallbackOpen((open) => !open)}>Colar</button>
-              </div>
-              <button type="button" className="vnext-leave-table-grid" data-editor-action="leave-table-grid" onClick={() => leaveTableGrid()}>Voltar ao objeto</button>
-            </div>
+            <TableGridToolbar
+              simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
+              tableOptionsOpen={tableOptionsOpen} setTableOptionsOpen={setTableOptionsOpen}
+              rowAxisReason={tableStructure?.rowReason} columnAxisReason={tableStructure?.columnReason}
+              rowAxisCount={tableStructure?.rowIds.length} columnAxisCount={tableStructure?.columnIds.length}
+              removeRowReason={tableStructure?.removeRowReason} removeColumnReason={tableStructure?.removeColumnReason}
+              runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
+              tableRowsToInsert={tableRowsToInsert} setTableRowsToInsert={setTableRowsToInsert}
+              currentMergeEligibility={currentMergeEligibility} currentUnmergeEligibility={currentUnmergeEligibility}
+              runTableMerge={runTableMerge} runTableUnmerge={runTableUnmerge}
+              tableRangeExtensionArmed={tableRangeExtensionArmed} toggleTableRangeExtension={toggleTableRangeExtension}
+              runTableBulkClear={runTableBulkClear} setMarkerPanelOpen={setMarkerPanelOpen} runVisibleTableCopy={runVisibleTableCopy}
+              setTablePasteFallbackOpen={setTablePasteFallbackOpen} leaveTableGrid={leaveTableGrid}
+            />
           )}
 
           {tablePasteFallbackOpen && editorState.mode === 'table-grid' && selectedTableObject && !selectedTableObject.locked && (
-            <div className="vnext-table-paste-fallback" data-table-paste-fallback="" role="region" aria-label="Colar dados na tabela">
-              <p className="vnext-disclosure-help">Selecione uma célula inicial para colar uma área da planilha. Os dados devem caber nas linhas e colunas existentes. Use Desfazer para recuperar o conteúdo anterior.</p>
-              <label>
-                <span>Cole aqui dados do Excel, Google Sheets ou TSV</span>
-                <textarea
-                  data-table-paste-textarea=""
-                  value={tablePasteFallbackText}
-                  onChange={(event) => setTablePasteFallbackText(event.target.value)}
-                  placeholder={'Ex.: Produto\\tFaixa\\nTA-25N\\t-25 °C a 140 °C'}
-                />
-              </label>
-              <div className="vnext-cell-edit-actions">
-                <button type="button" data-editor-action="apply-native-table-paste" onClick={applyNativePasteFallback}>Aplicar conteúdo colado</button>
-                <button type="button" data-editor-action="cancel-native-table-paste" onClick={() => { setTablePasteFallbackOpen(false); setTablePasteFallbackText(''); }}>Cancelar</button>
-              </div>
-            </div>
+            <TableGridPasteFallback tablePasteFallbackText={tablePasteFallbackText} setTablePasteFallbackText={setTablePasteFallbackText}
+              setTablePasteFallbackOpen={setTablePasteFallbackOpen} applyNativePasteFallback={applyNativePasteFallback} />
           )}
 
-          <div className="vnext-document-preview" aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
+          <div className="vnext-document-preview" tabIndex={-1} data-table-auto-fit={pendingTableFit ? 'pending' : undefined} aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
             <div className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
               <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
               <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
@@ -3969,17 +4126,9 @@ export function EditorWorkspace({
                         persistence?.runtime.workspace.notifyDraftStateChanged();
                       }}
                     />
-                    <div className="vnext-text-edit-toolbar" aria-label="Ferramentas da edição de texto">
-                      <div className="vnext-text-symbols">
-                        {technicalSymbols.map((symbol, index) => (
-                          <button key={symbol} type="button" data-editor-symbol-index={index} onClick={() => insertTechnicalSymbol(symbol)}>
-                            {symbol}
-                          </button>
-                        ))}
-                      </div>
-                      <button type="button" data-editor-action="cancel-text" onClick={() => cancelTextEdit()}>Cancelar</button>
-                      <button type="button" data-editor-action="commit-text" onClick={() => commitTextEdit()}>Concluir</button>
-                    </div>
+                    {/* FR-16b: the bar is drawn outside the zoomed page, at its real size. */}
+                    <TextEditToolbar symbols={technicalSymbols} onSymbol={insertTechnicalSymbol}
+                      onCancel={() => cancelTextEdit()} onCommit={() => commitTextEdit()} />
                   </div>
                 )}
                 {safeAreaU && (
@@ -4038,26 +4187,10 @@ export function EditorWorkspace({
                           {issueSeverity === 'ERROR' ? '!' : '⚠'}
                         </span>
                       )}
-                      {object.type === 'image' && (() => {
-                        const assetState = persistence?.assetRuntimeStates?.get(object.assetId);
-                        if (!assetState || assetState.status === 'resolved') return null;
-                        const isIntegrity = assetState.status === 'integrity-failed';
-                        return (
-                          <div
-                            className="vnext-image-repair-indicator"
-                            data-editor-image-repair={object.id}
-                            data-asset-status={assetState.status}
-                          >
-                            <span className="repair-icon">⚠️</span>
-                            <span className="repair-title">
-                              {isIntegrity ? 'Falha de integridade' : 'Imagem indisponível'}
-                            </span>
-                            <span className="repair-hint">
-                              Substitua ou envie nova imagem
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      {object.type === 'image' && persistence && (
+                        <PhotoStatusMark objectId={object.id} assetId={object.assetId} runtime={persistence.runtime}
+                          state={persistence.assetRuntimeStates?.get(object.assetId)} bridge={persistence.assetBridge} />
+                      )}
                       {selected && (
                         <>
                           <div className="vnext-selection-outline" aria-hidden="true" />
@@ -4066,12 +4199,12 @@ export function EditorWorkspace({
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
                             && !object.locked
                             && tableSelection
-                            && plans.get(object.table.id)?.rowQ
-                            && plans.get(object.table.id)?.gridOffsetYQ !== undefined
+                            && object.id === selectedTableObject?.id
+                            && gridPlan
                             && (
                               <TableGridOverlay
                                 table={object.table}
-                                plan={plans.get(object.table.id)!}
+                                plan={gridPlan}
                                 identity={tableSelection.identity}
                                 selection={tableSelection}
                                 localSequence={snapshot.localSequence}
@@ -4085,6 +4218,17 @@ export function EditorWorkspace({
                                 onActivateCell={(point) => {
                                   if (editorState.mode === 'table-grid') startCellEdit(point);
                                 }}
+                                onTypeToEdit={(text) => {
+                                  if (editorState.mode === 'table-grid') startCellEdit(undefined, text);
+                                }}
+                                onCellPressWhileEditing={(point) => commitCellEditAndMove(undefined, point)}
+                                onGridCommand={(command) => {
+                                  if (editorState.mode === 'table-grid') runGridCommand(command);
+                                }}
+                                renderCellEditor={(cell) => cellDraft && (
+                                  <CellInlineEditor draft={cellDraft} draftRef={cellDraftRef} fieldRef={cellEditorFieldRef} cell={cell}
+                                    onDraftChange={notifyCellDraftChanged} onCommit={commitCellEditAndMove} onCancel={() => cancelCellEdit()} />
+                                )}
                                 onCopyClipboard={handleTableCopyClipboard}
                                 onPasteClipboard={handleTablePasteClipboard}
                                 rangeExtensionArmed={tableRangeExtensionArmed}
@@ -4129,7 +4273,9 @@ export function EditorWorkspace({
           </div>
         </main>
 
-        <aside className="vnext-info" aria-label="Inspector do objeto">
+        {/* FR-17: the right column shows "Propriedades" or "Assistente", chosen by the tabs on top. */}
+        <SidePanelColumn showTabs={simpleByDefault} active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')}>
+        <aside className="vnext-info" id={SIDE_PROPERTIES_PANEL_ID} aria-label="Propriedades do objeto" hidden={simpleByDefault && assistantOpen}>
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
@@ -4238,31 +4384,33 @@ export function EditorWorkspace({
                 )}
               </section>
               <div className="vnext-divider" />
-              <p>Posição e tamanho em milímetros.</p>
+              {/* J4 P2: every field below shows "mm"; say once what it means. */}
+              <p data-inspector-units="">Posição e tamanho, em mm (mm = milímetros).</p>
               <div className="vnext-inspector-grid" data-inspector-authoring="">
-                {([['x', 'X'], ['y', 'Y'], ['width', 'Largura'], ['height', 'Altura']] as const).map(([field, label]) => (
-                  <label key={field}>
-                    <span>{label}</span>
-                    <div>
-                      <input type="text" inputMode="decimal" data-inspector-field={field} value={inspectorDraft[field]}
-                        disabled={selectedMutationLocked}
-                        aria-describedby={selectedMutationLocked
-                          ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
-                          : undefined}
-                        readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
-                        onFocus={() => {
-                          if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
-                        }}
-                        onChange={(event) => updateInspectorDraft(field, event.target.value)}
-                        onBlur={() => commitInspector(field)}
-                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                      />
-                      <span>mm</span>
-                    </div>
-                  </label>
+                {INSPECTOR_FRAME_FIELDS.map((field) => (
+                  <InspectorNumberField key={field} field={field} label={inspectorFieldLabel(field)} value={inspectorDraft[field]}
+                    error={inspectorFieldError?.objectId === selectedObject.id && inspectorFieldError.field === field ? inspectorFieldError.message : undefined}
+                    disabled={selectedMutationLocked}
+                    describedBy={selectedMutationLocked
+                      ? groupHasLockedDescendant(selectedObject) ? 'vnext-object-closure-lock-reason' : 'vnext-object-lock-reason'
+                      : undefined}
+                    readOnly={selectedObject.type === 'group' && (field === 'width' || field === 'height')}
+                    onFocus={() => {
+                      if (!inspectorDraftIsPending()) prepareAuthoringForContextChangeRef.current();
+                    }}
+                    onChange={(value) => updateInspectorDraft(field, value)}
+                    onCommit={commitInspector}
+                    onRevert={() => revertInspectorField(field)}
+                  />
                 ))}
               </div>
               </div>}
+              {selectedObject.type === 'text' && (
+                <TextInspectorSection object={selectedObject} simple={simpleByDefault} disabled={selectedMutationLocked} session={session}
+                  measurement={measuredLayout?.source === document ? measuredLayout : null}
+                  prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                  onMessage={setStatusMessage} />
+              )}
               {selectedObject.type === 'image' && (
                 <>
                   <div className="vnext-divider" />
@@ -4444,828 +4592,58 @@ export function EditorWorkspace({
                 </>
               )}
               {selectedObject.type === 'table' && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-semantic-title" data-table-semantic-title="" data-table-title-session="">
-                    <h3>Título da tabela</h3>
-                    {selectedObject.table.title && projectEditableRichText(selectedObject.table.title) === null ? (
-                      <p data-table-title-readonly="">
-                        Este título possui RichText avançado e foi preservado sem achatamento. A edição avançada pertence à etapa profissional de RichText.
-                      </p>
-                    ) : (
-                      <label>
-                        <span>Título</span>
-                        <textarea
-                          data-table-title-input=""
-                          value={selectedTableTitleValue}
-                          disabled={tableSemanticDisabled}
-                          aria-describedby={tableSemanticDisabledReasonId}
-                          onChange={(event) => updateTableTitleDraft(event.target.value)}
-                          onCompositionStart={(event) => setTableTitleComposition(true, event.currentTarget.value)}
-                          onCompositionEnd={(event) => setTableTitleComposition(false, event.currentTarget.value)}
-                        />
-                      </label>
-                    )}
-                    {tableSemanticDisabledReason && tableSemanticDisabledReasonId && (
-                      <p id={tableSemanticDisabledReasonId} data-table-semantic-disabled-reason="">
-                        {tableSemanticDisabledReason}
-                      </p>
-                    )}
-                    <div className="vnext-cell-edit-actions">
-                      <button
-                        type="button"
-                        data-editor-action="set-table-title"
-                        disabled={tableSemanticDisabled || (selectedObject.table.title !== undefined && projectEditableRichText(selectedObject.table.title) === null)}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => { applyTableTitleDraft(); }}
-                      >
-                        Salvar título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="cancel-table-title-draft"
-                        disabled={!tableTitleDraft}
-                        onClick={cancelTableTitleDraft}
-                      >
-                        Cancelar alterações do título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="clear-table-title"
-                        disabled={tableSemanticDisabled || !selectedObject.table.title}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => runTableTitleSet(null)}
-                      >
-                        Remover título
-                      </button>
-                      <button
-                        type="button"
-                        data-editor-action="open-table-semantics"
-                        disabled={tableSemanticDisabled}
-                        aria-describedby={tableSemanticDisabledReasonId}
-                        onClick={() => {
-                          if (editorState.mode === 'select') startTableGrid(selectedObject);
-                          setMarkerPanelOpen(true);
-                        }}
-                      >
-                        Notas e legenda
-                      </button>
-                    </div>
-                  </section>
-                  {simpleByDefault && (
-                    <>
-                    <button
-                      type="button"
-                      className="vnext-inspector-action vnext-inspector-disclosure"
-                      data-editor-action="toggle-table-inspector-advanced"
-                      aria-expanded={tableInspectorAdvancedOpen}
-                      aria-controls="vnext-table-advanced-details"
-                      onClick={() => setTableInspectorAdvancedOpen((open) => !open)}
-                    >
-                      {tableInspectorAdvancedOpen ? 'Ocultar detalhes da tabela' : 'Detalhes da tabela'}
-                    </button>
-                    <p className="vnext-disclosure-help">Altura, dimensões, cores e bordas.</p>
-                    </>
+                <TableInspectorPanel
+                  tableObject={selectedObject} documentStyle={document.style} assets={document.assets}
+                  simple={simpleByDefault} mode={editorState.mode} tableSelection={tableSelection}
+                  tableInspectorAdvancedOpen={tableInspectorAdvancedOpen} setTableInspectorAdvancedOpen={setTableInspectorAdvancedOpen}
+                  tableSemanticDisabled={tableSemanticDisabled} tableSemanticDisabledReason={tableSemanticDisabledReason}
+                  tableSemanticDisabledReasonId={tableSemanticDisabledReasonId}
+                  selectedTableTitleValue={selectedTableTitleValue} hasTableTitleDraft={Boolean(tableTitleDraft)}
+                  updateTableTitleDraft={updateTableTitleDraft} setTableTitleComposition={setTableTitleComposition}
+                  applyTableTitleDraft={applyTableTitleDraft} cancelTableTitleDraft={cancelTableTitleDraft} runTableTitleSet={runTableTitleSet}
+                  startTableGrid={startTableGrid} markerPanelOpen={markerPanelOpen} setMarkerPanelOpen={setMarkerPanelOpen}
+                  fitHeightPreparation={fitHeightPreparation} runFitHeight={runFitHeight}
+                  continuation={{ session, document, measurement: measuredLayout?.source === document ? measuredLayout : null,
+                    prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
+                  tableStyleScope={tableStyleScope} tableStyleRoleScope={tableStyleRoleScope} tableStyleDisabled={tableStyleDisabled}
+                  tableStyleDisabledReasonId={tableStyleDisabledReasonId} tableStyleDisabledReason={tableStyleDisabledReason}
+                  tableStyleAdvancedOpen={tableStyleAdvancedOpen} tableStylePaddingLinked={tableStylePaddingLinked}
+                  setTableStyleRoleScope={setTableStyleRoleScope} setTableStyleAdvancedOpen={setTableStyleAdvancedOpen}
+                  setTableStylePaddingLinked={setTableStylePaddingLinked} runTableStylePatch={runTableStylePatch}
+                  runTableBorderPreset={runTableBorderPreset} runTableLook={runTableLook} runAnnotationGap={runAnnotationGap}
+                  runTableAxisInsert={runTableAxisInsert} runTableAxisRemove={runTableAxisRemove}
+                  addQuickNote={addQuickNote} removeQuickNote={removeQuickNote}
+                  rowDimensionProjection={rowDimensionProjection} effectiveRowHeightMode={effectiveRowHeightMode}
+                  selectedRowAxisIds={selectedRowAxisIds} runRowProperties={runRowProperties} runRowHeightMode={runRowHeightMode}
+                  runRowHeightValue={runRowHeightValue} runAxisReorder={runAxisReorder}
+                  columnDimensionProjection={columnDimensionProjection} selectedColumnAxisIds={selectedColumnAxisIds}
+                  columnDimensionsAdvancedOpen={columnDimensionsAdvancedOpen} setColumnDimensionsAdvancedOpen={setColumnDimensionsAdvancedOpen}
+                  runColumnMode={runColumnMode} runColumnNumber={runColumnNumber} runEqualizeColumns={runEqualizeColumns}
+                  selectedAnchorCells={selectedAnchorCells} selectedSemanticCell={selectedSemanticCell}
+                  cellEditing={Boolean(cellDraft)} startCellEdit={startCellEdit}
+                  cellEditor={cellDraft && (
+                    <TableCellEditorSection cellDraft={cellDraft} cellDraftRef={cellDraftRef} cellEditorFieldRef={cellEditorFieldRef}
+                      simple={simpleByDefault} notifyCellDraftChanged={notifyCellDraftChanged} commitCellEdit={commitCellEdit} cancelCellEdit={cancelCellEdit} />
                   )}
-                  {(!simpleByDefault || tableInspectorAdvancedOpen) && <div id="vnext-table-advanced-details" data-table-advanced-details="">
-                  <div className="vnext-divider" />
-                  <section
-                    className="vnext-fit-height-section"
-                    data-table-fit-height=""
-                    data-fit-height-measured-q={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.measuredIntrinsicHeightQ : undefined}
-                    data-fit-height-prepared-u={fitHeightPreparation?.ok ? fitHeightPreparation.prepared.preparedHeightU : undefined}
-                  >
-                    <h3>Altura da tabela</h3>
-                    {fitHeightPreparation?.ok && (
-                      <p data-fit-height-measurement="">
-                        Altura necessária: {(fitHeightPreparation.prepared.preparedHeightU / 10_000).toFixed(2)} mm
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="vnext-inspector-action"
-                      data-editor-action="fit-table-height"
-                      disabled={!fitHeightPreparation?.ok}
-                      aria-describedby={!fitHeightPreparation?.ok ? `fit-height-reason-${selectedObject.id}` : undefined}
-                      onClick={runFitHeight}
-                    >
-                      Ajustar altura
-                    </button>
-                    {!fitHeightPreparation?.ok && (
-                      <p id={`fit-height-reason-${selectedObject.id}`} data-fit-height-disabled-reason="">
-                        {fitHeightPreparation?.message ?? 'Medindo tabela…'}
-                      </p>
-                    )}
-                    {fitHeightPreparation?.ok && fitHeightPreparation.prepared.tallerThanPage && (
-                      <p className="vnext-fit-height-advisory" data-fit-height-page-advisory="">
-                        A tabela é mais alta que uma página A4. Ajustar altura iguala o quadro ao conteúdo, mas não resolve a publicação em uma única página.
-                      </p>
-                    )}
-                  </section>
-                  </div>}
-                </>
-              )}
-              {selectedObject.type === 'table' && tableStyleScope && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <TableStyleInspector
-                    table={selectedObject.table}
-                    documentStyle={document.style}
-                    scope={tableStyleScope}
-                    roleScope={tableStyleRoleScope}
-                    disabled={tableStyleDisabled}
-                    disabledReasonId={tableStyleDisabledReasonId}
-                    disabledReason={tableStyleDisabledReason}
-                    advancedOpen={tableStyleAdvancedOpen}
-                    paddingLinked={tableStylePaddingLinked}
-                    onRoleScopeChange={setTableStyleRoleScope}
-                    onAdvancedOpenChange={setTableStyleAdvancedOpen}
-                    onPaddingLinkedChange={setTableStylePaddingLinked}
-                    onPatch={runTableStylePatch}
-                    onBorderPreset={runTableBorderPreset}
-                    onPreset={runTablePreset}
-                    onAnnotationGap={runAnnotationGap}
-                  />
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && rowDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-dimension-inspector" data-table-row-dimensions="">
-                    <h3>{rowDimensionProjection.rowIds.length === 1 ? 'Linha' : `${rowDimensionProjection.rowIds.length} linhas`}</h3>
-                    {editorState.mode === 'cell-edit' && (
-                      <p id={`table-row-dimension-disabled-${selectedObject.id}`}>
-                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
-                      </p>
-                    )}
-                    <label>
-                      <span>Tipo da linha</span>
-                      <select
-                        data-row-property="role"
-                        value={rowDimensionProjection.role}
-                        disabled={editorState.mode !== 'table-grid'}
-                        aria-describedby={editorState.mode !== 'table-grid' ? `table-row-dimension-disabled-${selectedObject.id}` : undefined}
-                        onChange={(event) => runRowProperties(
-                          { role: event.target.value as 'header' | 'body' | 'section' },
-                          'Tipo da linha atualizado.'
-                        )}
-                      >
-                        {rowDimensionProjection.role === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="header">Cabeçalho</option>
-                        <option value="body">Corpo</option>
-                        <option value="section">Seção</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Altura</span>
-                      <select
-                        data-row-property="height-mode"
-                        value={effectiveRowHeightMode ?? rowDimensionProjection.heightMode}
-                        disabled={editorState.mode !== 'table-grid'}
-                        onChange={(event) => runRowHeightMode(event.target.value as 'AUTO' | 'MIN_MM' | 'FIXED_MM')}
-                      >
-                        {rowDimensionProjection.heightMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="AUTO">Automática</option>
-                        <option value="MIN_MM">Mínima</option>
-                        <option value="FIXED_MM">Exata</option>
-                      </select>
-                    </label>
-                    {(effectiveRowHeightMode === 'MIN_MM' || effectiveRowHeightMode === 'FIXED_MM') && (
-                      <label>
-                        <span>Valor</span>
-                        <div className="vnext-dimension-value">
-                          <input
-                            key={rowDimensionProjection.rowIds.join(':') + ':' + String(rowDimensionProjection.valueU)}
-                            data-row-property="height-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof rowDimensionProjection.valueU === 'number' ? String(rowDimensionProjection.valueU / 10_000) : ''}
-                            placeholder={rowDimensionProjection.valueU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runRowHeightValue(event.target.value)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                          <span>mm</span>
-                        </div>
-                      </label>
-                    )}
-                    <div className="vnext-dimension-actions">
-                      <button type="button" data-editor-action="row-height-auto"
-                        disabled={editorState.mode !== 'table-grid'} onClick={() => runRowHeightMode('AUTO')}>
-                        Voltar para automática
-                      </button>
-                      <button type="button" data-editor-action="move-row-up"
-                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows[0]?.id === selectedRowAxisIds[0]}
-                        onClick={() => runAxisReorder('row', -1)}>Mover para cima</button>
-                      <button type="button" data-editor-action="move-row-down"
-                        disabled={editorState.mode !== 'table-grid' || selectedRowAxisIds.length !== 1 || selectedTableObject?.table.rows.at(-1)?.id === selectedRowAxisIds[0]}
-                        onClick={() => runAxisReorder('row', 1)}>Mover para baixo</button>
-                    </div>
-                  </section>
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && columnDimensionProjection && (!simpleByDefault || tableInspectorAdvancedOpen) && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-table-dimension-inspector" data-table-column-dimensions="">
-                    <h3>{columnDimensionProjection.columnIds.length === 1 ? 'Coluna' : `${columnDimensionProjection.columnIds.length} colunas`}</h3>
-                    {editorState.mode === 'cell-edit' && (
-                      <p id={`table-column-dimension-disabled-${selectedObject.id}`}>
-                        Conclua ou cancele a edição da célula para alterar a estrutura da tabela.
-                      </p>
-                    )}
-                    <label>
-                      <span>Largura</span>
-                      <select
-                        data-column-property="width-mode"
-                        value={columnDimensionProjection.widthMode}
-                        disabled={editorState.mode !== 'table-grid'}
-                        onChange={(event) => runColumnMode(event.target.value as 'fixed' | 'flex')}
-                      >
-                        {columnDimensionProjection.widthMode === 'mixed' && <option value="mixed" disabled>Misto</option>}
-                        <option value="flex">Flexível</option>
-                        <option value="fixed">Fixa</option>
-                      </select>
-                    </label>
-                    {columnDimensionProjection.widthMode === 'fixed' && (
-                      <label>
-                        <span>Largura fixa</span>
-                        <div className="vnext-dimension-value">
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':' + String(columnDimensionProjection.fixedWidthU)}
-                            data-column-property="fixed-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.fixedWidthU === 'number' ? String(columnDimensionProjection.fixedWidthU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.fixedWidthU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('fixed', event.target.value)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                          <span>mm</span>
-                        </div>
-                      </label>
-                    )}
-                    <button
-                      type="button"
-                      className="vnext-inspector-action"
-                      data-editor-action="toggle-column-dimension-advanced"
-                      aria-expanded={columnDimensionsAdvancedOpen}
-                      onClick={() => setColumnDimensionsAdvancedOpen((open) => !open)}
-                    >
-                      {columnDimensionsAdvancedOpen ? 'Ocultar avançado' : 'Avançado'}
-                    </button>
-                    {columnDimensionsAdvancedOpen && (
-                      <div className="vnext-dimension-advanced" data-column-dimension-advanced="">
-                        {columnDimensionProjection.widthMode === 'flex' && (
-                          <label>
-                            <span>Peso flexível</span>
-                            <input
-                              key={columnDimensionProjection.columnIds.join(':') + ':weight:' + String(columnDimensionProjection.flexWeight)}
-                              data-column-property="weight"
-                              type="number"
-                              min="1"
-                              step="1"
-                              defaultValue={typeof columnDimensionProjection.flexWeight === 'number' ? columnDimensionProjection.flexWeight : ''}
-                              placeholder={columnDimensionProjection.flexWeight === 'mixed' ? 'Misto' : undefined}
-                              disabled={editorState.mode !== 'table-grid'}
-                              onBlur={(event) => runColumnNumber('weight', event.target.value)}
-                            />
-                          </label>
-                        )}
-                        <label>
-                          <span>Mínimo (mm)</span>
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':min:' + String(columnDimensionProjection.minU)}
-                            data-column-property="min-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.minU === 'number' ? String(columnDimensionProjection.minU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.minU === 'mixed' ? 'Misto' : undefined}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('min', event.target.value)}
-                          />
-                        </label>
-                        <label>
-                          <span>Máximo (mm)</span>
-                          <input
-                            key={columnDimensionProjection.columnIds.join(':') + ':max:' + String(columnDimensionProjection.maxU)}
-                            data-column-property="max-mm"
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={typeof columnDimensionProjection.maxU === 'number' ? String(columnDimensionProjection.maxU / 10_000) : ''}
-                            placeholder={columnDimensionProjection.maxU === 'mixed' ? 'Misto' : 'Sem limite'}
-                            disabled={editorState.mode !== 'table-grid'}
-                            onBlur={(event) => runColumnNumber('max', event.target.value)}
-                          />
-                        </label>
-                      </div>
-                    )}
-                    <div className="vnext-dimension-actions">
-                      <button type="button" data-editor-action="equalize-columns"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length < 2}
-                        onClick={runEqualizeColumns}>Igualar larguras</button>
-                      <button type="button" data-editor-action="move-column-left"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns[0]?.id === selectedColumnAxisIds[0]}
-                        onClick={() => runAxisReorder('column', -1)}>Mover para esquerda</button>
-                      <button type="button" data-editor-action="move-column-right"
-                        disabled={editorState.mode !== 'table-grid' || selectedColumnAxisIds.length !== 1 || selectedTableObject?.table.columns.at(-1)?.id === selectedColumnAxisIds[0]}
-                        onClick={() => runAxisReorder('column', 1)}>Mover para direita</button>
-                    </div>
-                  </section>
-                </>
-              )}
-              {selectedObject.type === 'table' && !selectedObject.locked && tableSelection && (
-                <>
-                  <div className="vnext-divider" />
-                  <section className="vnext-cell-inspector" data-table-cell-inspector="">
-                    <h3>Células da tabela</h3>
-                    <p>{selectedAnchorCells.length} célula(s) selecionada(s).</p>
-                    {!cellDraft && (
-                      <button type="button" className="vnext-inspector-action" data-editor-action="edit-cell-content"
-                        disabled={selectedAnchorCells.length !== 1} onClick={() => startCellEdit()}>
-                        Editar conteúdo
-                      </button>
-                    )}
-                    {cellDraft && (
-                      <div data-cell-edit-session="">
-                        <label>
-                          <span>Tipo de conteúdo</span>
-                          <select
-                            data-cell-content-type=""
-                            value={cellDraft.activeType}
-                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
-                            onChange={(event) => {
-                              const next = changeTableCellDraftType(cellDraft, event.target.value as EditableCellType);
-                              notifyCellDraftChanged(next);
-                            }}
-                          >
-                            <option value="empty">Vazio</option>
-                            <option value="richText">Texto</option>
-                            <option value="technicalCode">Código técnico</option>
-                            <option value="measurement">Medição</option>
-                            {cellDraft.originalContent.type === 'marker' && <option value="marker">Marcador</option>}
-                            {cellDraft.originalContent.type === 'image' && <option value="image">Imagem</option>}
-                          </select>
-                        </label>
-                        {cellDraft.requiresTypeChangeConfirmation && (
-                          <div role="alert" data-cell-type-confirmation="">
-                            <p>Trocar o tipo substituirá o conteúdo atual desta célula.</p>
-                            <button type="button" onClick={() => notifyCellDraftChanged(confirmTableCellDraftTypeChange(cellDraft))}>
-                              Confirmar substituição
-                            </button>
-                            <button type="button" onClick={() => notifyCellDraftChanged(createTableCellDraft(cellDraft.identity, cellDraft.originalContent))}>
-                              Manter conteúdo atual
-                            </button>
-                          </div>
-                        )}
-                        {cellDraft.activeType === 'richText' && (
-                          <label>
-                            <span>Texto</span>
-                            <textarea
-                              ref={(node) => { cellEditorFieldRef.current = node; }}
-                              data-cell-rich-text=""
-                              value={cellDraft.richText}
-                              disabled={projectEditableRichText(cellDraft.originalContent.type === 'richText'
-                                ? cellDraft.originalContent.value
-                                : { paragraphs: [] }) === null}
-                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                richText: event.target.value.replace(/\r\n?/g, '\n'),
-                              }))}
-                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                            />
-                          </label>
-                        )}
-                        {cellDraft.activeType === 'technicalCode' && (
-                          <label>
-                            <span>Código</span>
-                            <input
-                              ref={(node) => { cellEditorFieldRef.current = node; }}
-                              data-cell-technical-code=""
-                              type="text"
-                              value={cellDraft.technicalCode}
-                              style={{ fontFamily: 'monospace' }}
-                              onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, { technicalCode: event.target.value }))}
-                              onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                              onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !cellDraftRef.current?.composing) {
-                                  event.preventDefault();
-                                  commitCellEdit();
-                                }
-                              }}
-                            />
-                          </label>
-                        )}
-                        {cellDraft.activeType === 'measurement' && (
-                          <div className="vnext-cell-measurement" data-cell-measurement="">
-                            <label>
-                              <span>Valor</span>
-                              <input
-                                ref={(node) => { cellEditorFieldRef.current = node; }}
-                                data-cell-measurement-value=""
-                                type="text"
-                                value={cellDraft.measurement.valueText}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { valueText: event.target.value },
-                                }))}
-                                onCompositionStart={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraft, true))}
-                                onCompositionEnd={() => notifyCellDraftChanged(setTableCellDraftComposition(cellDraftRef.current ?? cellDraft, false))}
-                              />
-                            </label>
-                            <label>
-                              <span>Unidade</span>
-                              <input
-                                data-cell-measurement-unit=""
-                                type="text"
-                                value={cellDraft.measurement.unit}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { unit: event.target.value },
-                                }))}
-                              />
-                            </label>
-                            <label>
-                              <span>Qualificador</span>
-                              <select
-                                data-cell-measurement-qualifier=""
-                                value={cellDraft.measurement.qualifier}
-                                onChange={(event) => notifyCellDraftChanged(updateTableCellDraft(cellDraft, {
-                                  measurement: { qualifier: event.target.value as TableCellDraft['measurement']['qualifier'] },
-                                }))}
-                              >
-                                <option value="">Nenhum</option>
-                                <option value="approx">Aproximadamente</option>
-                                <option value="min">Mínimo</option>
-                                <option value="max">Máximo</option>
-                              </select>
-                            </label>
-                          </div>
-                        )}
-                        {cellDraft.activeType === 'empty' && <p data-cell-empty-content="">A célula ficará vazia.</p>}
-                        {cellDraft.activeType === 'marker' && <p data-cell-readonly-content="">{simpleByDefault ? 'Marcador existente. Use Notas e legenda para revisar as notas e os símbolos da tabela.' : 'Marcador existente. A edição de marcadores será disponibilizada em uma etapa posterior.'}</p>}
-                        {cellDraft.activeType === 'image' && <p data-cell-readonly-content="">{simpleByDefault ? 'Para ajustar esta imagem, abra Detalhes da tabela e use Imagem da célula.' : 'Imagem existente. A edição de imagem da célula não faz parte desta etapa.'}</p>}
-                        {cellDraft.originalContent.type !== 'marker' && cellDraft.originalContent.type !== 'image' && (
-                          <button type="button" data-editor-action="clear-cell-content"
-                            onClick={() => notifyCellDraftChanged(clearTableCellDraft(cellDraft))}>
-                            Limpar conteúdo
-                          </button>
-                        )}
-                        <div className="vnext-cell-edit-actions">
-                          <button type="button" data-editor-action="cancel-cell-content" onClick={() => cancelCellEdit()}>Cancelar</button>
-                          <button type="button" data-editor-action="commit-cell-content"
-                            disabled={cellDraft.originalContent.type === 'marker' || cellDraft.originalContent.type === 'image'}
-                            onClick={() => commitCellEdit()}>
-                            Concluir
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
-                    <div className="vnext-divider" />
-                    <section className="vnext-image-cell-panel" data-image-cell-authoring="">
-                      <h3>Imagem da célula</h3>
-                      {!selectedSemanticCell ? (
-                        <p>Selecione exatamente uma célula para inserir ou editar uma imagem.</p>
-                      ) : (
-                        <>
-                          <label>
-                            <span>Imagem do catálogo</span>
-                            <select
-                              data-image-cell-asset=""
-                              value={imageCellAssetChoice}
-                              disabled={tableSemanticDisabled}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onChange={(event) => setImageCellAssetChoice(event.target.value)}
-                            >
-                              <option value="">Escolha uma imagem</option>
-                              {document.assets.map((asset) => (
-                                <option key={asset.id} value={asset.id}>{asset.name} — {asset.alt}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Ajuste</span>
-                            <select
-                              data-image-cell-fit=""
-                              value={imageCellFit}
-                              disabled={tableSemanticDisabled}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onChange={(event) => setImageCellFit(event.target.value as 'contain' | 'cover')}
-                            >
-                              <option value="contain">Conter</option>
-                              <option value="cover">Preencher</option>
-                            </select>
-                          </label>
-                          <label>
-                            <span>Largura</span>
-                            <div>
-                              <input
-                                data-image-cell-width=""
-                                type="text"
-                                inputMode="decimal"
-                                value={imageCellWidthMm}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setImageCellWidthMm(event.target.value)}
-                              />
-                              <span>mm</span>
-                            </div>
-                          </label>
-                          <label>
-                            <span>Altura</span>
-                            <div>
-                              <input
-                                data-image-cell-height=""
-                                type="text"
-                                inputMode="decimal"
-                                value={imageCellHeightMm}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setImageCellHeightMm(event.target.value)}
-                              />
-                              <span>mm</span>
-                            </div>
-                          </label>
-                          <div className="vnext-cell-edit-actions">
-                            <button
-                              type="button"
-                              data-editor-action="set-cell-image"
-                              disabled={tableSemanticDisabled || !imageCellAssetChoice}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellSet}
-                            >
-                              {selectedSemanticCell.content.type === 'image' ? 'Substituir imagem' : 'Inserir imagem'}
-                            </button>
-                            <button
-                              type="button"
-                              data-editor-action="upload-cell-image"
-                              disabled={tableSemanticDisabled || !persistence?.assetBridge}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellUpload}
-                            >
-                              Upload
-                            </button>
-                            <button
-                              type="button"
-                              data-editor-action="clear-cell-image"
-                              disabled={tableSemanticDisabled || selectedSemanticCell.content.type !== 'image'}
-                              aria-describedby={tableSemanticDisabledReasonId}
-                              onClick={runImageCellClear}
-                            >
-                              Remover imagem
-                            </button>
-                          </div>
-                          {tableSemanticDisabledReason && <p>{tableSemanticDisabledReason}</p>}
-                        </>
-                      )}
-                    </section>
-                    </>}
-
-                    {markerPanelOpen && selectedTableObject && !selectedTableObject.locked && (
-                      <>
-                        <div className="vnext-divider" />
-                        <section className="vnext-marker-legend-panel" data-marker-legend-panel="">
-                          <div className="vnext-legend-entry-heading">
-                            <h3>Notas, marcadores e legenda</h3>
-                            <button type="button" data-editor-action="close-marker-panel" onClick={() => setMarkerPanelOpen(false)}>Fechar</button>
-                          </div>
-                          <p>Notas, legendas e marcadores usam as superfícies semânticas canônicas desta tabela.</p>
-                          <fieldset className="vnext-marker-create" data-annotation-create="">
-                            <legend>Adicionar anotação</legend>
-                            <label>
-                              <span>Tipo</span>
-                              <select
-                                data-annotation-kind=""
-                                value={newAnnotationKind}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => {
-                                  const kind = event.target.value as 'caption' | 'note' | 'footnote';
-                                  setNewAnnotationKind(kind);
-                                  if (kind === 'caption') setNewAnnotationTarget('TABLE');
-                                }}
-                              >
-                                <option value="caption">Legenda da tabela</option>
-                                <option value="note">Nota</option>
-                                <option value="footnote">Nota de rodapé</option>
-                              </select>
-                            </label>
-                            <label>
-                              <span>Aplicar a</span>
-                              <select
-                                data-annotation-target=""
-                                value={newAnnotationKind === 'caption' ? 'TABLE' : newAnnotationTarget}
-                                disabled={tableSemanticDisabled || newAnnotationKind === 'caption'}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setNewAnnotationTarget(event.target.value as 'TABLE' | 'CELL')}
-                              >
-                                <option value="TABLE">Tabela</option>
-                                <option value="CELL" disabled={!selectedSemanticCell}>Célula selecionada</option>
-                              </select>
-                            </label>
-                            <label>
-                              <span>Texto</span>
-                              <textarea
-                                data-new-annotation-text=""
-                                value={newAnnotationText}
-                                disabled={tableSemanticDisabled}
-                                aria-describedby={tableSemanticDisabledReasonId}
-                                onChange={(event) => setNewAnnotationText(event.target.value.replace(/\r\n?/g, '\n'))}
-                                placeholder="Texto técnico da anotação"
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              data-editor-action="create-annotation"
-                              disabled={Boolean(cellDraft) || !newAnnotationText.trim() || (newAnnotationTarget === 'CELL' && newAnnotationKind !== 'caption' && !selectedSemanticCell)}
-                              onClick={runAnnotationCreate}
-                            >
-                              Criar e aplicar
-                            </button>
-                          </fieldset>
-                          <div className="vnext-legend-list" data-annotation-list="">
-                            {selectedTableObject.table.annotations.length === 0 ? (
-                              <p>Nenhuma anotação criada.</p>
-                            ) : selectedTableObject.table.annotations.map((annotation, annotationIndex) => {
-                              const editable = projectEditableRichText(annotation.text);
-                              const tableAttached = (selectedTableObject.table.annotationIds ?? []).includes(annotation.id);
-                              const cellAttached = Boolean(selectedSemanticCell?.annotationIds?.includes(annotation.id));
-                              const usageCount = annotationUsageCount(selectedTableObject.table, annotation.id);
-                              return (
-                                <div key={annotation.id} className="vnext-legend-entry-editor" data-annotation-entry-id={annotation.id}>
-                                  <div className="vnext-legend-entry-heading">
-                                    <strong>{annotation.kind === 'caption' ? 'Legenda' : annotation.kind === 'note' ? 'Nota' : 'Nota de rodapé'}</strong>
-                                    <span>{usageCount} referência(s)</span>
-                                  </div>
-                                  <label>
-                                    <span>Texto</span>
-                                    <textarea
-                                      key={annotation.id + ':' + JSON.stringify(annotation.text)}
-                                      data-annotation-text={annotation.id}
-                                      defaultValue={editable ?? ''}
-                                      disabled={editable === null || Boolean(cellDraft)}
-                                      onBlur={(event) => {
-                                        if (editable !== null && event.target.value !== editable) runAnnotationUpdate(annotation, event.target.value);
-                                      }}
-                                    />
-                                  </label>
-                                  {editable === null && (
-                                    <p>RichText avançado preservado; edição simples indisponível nesta etapa.</p>
-                                  )}
-                                  <div className="vnext-cell-edit-actions">
-                                    <button type="button" data-editor-action="annotation-table-reference"
-                                      disabled={Boolean(cellDraft)}
-                                      onClick={() => runAnnotationReference(annotation, 'TABLE', tableAttached ? 'detach' : 'attach')}>
-                                      {tableAttached ? 'Remover da tabela' : 'Aplicar à tabela'}
-                                    </button>
-                                    {annotation.kind !== 'caption' && (
-                                      <button type="button" data-editor-action="annotation-cell-reference"
-                                        disabled={Boolean(cellDraft) || !selectedSemanticCell}
-                                        onClick={() => runAnnotationReference(annotation, 'CELL', cellAttached ? 'detach' : 'attach')}>
-                                        {cellAttached ? 'Remover da célula' : 'Aplicar à célula'}
-                                      </button>
-                                    )}
-                                    <button type="button" data-editor-action="move-annotation-up"
-                                      disabled={Boolean(cellDraft) || annotationIndex === 0}
-                                      onClick={() => runAnnotationReorder(annotation.id, 'up')}>Mover para cima</button>
-                                    <button type="button" data-editor-action="move-annotation-down"
-                                      disabled={Boolean(cellDraft) || annotationIndex === selectedTableObject.table.annotations.length - 1}
-                                      onClick={() => runAnnotationReorder(annotation.id, 'down')}>Mover para baixo</button>
-                                    <button type="button" data-editor-action="remove-annotation"
-                                      disabled={Boolean(cellDraft) || usageCount > 0}
-                                      title={usageCount > 0 ? 'Remova as referências antes de excluir.' : undefined}
-                                      onClick={() => runAnnotationRemove(annotation)}>Excluir</button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="vnext-divider" />
-                          <p>O marcador referencia uma entrada da legenda desta tabela.</p>
-                          <label>
-                            <span>Marcador existente</span>
-                            <select data-marker-picker="" value={markerLegendChoice} onChange={(event) => setMarkerLegendChoice(event.target.value)}>
-                              <option value="">Selecione um marcador</option>
-                              {selectedTableObject.table.legend.map((entry) => {
-                                const text = projectEditableRichText(entry.text) ?? 'Descrição avançada';
-                                const usage = legendUsageCount(selectedTableObject.table, entry.id);
-                                return <option key={entry.id} value={entry.id}>{entry.markerCode} — {text} ({usage} uso(s))</option>;
-                              })}
-                            </select>
-                          </label>
-                          <div className="vnext-cell-edit-actions">
-                            <button type="button" data-editor-action="apply-existing-marker" disabled={!markerLegendChoice || editorState.mode !== 'table-grid'} onClick={runExistingMarkerAssignment}>Aplicar marcador</button>
-                            <button type="button" data-editor-action="detach-marker" disabled={editorState.mode !== 'table-grid' || selectedAnchorCells.length === 0 || selectedAnchorCells.some((cell) => cell.content.type !== 'marker')} onClick={runMarkerDetach}>Remover marcador da célula</button>
-                          </div>
-                          <fieldset className="vnext-marker-create">
-                            <legend>Novo marcador</legend>
-                            <label>
-                              <span>Código</span>
-                              <input data-new-marker-code="" value={newMarkerCode} onChange={(event) => setNewMarkerCode(event.target.value)} placeholder="Ex.: *, †, A, 1" />
-                            </label>
-                            <label>
-                              <span>Descrição</span>
-                              <textarea data-new-marker-text="" value={newMarkerText} onChange={(event) => setNewMarkerText(event.target.value.replace(/\r\n?/g, '\n'))} placeholder="Descrição técnica da legenda" />
-                            </label>
-                            <div className="vnext-cell-edit-actions">
-                              <button type="button" data-editor-action="create-and-assign-marker" disabled={editorState.mode !== 'table-grid'} onClick={runNewMarkerAssignment}>Criar e aplicar</button>
-                              <button type="button" data-editor-action="create-legend" disabled={editorState.mode !== 'table-grid'} onClick={runLegendCreateOnly}>Criar legenda</button>
-                            </div>
-                          </fieldset>
-                          <div className="vnext-legend-list" data-legend-list="">
-                            {selectedTableObject.table.legend.length === 0 ? (
-                              <p>Nenhuma legenda criada.</p>
-                            ) : selectedTableObject.table.legend.map((entry, legendIndex) => (
-                              <LegendEditorRow
-                                key={entry.id}
-                                entry={entry}
-                                usageCount={legendUsageCount(selectedTableObject.table, entry.id)}
-                                canMoveUp={!cellDraft && legendIndex > 0}
-                                canMoveDown={!cellDraft && legendIndex < selectedTableObject.table.legend.length - 1}
-                                mutationDisabled={Boolean(cellDraft)}
-                                onUpdate={(markerCode, plainText) => runLegendUpdate(entry, markerCode, plainText)}
-                                onRemove={() => runLegendRemove(entry)}
-                                onMoveUp={() => runLegendReorder(entry.id, 'up')}
-                                onMoveDown={() => runLegendReorder(entry.id, 'down')}
-                                onLocate={() => locateLegendUsage(entry.id)}
-                              />
-                            ))}
-                          </div>
-                        </section>
-                      </>
-                    )}
-
-                    {(!simpleByDefault || tableInspectorAdvancedOpen) && <>
-                    <div className="vnext-divider" />
-                    <h3>Propriedades da seleção</h3>
-                    <label>
-                      <span>Alinhamento</span>
-                      <select data-cell-property="textAlign" value={String(commonCellStyleValue('textAlign') ?? '')}
-                        onChange={(event) => runCellPropertyPatch({
-                          textAlign: event.target.value === '' ? null : event.target.value as 'left' | 'center' | 'right',
-                        })}>
-                        <option value="">Herdado</option><option value="left">Esquerda</option>
-                        <option value="center">Centro</option><option value="right">Direita</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Peso</span>
-                      <select data-cell-property="fontWeight" value={String(commonCellStyleValue('fontWeight') ?? '')}
-                        onChange={(event) => runCellPropertyPatch({
-                          fontWeight: event.target.value === '' ? null : Number(event.target.value) as 400 | 700,
-                        })}>
-                        <option value="">Herdado</option><option value="400">Normal</option><option value="700">Negrito</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Quebra</span>
-                      <select data-cell-property="wrapPolicy" value={commonWrapPolicy ?? ''}
-                        onChange={(event) => runCellPropertyPatch({
-                          wrapPolicy: event.target.value === '' ? null : event.target.value as 'wrap' | 'nowrap',
-                        })}>
-                        <option value="">Automático · Herdado</option><option value="wrap">Quebrar</option>
-                        <option value="nowrap">Não quebrar</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Cor do texto</span>
-                      <input key={propertySelectionKey + ':color'} data-cell-property="color" type="text"
-                        defaultValue={String(commonCellStyleValue('color') ?? '')} placeholder="Herdado"
-                        onBlur={(event) => commitCellColor('color', event.target.value)} />
-                    </label>
-                    <label>
-                      <span>Fundo</span>
-                      <input key={propertySelectionKey + ':background'} data-cell-property="background" type="text"
-                        defaultValue={String(commonCellStyleValue('background') ?? '')} placeholder="Herdado"
-                        onBlur={(event) => commitCellColor('background', event.target.value)} />
-                    </label>
-                    <fieldset>
-                      <legend>Padding (mm)</legend>
-                      {(['top', 'right', 'bottom', 'left'] as const).map((edge) => (
-                        <label key={edge}>
-                          <span>{{ top: 'Superior', right: 'Direita', bottom: 'Inferior', left: 'Esquerda' }[edge]}</span>
-                          <input
-                            key={propertySelectionKey + ':padding:' + edge}
-                            data-cell-padding={edge}
-                            type="text"
-                            inputMode="decimal"
-                            defaultValue={String(commonCellStyleValue('paddingMm')?.[edge] ?? '')}
-                            placeholder="Herdado"
-                            onBlur={(event) => commitCellPadding(edge, event.target.value)}
-                            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-                          />
-                        </label>
-                      ))}
-                      <button type="button" data-editor-action="reset-cell-padding"
-                        onClick={() => runCellPropertyPatch({ paddingMm: null })}>
-                        Redefinir todo padding
-                      </button>
-                    </fieldset>
-                    </>}
-                  </section>
-                </>
+                  imageCellAssetChoice={imageCellAssetChoice} setImageCellAssetChoice={setImageCellAssetChoice}
+                  imageCellFit={imageCellFit} setImageCellFit={setImageCellFit}
+                  imageCellWidthMm={imageCellWidthMm} setImageCellWidthMm={setImageCellWidthMm}
+                  imageCellHeightMm={imageCellHeightMm} setImageCellHeightMm={setImageCellHeightMm}
+                  canUploadCellImage={Boolean(persistence?.assetBridge)} runImageCellSet={runImageCellSet}
+                  runImageCellUpload={runImageCellUpload} runImageCellClear={runImageCellClear}
+                  newAnnotationKind={newAnnotationKind} setNewAnnotationKind={setNewAnnotationKind}
+                  newAnnotationTarget={newAnnotationTarget} setNewAnnotationTarget={setNewAnnotationTarget}
+                  newAnnotationText={newAnnotationText} setNewAnnotationText={setNewAnnotationText}
+                  runAnnotationCreate={runAnnotationCreate} runAnnotationUpdate={runAnnotationUpdate}
+                  runAnnotationReference={runAnnotationReference} runAnnotationReorder={runAnnotationReorder} runAnnotationRemove={runAnnotationRemove}
+                  markerLegendChoice={markerLegendChoice} setMarkerLegendChoice={setMarkerLegendChoice}
+                  runExistingMarkerAssignment={runExistingMarkerAssignment} runMarkerDetach={runMarkerDetach}
+                  newMarkerCode={newMarkerCode} setNewMarkerCode={setNewMarkerCode} newMarkerText={newMarkerText} setNewMarkerText={setNewMarkerText}
+                  runNewMarkerAssignment={runNewMarkerAssignment} runLegendCreateOnly={runLegendCreateOnly}
+                  runLegendUpdate={runLegendUpdate} runLegendRemove={runLegendRemove} runLegendReorder={runLegendReorder}
+                  locateLegendUsage={locateLegendUsage}
+                  commonWrapPolicy={commonWrapPolicy} runCellPropertyPatch={runCellPropertyPatch}
+                />
               )}
               <div className="vnext-divider" />
               <div className="vnext-diagnostics-section" data-editor-diagnostics="">
@@ -5310,15 +4688,11 @@ export function EditorWorkspace({
                             {diagnostic.guidance}
                           </p>
                         )}
-                        {(diagnostic.rowId || diagnostic.cellId) && (
-                          <small>
-                            {diagnostic.rowId ? `Linha ${diagnostic.rowId}` : ''}
-                            {diagnostic.rowId && diagnostic.cellId ? ' · ' : ''}
-                            {diagnostic.cellId ? `Célula ${diagnostic.cellId}` : ''}
-                          </small>
+                        {(diagnostic.rowId || diagnostic.cellId) && selectedTableObject && (
+                          <small>{describeTableLocation(selectedTableObject.table, diagnostic.rowId, diagnostic.cellId)}</small>
                         )}
                         <div className="vnext-diagnostic-actions">
-                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && (
+                          {diagnostic.action === 'FIT_HEIGHT' && fitHeightPreparation?.ok && !fitHeightPreparation.prepared.tallerThanPage && !fitHeightPreparation.prepared.wouldExceedPage && (
                             <button type="button" data-diagnostic-action="fit-height" onClick={runFitHeight}>
                               Ajustar altura
                             </button>
@@ -5338,79 +4712,19 @@ export function EditorWorkspace({
           ) : <p className="vnext-context-help">{simpleByDefault
             ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
             : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>}
-          {(!simpleByDefault || persistence?.save.phase === 'conflict') && <>
+          {!simpleByDefault && <>
           <div className="vnext-divider" />
-          <h3>{persistence?.save.phase === 'conflict' ? 'Atenção ao salvamento' : 'Salvamento'}</h3>
+          <h3>Salvamento</h3>
           <p>
             {persistence
               ? fatherSaveExplanation(persistence.save)
               : 'Este documento continua somente em memória nesta aba.'}
           </p>
-          {persistence?.save.phase === 'conflict' && (
-            <div data-persistence-conflict-actions="">
-              <p>Este catálogo mudou em outro lugar. Seu trabalho continua preservado nesta sessão.</p>
-              <button
-                type="button"
-                className="vnext-inspector-action"
-                disabled={conflictResolutionBusy}
-                onClick={() => {
-                  void persistence.runtime.conflictResolutionCoordinator.openLatest().then((result) => {
-                    if (!result.ok) {
-                      setStatusMessage('Não foi possível abrir a versão mais recente. Mantenha esta aba aberta e tente novamente.');
-                    }
-                  });
-                }}
-              >
-                {conflictResolutionState === 'resolving-open-latest'
-                  ? 'Abrindo versão mais recente…'
-                  : 'Abrir versão mais recente'}
-              </button>
-              <button
-                type="button"
-                className="vnext-inspector-action"
-                disabled={conflictResolutionBusy}
-                onClick={() => {
-                  void persistence.runtime.conflictResolutionCoordinator.saveAsCopy().then((result) => {
-                    if (!result.ok) {
-                      setStatusMessage('Não foi possível salvar seu trabalho como cópia. Mantenha esta aba aberta e tente novamente.');
-                    }
-                  });
-                }}
-              >
-                {conflictResolutionState === 'resolving-save-as-copy'
-                  ? 'Salvando cópia…'
-                  : 'Salvar meu trabalho como cópia'}
-              </button>
-            </div>
-          )}
           </>}
-          {persistence?.localProtection === 'unavailable' && (
-            <p className="vnext-live-status" role="alert">
-              Não foi possível proteger as alterações neste computador. Mantenha esta aba aberta e use Salvar antes de sair.
-            </p>
-          )}
-          {statusMessage && <p className="vnext-live-status" role="status">{statusMessage}</p>}
         </aside>
-        {assistantOpen && simpleByDefault && (
-          <aside
-            id="vnext-assistant-chat"
-            className="vnext-assistant-dock"
-            aria-label="Assistente do catálogo atual"
-            data-vnext-assistant="open"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') { event.stopPropagation(); setAssistantOpen(false); }
-            }}
-          >
-            <div className="vnext-assistant-dock-controls">
-              <span>Você está editando este catálogo</span>
-              <button type="button" aria-label="Fechar painel do assistente" onClick={() => setAssistantOpen(false)}>Fechar ✕</button>
-            </div>
-            <div className="vnext-assistant-mode" role="tablist" aria-label="Modo do assistente">
-              <button role="tab" aria-selected={assistantMode === 'gemini'} type="button"
-                onClick={() => setAssistantMode('gemini')}>Criar com Gemini</button>
-              <button role="tab" aria-selected={assistantMode === 'tools'} type="button"
-                onClick={() => setAssistantMode('tools')}>Ferramentas</button>
-            </div>
+        {simpleByDefault && (
+          <AssistantDock open={assistantOpen} onClose={() => setAssistantOpen(false)} mode={assistantMode} onModeChange={setAssistantMode}
+            selection={{ count: editorState.selectedObjectIds.length, type: selectedObject?.type }}>
             {assistantMode === 'gemini' ? <CatalogNativeComposer
               key={document.id + ':gemini'} session={session} documentId={document.id}
               ownerScope={persistence?.runtime.workspace.getSnapshot().activeAuthorityScopeId}
@@ -5422,6 +4736,8 @@ export function EditorWorkspace({
                 ? { pageId: selectedPage.id, objectId: selectedTableObject.id }
                 : undefined}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
+              measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
+              onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
             /> : <CatalogWorkbenchChat
               key={document.id}
               compactMode
@@ -5436,8 +4752,9 @@ export function EditorWorkspace({
               }}
               onEditor={() => setAssistantOpen(false)}
             />}
-          </aside>
+          </AssistantDock>
         )}
+        </SidePanelColumn>
       </div>
       <EditorDiagnosticsProbe
         document={document}
@@ -5446,5 +4763,10 @@ export function EditorWorkspace({
         onMeasuredLayout={receiveMeasuredLayout}
       />
     </div>
+    {/* FR-43: next to the shell, not inside it, so the shell's key and pointer handlers never act on the dialog. */}
+    <SaveConflictDialog save={persistence?.save} documentTitle={document.title} state={conflictResolutionState}
+      resolution={persistence?.runtime.conflictResolutionCoordinator} />
+    {persistence && <PhotoLoadingAnnouncer runtime={persistence.runtime} />}
+    </>
   );
 }

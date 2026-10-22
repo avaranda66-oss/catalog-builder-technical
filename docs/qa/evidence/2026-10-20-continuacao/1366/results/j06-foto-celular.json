@@ -1,0 +1,437 @@
+{
+  "journey": "j06-foto-celular",
+  "title": "J6 — foto de celular: JPEG retrato (EXIF 6) de pé, HEIC explicado, Publicar / PDF não bloqueia",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T15:52:32.891Z",
+  "steps": [
+    {
+      "name": "0 fixtures: JPEG paisagem 3000×2000 com EXIF Orientation=6 e HEIC com assinatura \"ftypheic\"",
+      "ok": true,
+      "detail": "{\"jpeg\":{\"path\":\"C:\\\\Users\\\\Usuario\\\\.codex\\\\worktrees\\\\father-ready-continuacao\\\\catalog-builder\\\\tests\\\\vnext\\\\proof\\\\father-journeys\\\\fixtures\\\\photos\\\\celular-retrato-exif6.jpg\",\"bytes\":40267,\"sof\":{\"height\":2000,\"width\":3000},\"orientationEntry\":[1,18,0,3,0,0,0,1,0,6,0,0]},\"heic\":{\"path\":\"C:\\\\Users\\\\Usuario\\\\.codex\\\\worktrees\\\\father-ready-continuacao\\\\catalog-builder\\\\tests\\\\vnext\\\\proof\\\\father-journeys\\\\fixtures\\\\photos\\\\foto-iphone.heic\",\"bytes\":40,\"signature\":\"ftypheic\"}}",
+      "atMs": 3
+    },
+    {
+      "name": "0 catálogo \"Em branco\" aberto e salvo",
+      "ok": true,
+      "detail": null,
+      "atMs": 1815
+    },
+    {
+      "name": "1 botão \"Imagem\" visível sem rolar na barra acima da página",
+      "ok": true,
+      "detail": "87×44 px · letra 15 px · y=151",
+      "atMs": 1832
+    },
+    {
+      "name": "2 mensagem \"Imagem adicionada.\" aparece em menos de 2 s",
+      "ok": true,
+      "detail": "1339 ms · \"Imagem adicionada.\" · tom: success",
+      "atMs": 3281
+    },
+    {
+      "name": "2 a mensagem fica visível sem rolar, com letra legível (≥ 13 px)",
+      "ok": true,
+      "detail": "visível: true · letra 15 px · y=280",
+      "atMs": 3281
+    },
+    {
+      "name": "2 a foto entrou no catálogo (1 objeto de imagem, salvo em 2000×3000 — retrato)",
+      "ok": true,
+      "detail": "objetos: 1 · guardada: {\"widthPx\":2000,\"heightPx\":3000,\"mime\":\"image/jpeg\",\"fileSize\":40411,\"name\":\"celular-retrato-exif6.jpg\"} · enviada: 40411 bytes (original 40267)",
+      "atMs": 3325
+    },
+    {
+      "name": "2 a foto aparece DE PÉ na página (vermelho em cima, azul embaixo; 2000×3000)",
+      "ok": true,
+      "detail": "32 ms · {\"natural\":[2000,3000],\"box\":[215,215],\"top\":[211,47,46],\"bottom\":[21,100,192],\"left\":[21,100,192],\"right\":[21,100,192],\"objectFit\":\"contain\",\"imageOrientation\":\"from-image\"}",
+      "atMs": 3401
+    },
+    {
+      "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+      "ok": false,
+      "finding": {
+        "id": "C-01",
+        "severity": "P3",
+        "knownFR": null
+      },
+      "detail": "moldura 58×58 mm · foto desenhada com 143 de 215 px de largura (33 % vazio)",
+      "atMs": null
+    },
+    {
+      "name": "2 \"Salvo\" volta sozinho depois da foto",
+      "ok": true,
+      "detail": "873 ms · Saved",
+      "atMs": 4417
+    },
+    {
+      "name": "2 editor com a foto: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 4421
+    },
+    {
+      "name": "3 HEIC: mensagem aparece em menos de 2 s, visível sem rolar",
+      "ok": true,
+      "detail": "9 ms · visível: true · tom: info · letra 15 px",
+      "atMs": 4537
+    },
+    {
+      "name": "3 HEIC: a mensagem diz que é HEIC e COMO resolver (\"Mais compatível\" ou JPEG), em português",
+      "ok": true,
+      "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\"",
+      "atMs": 4538
+    },
+    {
+      "name": "3 HEIC: nada foi inserido nem enviado por engano",
+      "ok": true,
+      "detail": "objetos de imagem: 1 (antes 1) · envios: 1",
+      "atMs": 4540
+    },
+    {
+      "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+      "ok": false,
+      "finding": {
+        "id": "C-03",
+        "severity": "P2",
+        "knownFR": null
+      },
+      "detail": "sumiu depois de 4004 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\"",
+      "atMs": null
+    },
+    {
+      "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+      "ok": false,
+      "finding": {
+        "id": "C-02",
+        "severity": "P3",
+        "knownFR": null
+      },
+      "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto",
+      "atMs": null
+    },
+    {
+      "name": "4 Publicar / PDF com a foto: \"Pronto para imprimir ou salvar PDF.\" e botão de imprimir ativo (foto não bloqueia)",
+      "ok": true,
+      "detail": "164 ms · estado: READY · \"Pronto para imprimir ou salvar PDF.\" · itens: 0",
+      "atMs": 8857
+    },
+    {
+      "name": "4 a prévia de impressão mostra a foto de pé (vermelho em cima, azul embaixo)",
+      "ok": true,
+      "detail": "{\"natural\":[2000,3000],\"box\":[219,219],\"top\":[211,47,46],\"bottom\":[21,100,192],\"left\":[21,100,192],\"right\":[21,100,192],\"objectFit\":\"contain\",\"imageOrientation\":\"from-image\"}",
+      "atMs": 8931
+    },
+    {
+      "name": "4 \"Voltar ao editor\" devolve um editor que responde (sem travar)",
+      "ok": true,
+      "detail": null,
+      "atMs": 9090
+    },
+    {
+      "name": "5 zero erros de console (do aplicativo) e de página em toda a jornada",
+      "ok": true,
+      "detail": "console: - · página: - · ruído do vite ignorado: 0",
+      "atMs": 9092
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-01-foto-inserida.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-02-foto-close.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-03-heic-mensagem.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j06-foto-celular-04-publicar-pronto.png"
+  ],
+  "findings": [],
+  "pendingSteps": [],
+  "findingSteps": [
+    {
+      "id": "C-01",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+      "detail": "moldura 58×58 mm · foto desenhada com 143 de 215 px de largura (33 % vazio)"
+    },
+    {
+      "id": "C-03",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+      "detail": "sumiu depois de 4004 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\""
+    },
+    {
+      "id": "C-02",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+      "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "jpegNoticeMs": 1339,
+    "jpegImageMs": 32,
+    "jpegSavedMs": 873,
+    "heicNoticeMs": 9,
+    "publishReadyMs": 164
+  },
+  "measures": {
+    "fixtures": {
+      "jpeg": {
+        "path": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder\\tests\\vnext\\proof\\father-journeys\\fixtures\\photos\\celular-retrato-exif6.jpg",
+        "bytes": 40267,
+        "sof": {
+          "height": 2000,
+          "width": 3000
+        },
+        "orientationEntry": [
+          1,
+          18,
+          0,
+          3,
+          0,
+          0,
+          0,
+          1,
+          0,
+          6,
+          0,
+          0
+        ]
+      },
+      "heic": {
+        "path": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder\\tests\\vnext\\proof\\father-journeys\\fixtures\\photos\\foto-iphone.heic",
+        "bytes": 40,
+        "signature": "ftypheic"
+      }
+    },
+    "imageButton": {
+      "text": "Imagem",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 87,
+      "top": 151,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "chooserAccept": "image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif",
+    "jpegNotice": {
+      "text": "Imagem adicionada.",
+      "fontPx": 15,
+      "heightPx": 58,
+      "widthPx": 720,
+      "top": 280,
+      "inViewport": true,
+      "fullyVisible": true,
+      "tone": "success"
+    },
+    "jpegFinalized": [
+      {
+        "widthPx": 2000,
+        "heightPx": 3000,
+        "mime": "image/jpeg",
+        "fileSize": 40411,
+        "name": "celular-retrato-exif6.jpg"
+      }
+    ],
+    "jpegUploads": [
+      {
+        "storagePath": "vnext/64716add-a7a0-4a0f-a004-7822a383e282/1.jpeg",
+        "mime": "image/jpeg",
+        "size": 40411
+      }
+    ],
+    "jpegFrame": {
+      "xMm": 20,
+      "yMm": 52,
+      "widthMm": 58,
+      "heightMm": 58
+    },
+    "jpegPixels": {
+      "natural": [
+        2000,
+        3000
+      ],
+      "box": [
+        215,
+        215
+      ],
+      "top": [
+        211,
+        47,
+        46
+      ],
+      "bottom": [
+        21,
+        100,
+        192
+      ],
+      "left": [
+        21,
+        100,
+        192
+      ],
+      "right": [
+        21,
+        100,
+        192
+      ],
+      "objectFit": "contain",
+      "imageOrientation": "from-image"
+    },
+    "frameFit": {
+      "frameMm": "58×58",
+      "boxPx": [
+        215,
+        215
+      ],
+      "drawnWidthPx": 143,
+      "emptyShare": 0.33,
+      "objectFit": "contain"
+    },
+    "heicNotice": {
+      "text": "Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.",
+      "fontPx": 15,
+      "heightPx": 58,
+      "widthPx": 720,
+      "top": 280,
+      "inViewport": true,
+      "fullyVisible": true,
+      "tone": "info"
+    },
+    "heicNoticeVisibleMs": 4004,
+    "publishButton": {
+      "text": "Publicar / PDF",
+      "fontPx": 15,
+      "heightPx": 44,
+      "widthPx": 126,
+      "top": 12,
+      "inViewport": true,
+      "fullyVisible": true
+    },
+    "reviewStatus": {
+      "publicationStatus": "READY",
+      "statusText": "Pronto para imprimir ou salvar PDF.",
+      "items": [],
+      "printEnabled": true
+    },
+    "previewPixels": {
+      "natural": [
+        2000,
+        3000
+      ],
+      "box": [
+        219,
+        219
+      ],
+      "top": [
+        211,
+        47,
+        46
+      ],
+      "bottom": [
+        21,
+        100,
+        192
+      ],
+      "left": [
+        21,
+        100,
+        192
+      ],
+      "right": [
+        21,
+        100,
+        192
+      ],
+      "objectFit": "contain",
+      "imageOrientation": "from-image"
+    },
+    "devServerNoise": [],
+    "clicks": {
+      "inserir foto": 2,
+      "tentar HEIC": 2,
+      "publicar": 1,
+      "voltar ao editor": 1
+    },
+    "clicksTotal": 6
+  },
+  "texts": {
+    "2 editor com a foto": {
+      "hits": [],
+      "mm": []
+    }
+  },
+  "clicks": {
+    "inserir foto": 2,
+    "tentar HEIC": 2,
+    "publicar": 1,
+    "voltar ao editor": 1
+  },
+  "viteEvents": [
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected."
+  ],
+  "status": "pass",
+  "findingSummary": [
+    {
+      "id": "C-01",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+      "detail": "moldura 58×58 mm · foto desenhada com 143 de 215 px de largura (33 % vazio)"
+    },
+    {
+      "id": "C-03",
+      "severity": "P2",
+      "knownFR": null,
+      "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+      "detail": "sumiu depois de 4004 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\""
+    },
+    {
+      "id": "C-02",
+      "severity": "P3",
+      "knownFR": null,
+      "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+      "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto"
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "cecf9833-9095-41ef-aa36-986211307b86",
+    "startedAt": "2026-10-20T15:52:23.338Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": false
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

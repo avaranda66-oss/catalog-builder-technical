@@ -4,6 +4,8 @@
  * Unlocking leaves a secret in process memory until it is explicitly forgotten
  * or the page closes. This does NOT defend against XSS or malware while open.
  */
+import { GEMINI_BYOK_DEFAULT_MODEL } from './gemini-models';
+
 export const PROVIDER_IDS = ['gemini', 'openai', 'anthropic'] as const;
 export type ProviderId = typeof PROVIDER_IDS[number];
 export const PROVIDER_CONFIG: Record<ProviderId, {
@@ -11,7 +13,7 @@ export const PROVIDER_CONFIG: Record<ProviderId, {
   keyHelp: string;
   configuredDefaultModel: string;
 }> = {
-  gemini: { label: 'Google Gemini', keyHelp: 'Google AI Studio', configuredDefaultModel: 'gemini-2.5-flash-lite' },
+  gemini: { label: 'Google Gemini', keyHelp: 'Google AI Studio', configuredDefaultModel: GEMINI_BYOK_DEFAULT_MODEL },
   openai: { label: 'OpenAI', keyHelp: 'OpenAI Platform', configuredDefaultModel: 'gpt-5-mini' },
   anthropic: { label: 'Anthropic Claude', keyHelp: 'Anthropic Console', configuredDefaultModel: 'claude-haiku-4-5' },
 };

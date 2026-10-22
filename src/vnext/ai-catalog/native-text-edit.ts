@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { DocumentSession } from '../application';
 import type { RichText } from '../domain';
+import { frameShortRewriteInstruction } from './composer-framing';
 
 /**
  * Deliberately narrow: selected, single-line editorial prose only.
@@ -56,7 +57,7 @@ export function prepareNativeTextEditRequest(
   const original = plainSelectedEditorialText(target);
   if (!original) throw new Error('SELECTED_TEXT_REQUIRES_MANUAL_REVIEW');
   return NativeTextEditRequestSchema.parse({
-    version: 1, task: 'revise_selected_text', message,
+    version: 1, task: 'revise_selected_text', message: frameShortRewriteInstruction(message),
     history: history.slice(-8), target: { objectId: target.objectId, text: original },
   });
 }

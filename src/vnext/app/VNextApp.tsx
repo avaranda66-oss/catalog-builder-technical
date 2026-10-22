@@ -12,6 +12,8 @@ import type { TranslationReviewCoordinator } from '../translation/review-coordin
 import { TranslationReview } from './TranslationReview';
 import { PublicationReview } from './PublicationReview';
 import type { PublicationSource } from '../publication/review';
+import type { EditorLocateRequest } from './editor/use-issue-navigation';
+import { publicationWaitingMessage } from './publication-diagnostic-presentation';
 
 function createBrowserId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
@@ -51,6 +53,13 @@ function RuntimeWorkspace({
 }) {
   const [translationOpen, setTranslationOpen] = React.useState(false);
   const [publicationOpen, setPublicationOpen] = React.useState(false);
+  // "Corrigir este item": the review closes and the editor of the same open session goes to the object.
+  const [locateRequest, setLocateRequest] = React.useState<EditorLocateRequest & { readonly openSessionId: string }>();
+  const locateSequence = React.useRef(0);
+  // Drop a request once the editor used it, so an editor that mounts again does not jump to an old problem.
+  const dropLocateRequest = React.useCallback((id: number) => {
+    setLocateRequest(current => current?.id === id ? undefined : current);
+  }, []);
   React.useEffect(() => {
     if (!getPublicationSource) return;
     document.body.setAttribute('data-vnext-print-policy', '');
@@ -86,6 +95,7 @@ function RuntimeWorkspace({
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
           onRequestPublication={getPublicationSource ? () => setPublicationOpen(true) : undefined}
+          locateRequest={locateRequest?.openSessionId === snapshot.binding.openSessionId ? locateRequest : undefined}
           persistence={{
             runtime,
             openSessionId: snapshot.binding.openSessionId,
@@ -106,10 +116,14 @@ function RuntimeWorkspace({
       {activeRecoveryGatePhase === 'RELEASED' && translationOpen && translation && onOpenTranslatedCopy && (
         <TranslationReview coordinator={translation} sourceLocale={snapshot.session.getSnapshot().document.locale}
           sourceTitle={snapshot.session.getSnapshot().document.title}
-          onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} />
+          onClose={() => setTranslationOpen(false)} onOpenCopy={onOpenTranslatedCopy} save={() => runtime.manualSave()} />
       )}
       {activeRecoveryGatePhase === 'RELEASED' && publicationOpen && getPublicationSource && (
-        <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)} />
+        <PublicationReview getSource={getPublicationSource} subscribe={runtime.workspace.subscribe} onClose={() => setPublicationOpen(false)}
+          waitingMessage={publicationWaitingMessage(snapshot.save)} simple={simpleByDefault}
+          onLocateDiagnostic={diagnostic => setLocateRequest({
+            id: ++locateSequence.current, diagnostic, openSessionId: snapshot.binding.openSessionId, onHandled: dropLocateRequest,
+          })} />
       )}
       {runtime.recoveryStartup && (
         <RecoveryCenter

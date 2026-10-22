@@ -1,0 +1,3 @@
+/* FR-44: an expired session gets the same amber dot as the other save problems (base rules in styles.css). */
+.vnext-save-summary[data-save-phase="unauthorized"]::before,
+.vnext-save-summary[data-save-phase="blocked"]::before { background: #b7791f; }

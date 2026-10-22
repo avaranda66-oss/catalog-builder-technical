@@ -9,6 +9,11 @@ import {
   createDefaultCatalogStarterRegistry,
   projectCatalogLibraryItems,
 } from '@/vnext/library';
+import {
+  CATALOG_TITLE_MAX_LENGTH,
+  DEFAULT_BLANK_CATALOG_TITLE,
+  normalizeCatalogTitle,
+} from '@/vnext/library/service';
 import type {
   ArchiveCatalogCasRequest,
   CatalogListItem,
@@ -829,12 +834,24 @@ describe('W3.F Duplicate and Starter creation', () => {
       label: 'Ficha técnica essencial',
       description: 'Título e tabela básica para começar uma ficha de produto.',
       category: 'Ficha técnica',
-    }, {
+    }, expect.objectContaining({
+      starterId: 'presys-ficha-tecnica-a4',
+      revision: 1,
+      label: 'Ficha técnica (4 a 6 páginas)',
+      category: 'PRESYS',
+      recommended: true,
+    }), expect.objectContaining({
+      starterId: 'presys-folder-a4',
+      revision: 1,
+      label: 'Folder (8 a 12 páginas)',
+      category: 'PRESYS',
+    }), {
       starterId: 'presys-ta25n-a4',
       revision: 1,
       label: 'PRESYS · TA-25N — produto e especificações',
       description: 'Duas páginas A4 editáveis, com imagem oficial e campos pendentes explícitos.',
       category: 'PRESYS',
+      reviewNotes: expect.arrayContaining([expect.stringContaining('Fontes PRESYS')]),
     }]);
 
     const first = await library.createFromStarter('essential-technical-sheet');
@@ -849,5 +866,117 @@ describe('W3.F Duplicate and Starter creation', () => {
     expect(authoredStructuralIdentityIds(second.value.documentSnapshot).some((id) => firstIds.has(id))).toBe(false);
     expect(first.value.catalogId).not.toBe(second.value.catalogId);
     expect(await library.createFromStarter('missing')).toMatchObject({ ok: false, error: { code: 'STARTER_NOT_FOUND' } });
+  });
+});
+
+describe('Father-ready entry: names, safe verification and archived recovery (FR-02, FR-04, FR-08)', () => {
+  function starterLibrary(repository: CatalogRepository, start: number): CatalogLibraryService {
+    const ids = idSequence(start);
+    return new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+      starterRegistry: createDefaultCatalogStarterRegistry(),
+    });
+  }
+
+  it('normalizes typed names: pasted tabs and line breaks become single spaces', () => {
+    expect(normalizeCatalogTitle('  TA-25N\t—\nFicha técnica   2026  ')).toBe('TA-25N — Ficha técnica 2026');
+    expect(normalizeCatalogTitle('\u0007\t  ')).toBe('');
+    expect(normalizeCatalogTitle(undefined)).toBe('');
+    expect([...normalizeCatalogTitle('é'.repeat(400))]).toHaveLength(CATALOG_TITLE_MAX_LENGTH);
+  });
+
+  it('creates a blank catalog with the typed name and falls back to "Novo catálogo" only when empty', async () => {
+    const repository = new MemoryCatalogRepository();
+    const named = await service(repository, 4100).createBlank('PCON-Y18 — Ficha técnica\t2026');
+    expect(named.ok && named.value.documentSnapshot.title).toBe('PCON-Y18 — Ficha técnica 2026');
+    const unnamed = await service(repository, 4200).createBlank('   ');
+    expect(unnamed.ok && unnamed.value.documentSnapshot.title).toBe(DEFAULT_BLANK_CATALOG_TITLE);
+  });
+
+  it('creates from a starter with the typed name, keeping the starter title when no name is given', async () => {
+    const repository = new MemoryCatalogRepository();
+    const named = await starterLibrary(repository, 4300).createFromStarter('essential-technical-sheet', ' TA-25N — Ficha técnica 2026 ');
+    expect(named.ok).toBe(true);
+    if (!named.ok) return;
+    expect(named.value.documentSnapshot.title).toBe('TA-25N — Ficha técnica 2026');
+    expect(named.value.title).toBe('TA-25N — Ficha técnica 2026');
+    expect(named.value.origin).toEqual({ originKind: 'starter', originId: 'essential-technical-sheet', originRevision: 1 });
+
+    const unnamed = await starterLibrary(repository, 4400).createFromStarter('essential-technical-sheet');
+    expect(unnamed.ok && unnamed.value.documentSnapshot.title).toBe('Ficha técnica essencial');
+  });
+
+  it('verifyPendingCreate with nothing pending never creates a catalog', async () => {
+    const repository = new MemoryCatalogRepository();
+    const library = service(repository, 4500);
+    expect(await library.verifyPendingCreate()).toEqual({ ok: true, value: null });
+    expect(repository.createCatalog).not.toHaveBeenCalled();
+    expect(repository.getCatalog).not.toHaveBeenCalled();
+  });
+
+  it('verifyPendingCreate resolves the same ambiguous attempt and then reports nothing pending', async () => {
+    const storage = new MemoryCatalogRepository();
+    let createAttempt = 0;
+    const repository: CatalogRepository = {
+      listCatalogs: storage.listCatalogs,
+      getCatalog: storage.getCatalog,
+      createCatalog: vi.fn(async (request: CreateCatalogRequest) => {
+        createAttempt += 1;
+        const committed = await storage.createCatalog(request);
+        if (createAttempt === 1) return { ok: false as const, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' as const } };
+        return committed;
+      }),
+      saveCAS: storage.saveCAS,
+      archiveCAS: storage.archiveCAS,
+    };
+    const ids = idSequence(4600);
+    const library = new CatalogLibraryService({
+      repository,
+      applicationDependencies: dependencies,
+      createId: ids,
+      createMutationId: ids,
+      createOpenSessionId: ids,
+      authLineage: () => 'user-a:1',
+      authorityScopeId: () => 'workspace:user-a',
+    });
+    // The server committed but the answer was lost on the way back.
+    const getCatalog = vi.mocked(storage.getCatalog);
+    getCatalog.mockImplementationOnce(async () => ({ ok: false, error: { code: 'OFFLINE' } }));
+    expect(await library.createBlank('Catálogo do pai')).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(library.getCreateState()).toBe('pending-verification');
+
+    const verified = await library.verifyPendingCreate();
+    expect(verified.ok && verified.value?.documentSnapshot.title).toBe('Catálogo do pai');
+    expect(library.getCreateState()).toBe('idle');
+    expect(await library.verifyPendingCreate()).toEqual({ ok: true, value: null });
+    expect(repository.createCatalog).toHaveBeenCalledTimes(1);
+    const listed = await storage.listCatalogs();
+    expect(listed.ok && listed.value).toHaveLength(1);
+  });
+
+  it('duplicating an archived catalog recovers it as an active copy without touching the original', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'TA-25N arquivado', 4700);
+    const library = service(repository, 4800);
+    expect((await library.archive(source.catalogId)).ok).toBe(true);
+
+    const copy = await library.duplicate(source.catalogId);
+    expect(copy.ok).toBe(true);
+    if (!copy.ok) return;
+    expect(copy.value.archivedAt).toBeNull();
+    expect(copy.value.title).toBe('Cópia de TA-25N arquivado');
+    expect(copy.value.origin).toMatchObject({ originKind: 'duplicate', originId: source.catalogId });
+    expect(repository.current(source.catalogId).archivedAt).not.toBeNull();
+
+    const active = await library.list({ view: 'active' });
+    expect(active.ok && active.value.map((item) => item.title)).toEqual(['Cópia de TA-25N arquivado']);
+    const archived = await library.list({ view: 'archived' });
+    expect(archived.ok && archived.value.map((item) => item.title)).toEqual(['TA-25N arquivado']);
   });
 });

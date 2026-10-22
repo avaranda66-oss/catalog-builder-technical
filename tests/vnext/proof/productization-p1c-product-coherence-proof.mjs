@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fillProvisionalContent } from './fixtures/content-placeholders.mjs';
 
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -242,7 +243,7 @@ async function save(page) {
   await page.waitForFunction(() => { const value = window.__C1_STATE__(); return value && !value.dirty && value.save.phase !== 'saving'; });
 }
 async function selectPage(page, index) {
-  await page.locator('.vnext-page-list button').nth(index).click();
+  await page.locator('.vnext-page-list [data-page-nav-id]').nth(index).click();
 }
 async function workflow(browser, width, first) {
   const context = await browser.newContext({ viewport: { width, height: 1000 } });
@@ -377,6 +378,18 @@ async function workflow(browser, width, first) {
   await page.keyboard.press('Escape');
   await page.locator('[data-translation-review]').waitFor({ state: 'detached' });
   if (phase !== 'before') assert.equal(await page.locator('[data-editor-action="translate"]').evaluate(node => node === document.activeElement), true);
+  if (phase !== 'before') {
+    // FR-51: the starter's pending fields ("A COMPLETAR") block the PDF with their locations until they are filled.
+    await page.locator('[data-editor-action="publish"]').click();
+    await page.locator('[data-publication-status="BLOCKED"]').waitFor();
+    // FR-81: the source note is no longer printed, so the six pending fields are what blocks.
+    assert(await page.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').count() >= 6);
+    await shot(page, 'publication-provisional-blocked', width);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-publication-host]').waitFor({ state: 'detached' });
+    assert((await fillProvisionalContent(page)).length >= 6);
+    await save(page);
+  }
   await page.locator('[data-editor-action="publish"]').click();
   await page.locator('[data-publication-status="READY"]').waitFor();
   assert.equal(await page.locator('[data-publication-action="print"]').isEnabled(), true);
@@ -400,7 +413,7 @@ async function workflow(browser, width, first) {
       assert(Math.abs((pdfPage.view[3] - pdfPage.view[1]) * 25.4 / 72 - 297) < .5);
       contents += (await pdfPage.getTextContent()).items.filter(item => 'str' in item).map(item => item.str).join(' ');
     }
-    assert(contents.includes('TA-25N')); assert(contents.includes('A COMPLETAR'));
+    assert(contents.includes('TA-25N')); assert(!contents.includes('A COMPLETAR'), 'FR-51: provisional text must not be printed');
     assert(!contents.includes('Revisar e publicar')); assert(!contents.includes('Imprimir / salvar PDF'));
     await pdf.destroy();
     observations.push({ nativePdf: pdfPath, pageCount: 2, a4: true, interfaceExcluded: true });
@@ -424,9 +437,12 @@ async function workflow(browser, width, first) {
   await shot(page, 'publication-blocked', width);
   if (phase !== 'before') {
     const diagnostic = page.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').first();
-    assert.equal(await diagnostic.locator('details').evaluate(node => node.open), false);
-    await diagnostic.getByText('Detalhes técnicos', { exact: true }).click();
-    assert((await diagnostic.locator('details').textContent()).includes('TEXT_OBJECT_OVERFLOW'));
+    // /v2 is the simple mode (the father's editor): no "Detalhes técnicos" with internal codes and IDs under the
+    // item. Support still reads the code on the item itself.
+    assert.equal(await diagnostic.locator('details').count(), 0);
+    assert.equal(await diagnostic.getByText('Detalhes técnicos', { exact: true }).count(), 0);
+    assert.equal(await diagnostic.getAttribute('data-publication-diagnostic'), 'TEXT_OBJECT_OVERFLOW');
+    assert(!(await diagnostic.textContent()).includes('TEXT_OBJECT_OVERFLOW'));
     await shot(page, 'publication-technical-details', width);
   }
   await page.keyboard.press('Escape');
@@ -470,7 +486,9 @@ async function workflow(browser, width, first) {
   await shot(page, 'rename-dialog', width);
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
-  await row.getByRole('button', { name: 'Arquivar', exact: true }).click();
+  // FR-04: Arquivar lives in the row's "Mais" menu.
+  await row.getByRole('button', { name: /^Mais ações de / }).click();
+  await row.getByRole('menuitem', { name: 'Arquivar', exact: true }).click();
   await page.getByRole('dialog').waitFor();
   await shot(page, 'archive-confirmation', width);
   await page.keyboard.press('Escape');

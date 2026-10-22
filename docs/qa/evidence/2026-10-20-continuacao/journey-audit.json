@@ -1,0 +1,897 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-20",
+  "method": "Releitura dos 28 JSON brutos, conferidos com run/executionId/HEAD/status do resumo. Nenhum teste executado nesta auditoria.",
+  "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+  "results": [
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j00-smoke",
+      "status": "pass",
+      "executionId": "8b595d87-6ba3-4050-98a5-73f8f62b1298",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1366/results/j00-smoke.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j01-entrar-meus-catalogos",
+      "status": "pending",
+      "executionId": "1bfa1d34-f282-4945-8f84-e545f51668f7",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "o endereço raiz leva a \"Meus catálogos\" sem digitar /v2 (redirecionamento após login)",
+          "reason": "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto."
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "A-02",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+          "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "textos da biblioteca abaixo de 13 px",
+          "detail": "ordenar: 12 px"
+        },
+        {
+          "id": "A-03",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+          "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px"
+        },
+        {
+          "text": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela).",
+          "severity": "P3",
+          "where": "biblioteca, barra de cima",
+          "name": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela)."
+        }
+      ],
+      "result": "1366/results/j01-entrar-meus-catalogos.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j02-j03-ia-arquivos-conversa",
+      "status": "pending",
+      "executionId": "d8eb06d2-9136-4269-9443-8f1ee9d3922c",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "J2 completa: fontes verificadas, conflitos, prévia de 4–6 páginas e aplicação em uma transação",
+          "reason": "pendente Ondas 3/4 (3A/3B/3C/4A): esta prova cobre intake e inserção local; não executa extração Gemini real, resolução dos conflitos TA-25N nem o aceite do pai."
+        },
+        {
+          "name": "J3-A \"aumente a foto da capa\" mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B: ajustar por conversa) — hoje o pedido vai pelo mesmo caminho de \"criar páginas\" (tarefa compose_scaffold); no harness volta uma proposta FALSA de páginas novas (a resposta real do Gemini a este pedido NÃO foi verificada aqui). O painel nunca mexe na foto: veio \"Proposta para revisar\" de páginas novas"
+        },
+        {
+          "name": "J3-C cada pedido mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B) — hoje: \"Ferramentas\" aplica na hora (sem prévia) só \"compactar tabelas\", e responde \"Ainda não consigo…\" para foto e para separar seções; a aba Gemini só cria páginas novas"
+        }
+      ],
+      "findingDetails": [],
+      "result": "1366/results/j02-j03-ia-arquivos-conversa.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j04-editar-a-mao",
+      "status": "pass",
+      "executionId": "74c2bfe1-6ce0-4cc9-b8df-04378d91f875",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+          "severity": "P3",
+          "detail": "sumiu sozinha após 4105 ms; 21 palavras pedem ~8400 ms a 150 palavras/min"
+        },
+        {
+          "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+          "severity": "P2",
+          "detail": "sobreposição medida: 28289 px²; conhecido FR-12/2C; botão Fechar usado sem force"
+        },
+        {
+          "name": "Letras dos botões ≥ 15 px",
+          "severity": "P2",
+          "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]"
+        },
+        {
+          "text": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]",
+          "severity": "P2",
+          "where": "editor",
+          "name": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]"
+        }
+      ],
+      "result": "1366/results/j04-editar-a-mao.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j05-tabela-longa",
+      "status": "pass",
+      "executionId": "c4b26da4-5c06-4298-9e13-6d4e65e08570",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1366/results/j05-tabela-longa.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j06-foto-celular",
+      "status": "pass",
+      "executionId": "cecf9833-9095-41ef-aa36-986211307b86",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "C-01",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+          "detail": "moldura 58×58 mm · foto desenhada com 143 de 215 px de largura (33 % vazio)"
+        },
+        {
+          "id": "C-03",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+          "detail": "sumiu depois de 4004 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\""
+        },
+        {
+          "id": "C-02",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+          "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto"
+        }
+      ],
+      "result": "1366/results/j06-foto-celular.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j07-salvar-reabrir",
+      "status": "pass",
+      "executionId": "13fc0685-9e2c-463c-aae2-9b0cbdb9f5b9",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "text": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar.",
+          "severity": "P3",
+          "where": "Recuperação local",
+          "name": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar."
+        }
+      ],
+      "result": "1366/results/j07-salvar-reabrir.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j08-publicar-pdf",
+      "status": "pass",
+      "executionId": "efa3f7a6-b81a-4298-9e2b-cf335972e3a8",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "C-04",
+          "severity": "P3",
+          "knownFR": "FR-13",
+          "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+          "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")"
+        }
+      ],
+      "result": "1366/results/j08-publicar-pdf.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j09-idiomas",
+      "status": "pass",
+      "executionId": "90ef62a1-433d-4e80-b780-22e44253acf7",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "E-01",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+          "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo"
+        },
+        {
+          "id": "E-02",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+          "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez"
+        }
+      ],
+      "result": "1366/results/j09-idiomas.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j10-dois-funcionarios",
+      "status": "pending",
+      "executionId": "89e1f4f3-6f56-454a-bd36-ea1248884600",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "2 ao abrir, a aba 2 é avisada de que outra pessoa está no catálogo",
+          "reason": "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar"
+        }
+      ],
+      "findingDetails": [],
+      "result": "1366/results/j10-dois-funcionarios.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j11-biblioteca",
+      "status": "pending",
+      "executionId": "5476705d-0d01-4279-9fee-c65c16707985",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "\"Restaurar\" na linha arquivada (voltar com o mesmo nome, sem criar cópia)",
+          "reason": "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados"
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "A-04",
+          "severity": "P2",
+          "knownFR": "FR-04 (4D: Restaurar)",
+          "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+          "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+          "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px"
+        },
+        {
+          "text": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto).",
+          "severity": "P3",
+          "where": "biblioteca, Ativos",
+          "name": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto)."
+        }
+      ],
+      "result": "1366/results/j11-biblioteca.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j12-planilha-empresa",
+      "status": "pass",
+      "executionId": "12036d7b-e6cf-4cfe-8aee-17b2d05fefba",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1366/results/j12-planilha-empresa.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "j13-falhas",
+      "status": "pending",
+      "executionId": "336a7882-c981-402a-bfe5-6822a61d85b4",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "R1 rede desligada por 30 s durante a edição: \"Sem conexão\" visível, nada se perde, salvamento retomado sozinho",
+          "reason": "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real."
+        },
+        {
+          "name": "R2 sessão expirada: aviso \"Sessão expirada\" com o que fazer, sem perder o trabalho",
+          "reason": "FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações."
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "C-05",
+          "severity": "P3",
+          "knownFR": "FR-61",
+          "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+          "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar"
+        }
+      ],
+      "result": "1366/results/j13-falhas.json"
+    },
+    {
+      "runId": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "journey": "jia1-assistente",
+      "status": "pass",
+      "executionId": "a2ae97d9-e7e9-4a80-a2ad-65d6b8b1159b",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "D-07",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+          "detail": "título da proposta termina em y=34 px, acima do topo da área rolável (y=357 px); \"Página 1\" termina em y=167 px"
+        }
+      ],
+      "result": "1366/results/jia1-assistente.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j00-smoke",
+      "status": "pass",
+      "executionId": "774c2bf7-b23f-4077-83db-c076480bbf36",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1280/results/j00-smoke@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j01-entrar-meus-catalogos",
+      "status": "pending",
+      "executionId": "5a20504f-fbab-4c71-beb9-403c34f24a9a",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "o endereço raiz leva a \"Meus catálogos\" sem digitar /v2 (redirecionamento após login)",
+          "reason": "pendente: só em produção (J1 do plano §2). Coberto por teste unitário: tests/app/root-redirect.test.tsx existe; o harness monta a biblioteca direto."
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "A-02",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "o seletor \"Ordenar catálogos\" tem só 19 px de altura (alvo pequeno para abrir a lista)",
+          "detail": "texto de 12 px; a moldura em volta tem 42 px, mas clicar nela não abre a lista"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "textos da biblioteca abaixo de 13 px",
+          "detail": "ordenar: 12 px"
+        },
+        {
+          "id": "A-03",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "no diálogo \"Novo catálogo\", o rótulo \"Nome do catálogo\" e a descrição das opções têm menos de 13 px",
+          "detail": "rotuloNome: 12 px, descricaoOpcao: 12 px"
+        },
+        {
+          "text": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela).",
+          "severity": "P3",
+          "where": "biblioteca, barra de cima",
+          "name": "A marca \"PRESYS · Catalog Builder\" tem 11 px: ilegível para quem usa óculos de leitura (é decorativa, mas é a primeira linha da tela)."
+        }
+      ],
+      "result": "1280/results/j01-entrar-meus-catalogos@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j02-j03-ia-arquivos-conversa",
+      "status": "pending",
+      "executionId": "832e2eca-8289-40e6-bc0f-147f3d4350c9",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "J2 completa: fontes verificadas, conflitos, prévia de 4–6 páginas e aplicação em uma transação",
+          "reason": "pendente Ondas 3/4 (3A/3B/3C/4A): esta prova cobre intake e inserção local; não executa extração Gemini real, resolução dos conflitos TA-25N nem o aceite do pai."
+        },
+        {
+          "name": "J3-A \"aumente a foto da capa\" mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B: ajustar por conversa) — hoje o pedido vai pelo mesmo caminho de \"criar páginas\" (tarefa compose_scaffold); no harness volta uma proposta FALSA de páginas novas (a resposta real do Gemini a este pedido NÃO foi verificada aqui). O painel nunca mexe na foto: veio \"Proposta para revisar\" de páginas novas"
+        },
+        {
+          "name": "J3-C cada pedido mostra um cartão antes/depois com Aplicar / Ajustar / Descartar",
+          "reason": "pendente Onda 4 (4B) — hoje: \"Ferramentas\" aplica na hora (sem prévia) só \"compactar tabelas\", e responde \"Ainda não consigo…\" para foto e para separar seções; a aba Gemini só cria páginas novas"
+        }
+      ],
+      "findingDetails": [],
+      "result": "1280/results/j02-j03-ia-arquivos-conversa@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j04-editar-a-mao",
+      "status": "pass",
+      "executionId": "da998986-c462-4dad-9407-df87c87dac02",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "name": "A1 a mensagem fica na tela tempo suficiente para ler (some só depois do tempo de leitura)",
+          "severity": "P3",
+          "detail": "sumiu sozinha após 4152 ms; 21 palavras pedem ~8400 ms a 150 palavras/min"
+        },
+        {
+          "name": "A1 texto da célula legível no zoom \"Ajustar à largura\" (≥ 13 px efetivos)",
+          "severity": "P3",
+          "detail": "{\"text\":\"TA-25N\",\"fontPx\":13.3,\"zoomRatio\":0.9,\"effectiveFontPx\":11.7,\"lineBoxPx\":16,\"w\":94,\"h\":15,\"inViewport\":true} · janela 1280×720"
+        },
+        {
+          "name": "A2 logo após inserir Tabela: aviso de localização cobre parte da tabela e exige fechar antes de editar",
+          "severity": "P2",
+          "detail": "sobreposição medida: 28205 px²; conhecido FR-12/2C; botão Fechar usado sem force"
+        },
+        {
+          "name": "Letras dos botões ≥ 15 px",
+          "severity": "P2",
+          "detail": "[{\"name\":\"Diminuir o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12},{\"name\":\"Aumentar o zoom\",\"w\":40,\"h\":44,\"minSide\":40,\"fontPx\":12}]"
+        },
+        {
+          "text": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]",
+          "severity": "P2",
+          "where": "editor",
+          "name": "palavras técnicas/inglês vistas: [{\"where\":\"B3 texto selecionado + Mais propriedades + Mais opções\",\"words\":[],\"context\":[],\"mm\":[\"mm\",\"mm\",\"mm\",\"mm\"]}]"
+        }
+      ],
+      "result": "1280/results/j04-editar-a-mao@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j05-tabela-longa",
+      "status": "pass",
+      "executionId": "80999973-38a1-4675-a778-f76815d50923",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1280/results/j05-tabela-longa@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j06-foto-celular",
+      "status": "pass",
+      "executionId": "e18a2abc-34fd-4458-a340-a7070490bdf5",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "C-01",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "2 a moldura da foto nova é quadrada: a foto retrato aparece com faixas vazias dos lados (seleção maior que a foto)",
+          "detail": "moldura 58×58 mm · foto desenhada com 129 de 193 px de largura (33 % vazio)"
+        },
+        {
+          "id": "C-03",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem some sozinha em ~4 s, antes de o pai terminar de ler (tom \"info\" em vez de \"error\")",
+          "detail": "sumiu depois de 3923 ms sem ninguém clicar em Fechar · tom: info · texto: \"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\""
+        },
+        {
+          "id": "C-02",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "3 HEIC: a mensagem cita \"Mais compatível\" sem dizer onde fica (Ajustes › Câmera › Formatos) nem como pedir a foto em JPEG",
+          "detail": "\"Esta foto está em HEIC. No iPhone, use “Mais compatível” ou envie como JPEG.\" — o pai não sabe o que é \"Mais compatível\" nem que é um ajuste do iPhone de quem tirou a foto"
+        }
+      ],
+      "result": "1280/results/j06-foto-celular@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j07-salvar-reabrir",
+      "status": "pass",
+      "executionId": "6a4ad507-a4d2-4bf5-a888-cdcbd32971a2",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "text": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar.",
+          "severity": "P3",
+          "where": "Recuperação local",
+          "name": "A tela de recuperação oferece 4 botões (Conferir se foi salvo / Abrir versão salva na nuvem / Ver alterações recuperadas / Apagar a cópia deste computador). A recomendada vem destacada, mas \"Ver alterações recuperadas\" e \"Apagar a cópia deste computador\" poderiam ficar atrás de \"Mais opções\" para o pai não hesitar."
+        }
+      ],
+      "result": "1280/results/j07-salvar-reabrir@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j08-publicar-pdf",
+      "status": "pass",
+      "executionId": "38b86bce-0aef-4c46-a404-83d49c2d75f5",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "C-04",
+          "severity": "P3",
+          "knownFR": "FR-13",
+          "name": "b o aviso bloqueado manda \"clicar em Verificar novamente\", mas \"Corrigir este item\" fecha a revisão: depois de corrigir não existe \"Verificar novamente\" na tela — o pai tem de descobrir que é \"Publicar / PDF\" de novo",
+          "detail": "status: \"Publicação bloqueada. Corrija os itens abaixo e clique em Verificar novamente.\" · depois de Corrigir: revisão fechada, botões visíveis na barra: Publicar / PDF (sem \"Verificar novamente\")"
+        }
+      ],
+      "result": "1280/results/j08-publicar-pdf@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j09-idiomas",
+      "status": "pass",
+      "executionId": "fb04155e-48fd-4259-97fd-99a7c9e3db32",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "E-01",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "6 \"Gerar tradução\" logo depois de editar mostra \"Salve o catálogo e conclua as edições antes de traduzir.\" em vez de salvar sozinho (como \"Publicar / PDF\" faz)",
+          "detail": "mensagem: \"Salve o catálogo e conclua as edições antes de traduzir.\" · o pai precisa esperar o \"Salvo\" e clicar de novo"
+        },
+        {
+          "id": "E-02",
+          "severity": "P2",
+          "knownFR": null,
+          "name": "25 Esc (ou \"Fechar\") no meio da revisão fecha o Centro e DESCARTA a tradução gerada e as correções feitas à mão, sem perguntar; ao reabrir, volta à etapa 1 vazia",
+          "detail": "trecho \"Exactitud\" corrigido (corrected) → Esc → diálogo fechou sem confirmação → reabrir: 0 trechos, etapa \"Idioma\" de novo; é preciso gerar e revisar tudo outra vez"
+        }
+      ],
+      "result": "1280/results/j09-idiomas@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j10-dois-funcionarios",
+      "status": "pending",
+      "executionId": "b9027027-c321-4ac7-846f-756fbb1b8978",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "2 ao abrir, a aba 2 é avisada de que outra pessoa está no catálogo",
+          "reason": "pendente Onda 4 (4D: presença e identidade de quem está editando, FR-05) — aviso ao abrir (false); o pai só descobre ao salvar"
+        }
+      ],
+      "findingDetails": [],
+      "result": "1280/results/j10-dois-funcionarios@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j11-biblioteca",
+      "status": "pending",
+      "executionId": "53516131-5c0d-4095-ab55-15bcd3cdc2c3",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "\"Restaurar\" na linha arquivada (voltar com o mesmo nome, sem criar cópia)",
+          "reason": "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados"
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "A-04",
+          "severity": "P2",
+          "knownFR": "FR-04 (4D: Restaurar)",
+          "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+          "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)"
+        },
+        {
+          "id": "A-01",
+          "severity": "P3",
+          "knownFR": "FR-05",
+          "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+          "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px"
+        },
+        {
+          "text": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto).",
+          "severity": "P3",
+          "where": "biblioteca, Ativos",
+          "name": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto)."
+        }
+      ],
+      "result": "1280/results/j11-biblioteca@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j12-planilha-empresa",
+      "status": "pass",
+      "executionId": "87405c98-32ac-4d0a-a0af-7bc032c8a6e6",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [],
+      "result": "1280/results/j12-planilha-empresa@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "j13-falhas",
+      "status": "pending",
+      "executionId": "d7bd041a-b12d-49fa-bf9b-899bbba90335",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [
+        {
+          "name": "R1 rede desligada por 30 s durante a edição: \"Sem conexão\" visível, nada se perde, salvamento retomado sozinho",
+          "reason": "FR-44/FR-45 integradas; a prova de rede real permanece pendente porque este harness salva em localStorage e não emula o transporte remoto. Os testes de persistência verificam as retentativas, sem substituir esta jornada real."
+        },
+        {
+          "name": "R2 sessão expirada: aviso \"Sessão expirada\" com o que fazer, sem perder o trabalho",
+          "reason": "FR-44 integrada; o harness não tem autenticação, portanto não exercita expiração de sessão real. Validar em ambiente autenticado sem fechar a aba com alterações."
+        }
+      ],
+      "findingDetails": [
+        {
+          "id": "C-05",
+          "severity": "P3",
+          "knownFR": "FR-61",
+          "name": "L3 com o limite diário já avisado no topo do painel, \"Enviar ao Gemini\" continua ativo: o pai digita o pedido inteiro e só depois recebe o mesmo aviso (trabalho em vão)",
+          "detail": "prontidão: \"O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.\" · botão Enviar ativo: true · caixa de texto aceita digitar"
+        }
+      ],
+      "result": "1280/results/j13-falhas@1280.json"
+    },
+    {
+      "runId": "2026-10-20T15-56-32-601Z-6022b6aa-4ce4-462a-9779-d81a6731e9e7",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "journey": "jia1-assistente",
+      "status": "pass",
+      "executionId": "744a3b25-5b2d-48aa-9f78-a0412f67f348",
+      "rawConsoleErrors": 0,
+      "filteredConsoleErrors": 0,
+      "appConsoleErrors": 0,
+      "pageErrors": 0,
+      "rawMessages": [],
+      "functionalFailures": [],
+      "pendingSteps": [],
+      "findingDetails": [
+        {
+          "id": "D-07",
+          "severity": "P3",
+          "knownFR": null,
+          "name": "B7 a conversa rola até os botões e corta o título \"Proposta para revisar\" e a \"Página 1: Capa\" (o pai vê a proposta começando na \"Página 2\")",
+          "detail": "título da proposta termina em y=9 px, acima do topo da área rolável (y=332 px); \"Página 1\" termina em y=143 px"
+        }
+      ],
+      "result": "1280/results/jia1-assistente@1280.json"
+    }
+  ]
+}

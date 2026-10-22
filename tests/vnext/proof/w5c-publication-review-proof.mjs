@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fillProvisionalContent } from './fixtures/content-placeholders.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const output = resolve(root, 'scratch/w5c-publication-review-proof');
@@ -172,7 +173,7 @@ async function saved(page) {
   await page.waitForFunction(() => { const s = window.__C1_STATE__(); return s && !s.dirty && s.save.phase !== 'saving'; });
 }
 async function selectPage(page, index) {
-  await page.locator('.vnext-page-list button').nth(index).click();
+  await page.locator('.vnext-page-list [data-page-nav-id]').nth(index).click();
 }
 async function inspectPdf(path) {
   const pdf = await getDocument({ data: new Uint8Array(await readFile(path)), isEvalSupported: false, useSystemFonts: false }).promise;
@@ -195,6 +196,8 @@ async function inspectPdf(path) {
   assert(pages.some(page => page.content.includes('TA-25N'))); assert(pages.some(page => page.images > 0));
   const allText = pages.map(page => page.content).join(' ');
   for (const technical of ['±0,1 °C', '0,01 °C', '±0,02 °C', 'Ø25,4 mm × 124 mm', '200 W', '−1 a 24,5 mA', 'EN 61010-1:2010+A1:2019']) assert(allText.includes(technical), 'PDF technical token lost: ' + technical);
+  // FR-51: provisional text can never reach a printed catalog.
+  for (const provisional of ['A COMPLETAR', 'revisar com engenharia']) assert(!allText.includes(provisional), 'PDF printed provisional text: ' + provisional);
   assert(pages.some(page => page.vectorOperations > 0));
   await pdf.destroy(); return { pageCount: 2, pages };
 }
@@ -328,14 +331,22 @@ try {
   const blocked = await fresh.locator('[data-publication-diagnostic]').allTextContents();
   assert(await fresh.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').count() > 0);
   assert(blocked.some(text => text.includes('Página 1') && text.includes('texto')));
+  // FR-51: the starter's six pending fields block the PDF, each with an exact location (FR-81: the source note is no longer printed).
+  const provisional = await fresh.locator('[data-publication-diagnostic="UNRESOLVED_PLACEHOLDER"]').allTextContents();
+  assert(provisional.length >= 6, 'Provisional text must block publication: ' + provisional.length);
+  for (const text of provisional) assert(/Página \d/.test(text) && text.includes('Ainda está escrito'), text);
   await fresh.screenshot({ path: resolve(output, 'publication-blocked.png'), fullPage: true });
-  await fresh.getByRole('button', { name: 'Voltar ao editor', exact: true }).click();
+  // FR-13: "Corrigir este item" closes the review and selects the overflowing text in the editor.
+  await fresh.locator('[data-publication-diagnostic="TEXT_OBJECT_OVERFLOW"]').first().getByRole('button', { name: 'Corrigir este item', exact: true }).click();
   await fresh.locator('[data-publication-host]').waitFor({ state: 'detached' });
+  await fresh.locator('[data-editor-object-id="' + copyText.id + '"][data-selected="true"]').waitFor();
   const correction = fresh.locator('[data-editor-object-id="' + copyText.id + '"]');
   await correction.click(); await correction.press('Enter');
   await fresh.locator('[data-text-edit-textarea]').fill('PRESYS · catálogo revisado');
   await fresh.locator('[data-editor-action="commit-text"]').click();
   await fresh.locator('[data-text-edit-textarea]').waitFor({ state: 'detached' });
+  const provisionalFilled = await fillProvisionalContent(fresh);
+  assert(provisionalFilled.length >= 6);
   if (await fresh.locator('[data-editor-action="save"]').isEnabled()) await fresh.locator('[data-editor-action="save"]').click();
   await saved(fresh);
   await fresh.getByRole('button', { name: 'Voltar aos catálogos', exact: true }).click();
@@ -395,11 +406,16 @@ try {
   await fresh.getByRole('button', { name: 'Publicar / PDF', exact: true }).click();
   await fresh.locator('[data-publication-status="READY"]').waitFor();
   const reviewedDocument = JSON.stringify((await state(fresh)).document);
+  const appTitle = await fresh.title();
   await fresh.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
   assert.equal(await fresh.locator('[data-publication-host]').getAttribute('data-print-approved'), null, 'Ctrl+P must not approve');
   await fresh.locator('[data-publication-action="print"]').click();
   await fresh.waitForFunction(() => window.__W5C_PRINT_COUNT__ === 1);
   assert.equal(await fresh.locator('[data-publication-host]').getAttribute('data-print-approved'), 'true');
+  assert.equal(await fresh.title(), (await state(fresh)).document.title, 'PDF filename follows the catalog title');
+  // FR-52: a single print instruction line.
+  assert.equal(await fresh.locator('[data-publication-print-instruction]').count(), 1);
+  assert((await fresh.locator('[data-publication-print-instruction]').innerText()).includes('Salvar como PDF'));
   await fresh.emulateMedia({ media: 'print' });
   const pdfPath = resolve(output, 'translated-catalog.pdf');
   await fresh.pdf({ path: pdfPath, format: 'A4', preferCSSPageSize: true, printBackground: true,
@@ -407,6 +423,8 @@ try {
   assert.equal(JSON.stringify((await state(fresh)).document), reviewedDocument);
   assert.deepEqual(catalogs.get(catalogId), sourceBefore);
   const pdfEvidence = await inspectPdf(pdfPath);
+  await fresh.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  assert.equal(await fresh.title(), appTitle, 'App title restored after printing');
   await fresh.emulateMedia({ media: 'screen' });
   await fresh.screenshot({ path: resolve(output, 'publication-desktop.png'), fullPage: true });
   await fresh.evaluate(() => window.__C1_RUNTIME__.workspace.getSnapshot().session.execute({ type: 'document.rename', title: 'Mutação adversarial após revisão' }));
@@ -451,7 +469,7 @@ try {
     sourceCatalogId: catalogId, copyCatalogId: copy.catalogId, sourceUnchanged: true, geometryAssetsPreserved: true,
     technicalTokensPreserved: true, correctedReview: true, provenance: copy.origin, staleResultRejected: true,
     exactlyOneCopy: true, copyEditSaveReopen: true, decoded, counters, translationRequests, errors,
-    publication: { allPages: 2, overflowBlocked: true, correctedThroughUI: true, staleBlocked: true, authorityLossPortalHidden: true, keyboardPreviewScroll: true, keyboardMobile: true, canonicalPreview: previewFacts, pdf: pdfEvidence },
+    publication: { allPages: 2, overflowBlocked: true, provisionalBlocked: provisional.length, provisionalFilled: provisionalFilled.length, correctedThroughUI: true, staleBlocked: true, authorityLossPortalHidden: true, keyboardPreviewScroll: true, keyboardMobile: true, canonicalPreview: previewFacts, pdf: pdfEvidence },
     realBackendAuthenticatedAcceptance: 'NOT AVAILABLE — controlled proof is not real-backend acceptance' };
   await writeFile(resolve(output, 'result.json'), JSON.stringify(evidence, null, 2) + '\n');
   console.log(JSON.stringify(evidence, null, 2));

@@ -1,0 +1,41 @@
+{
+  "llm": "gemini-3.8-flash",
+  "sourceId": "y17-folder",
+  "run": 2,
+  "promptVersion": "fr66a-2026-10-15.1",
+  "transport": "files-api",
+  "ok": true,
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "modelVersion": "gemini-3.8-flash",
+  "usage": {
+    "promptTokenCount": 7136,
+    "candidatesTokenCount": 2160,
+    "totalTokenCount": 9296,
+    "cachedContentTokenCount": 6269,
+    "promptTokensDetails": [
+      {
+        "modality": "IMAGE",
+        "tokenCount": 6384
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 752
+      }
+    ],
+    "cacheTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 660
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 5609
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "ms": 13059,
+  "uploadMs": 20540,
+  "text": "{\"title\":\"PCON-Y17\",\"models\":[\"PCON-Y17\"],\"sections\":[{\"title\":\"Technical Specifications\",\"rows\":[{\"key\":\"pressure-range\",\"label\":\"Ranges (3) bar\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"1\",\"unit\":\"bar\",\"condition\":\"(3)\",\"sourceRef\":{\"page\":11,\"quote\":\"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (3) psi\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0-15\",\"unit\":\"psi\",\"condition\":\"(3)\",\"sourceRef\":{\"page\":11,\"quote\":\"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (3) SI-Pascal\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"100\",\"unit\":\"kPa\",\"condition\":\"(3)\",\"sourceRef\":{\"page\":11,\"quote\":\"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"control-stability\",\"label\":\"Control* Stability (3)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.002\",\"unit\":\"% FS\",\"condition\":\"* using 2 σ method\",\"sourceRef\":{\"page\":11,\"quote\":\"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"accuracy\",\"label\":\"Accuracy (3)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.012\",\"unit\":\"% FS\",\"condition\":\"(3)\",\"sourceRef\":{\"page\":11,\"quote\":\"(3) 1 bar 0-15 psi 100 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (4) bar\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"2\",\"unit\":\"bar\",\"condition\":\"(4)\",\"sourceRef\":{\"page\":11,\"quote\":\"(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (4) psi\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0-30\",\"unit\":\"psi\",\"condition\":\"(4)\",\"sourceRef\":{\"page\":11,\"quote\":\"(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (4) SI-Pascal\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"200\",\"unit\":\"kPa\",\"condition\":\"(4)\",\"sourceRef\":{\"page\":11,\"quote\":\"(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"control-stability\",\"label\":\"Control* Stability (4)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.002\",\"unit\":\"% FS\",\"condition\":\"* using 2 σ method\",\"sourceRef\":{\"page\":11,\"quote\":\"(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"accuracy\",\"label\":\"Accuracy (4)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.012\",\"unit\":\"% FS\",\"condition\":\"(4)\",\"sourceRef\":{\"page\":11,\"quote\":\"(4) 2 bar 0-30 psi 200 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (5) bar\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"7\",\"unit\":\"bar\",\"condition\":\"(5)\",\"sourceRef\":{\"page\":11,\"quote\":\"(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (5) psi\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0-100\",\"unit\":\"psi\",\"condition\":\"(5)\",\"sourceRef\":{\"page\":11,\"quote\":\"(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pressure-range\",\"label\":\"Ranges (5) SI-Pascal\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"700\",\"unit\":\"kPa\",\"condition\":\"(5)\",\"sourceRef\":{\"page\":11,\"quote\":\"(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"control-stability\",\"label\":\"Control* Stability (5)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.002\",\"unit\":\"% FS\",\"condition\":\"* using 2 σ method\",\"sourceRef\":{\"page\":11,\"quote\":\"(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"accuracy\",\"label\":\"Accuracy (5)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"± 0.012\",\"unit\":\"% FS\",\"condition\":\"(5)\",\"sourceRef\":{\"page\":11,\"quote\":\"(5) 7 bar 0-100 psi 700 kPa ± 0.002 % FS ± 0.012 % FS\"}}]},{\"key\":\"pneumatic-connection\",\"label\":\"Pneumatic Connections (Pressure Control Module - C1)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"1/8\\\" Female BSPP\",\"unit\":\"\",\"condition\":\"Supply (+) / Supply (-) / Output / Reference\",\"sourceRef\":{\"page\":11,\"quote\":\"Pneumatic Connections (Pressure Control Module - C1): 1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference).\"}}]} ]},{\"title\":\"General Specifications\",\"rows\":[{\"key\":\"power-supply\",\"label\":\"Power Supply\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"100 to 240 Vac 50/60 Hz\",\"unit\":\"\",\"sourceRef\":{\"page\":11,\"quote\":\"Power Supply: 100 to 240 Vac 50/60 Hz.\"}}]},{\"key\":\"ambient-temperature\",\"label\":\"Operating Ambient\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"0 to 50\",\"unit\":\"°C\",\"sourceRef\":{\"page\":11,\"quote\":\"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"}}]},{\"key\":\"operating-humidity\",\"label\":\"Operating Ambient\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"90\",\"unit\":\"% maximum relative humidity\",\"sourceRef\":{\"page\":11,\"quote\":\"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"}}]},{\"key\":\"dimensions\",\"label\":\"Dimensions (DT Version)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"125 mm x 300 mm x 265 mm\",\"unit\":\"\",\"condition\":\"DT Version, (HxWxD)\",\"sourceRef\":{\"page\":11,\"quote\":\"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"}}]},{\"key\":\"dimensions\",\"label\":\"Dimensions (RM Version)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"132 mm x 483 mm x 300 mm\",\"unit\":\"\",\"condition\":\"RM Version, (HxWxD)\",\"sourceRef\":{\"page\":11,\"quote\":\"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"}}]},{\"key\":\"weight\",\"label\":\"Weight (DT Version)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"6.2\",\"unit\":\"kg\",\"condition\":\"DT Version, nominal\",\"sourceRef\":{\"page\":11,\"quote\":\"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"}}]},{\"key\":\"weight\",\"label\":\"Weight (RM Version)\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"8.5\",\"unit\":\"kg\",\"condition\":\"RM Version, nominal\",\"sourceRef\":{\"page\":11,\"quote\":\"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"}}]},{\"key\":\"warranty\",\"label\":\"Warranty\",\"values\":[{\"model\":\"PCON-Y17\",\"literal\":\"1\",\"unit\":\"year\",\"sourceRef\":{\"page\":11,\"quote\":\"Warranty: 1 year\"}}]} ]}]}"
+}

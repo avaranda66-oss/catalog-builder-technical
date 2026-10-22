@@ -2,7 +2,8 @@ import { parseCanonicalDocument } from '../application';
 import { findObjectInTree, type CatalogDocument, type RichText } from '../domain';
 import { TranslationFoundationError, resolveTranslationProfile, type TranslationFoundationResult, type TranslationLocator, type TranslationSemanticLeaf } from './contracts';
 import { extractSemanticTranslationCoverage, stableSerialize } from './semantic-leaves';
-import { protectTechnicalTokens } from './technical-token-protector';
+import { isAcceptedTranslationModelId, type VNextTranslationTargetLocale } from './language-registry';
+import { technicalTextEquivalentForLocale } from './locale-number-format';
 
 export interface TranslationReviewRun {
   readonly unitId: string;
@@ -19,7 +20,14 @@ function invalid(message: string): never {
   throw new TranslationFoundationError('INVALID_PROVIDER_RESPONSE', message);
 }
 
-export function requireReviewText(source: string, translated: string): void {
+/**
+ * Technical values must survive review. With `targetLocale`, a value may also appear in that
+ * language's number/abbreviation format (FR-85: "0,02 % FE" ↔ "0.02 % FS", "1.500" ↔ "1,500"
+ * after confirmation), judged from the sentence context and by position; any other difference
+ * is still refused. Without it, only exact equality passes: the provider must return technical
+ * data verbatim, and `targetLocale` is reserved for text the reviewer corrected.
+ */
+export function requireReviewText(source: string, translated: string, targetLocale?: VNextTranslationTargetLocale): void {
   // Authored placeholder-looking literals are facts too. Only newly introduced transport placeholders are forbidden.
   let withoutSourceLiterals = translated;
   for (const literal of source.match(/\[\[VNEXT_TECH_[^\]]+\]\]/g) ?? []) withoutSourceLiterals = withoutSourceLiterals.replace(literal, '');
@@ -32,8 +40,7 @@ export function requireReviewText(source: string, translated: string): void {
   if (!translated.trim() || translated.length > maxReviewChars || /<\/?[a-z][^>]*>/i.test(translated) || withoutSourceLiterals.includes('[[VNEXT_TECH_') || unsupportedControl) {
     invalid('Review text is empty, too large or contains unsupported markup');
   }
-  const tokens = (text: string) => protectTechnicalTokens(text).tokens.map(token => token.value).sort();
-  if (stableSerialize(tokens(source)) !== stableSerialize(tokens(translated))) {
+  if (!technicalTextEquivalentForLocale(source, translated, targetLocale)) {
     throw new TranslationFoundationError('TECHNICAL_TOKEN_MISMATCH', 'Review must preserve technical values');
   }
 }
@@ -59,7 +66,7 @@ export async function materializeTranslationCandidate(
   corrections: ReadonlyMap<string, string> = new Map()
 ): Promise<{ document: CatalogDocument; runs: readonly TranslationReviewRun[] }> {
   const profile = resolveTranslationProfile(source.locale, result.targetLocale, result.profileVersion);
-  if (result.provider.providerId !== profile.providerId || result.provider.modelId !== profile.modelId) invalid('Wrong candidate provider profile');
+  if (result.provider.providerId !== profile.providerId || !isAcceptedTranslationModelId(profile, result.provider.modelId)) invalid('Wrong candidate provider profile');
   if (result.sourceCatalogId !== source.id || result.sourceLocale !== source.locale) invalid('Wrong translation source');
   const coverage = await extractSemanticTranslationCoverage(source);
   const units = new Map(result.units.map(unit => [unit.unitId, unit]));
@@ -81,7 +88,10 @@ export async function materializeTranslationCandidate(
       const key = translationReviewKey(leaf.leafId, sourceRun.runId);
       const translated = corrections.get(key) ?? original;
       if (corrections.has(key)) usedCorrections.add(key);
-      requireReviewText(sourceRun.text, translated);
+      // Locale-equivalent forms are only legitimate for text the reviewer corrected (coordinator.correct already
+      // validated it with the locale). Provider output must keep every technical value verbatim: "1.500 mbar"
+      // may only become "1,500 mbar" after a person confirmed the reading.
+      requireReviewText(sourceRun.text, translated, corrections.has(key) ? result.targetLocale : undefined);
       if (leaf.kind === 'catalogTitle') document.title = translated;
       else {
         const inline = rich?.paragraphs.flatMap(paragraph => paragraph.inlines).find(item => item.id === sourceRun.runId);

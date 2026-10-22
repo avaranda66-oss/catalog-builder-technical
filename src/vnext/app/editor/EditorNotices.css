@@ -1,0 +1,30 @@
+/*
+ * FR-12 message area, right under the top bar. Only the persistent bands (save problem, local protection)
+ * take room in the layout. The latest status message floats over the top of the workspace, so the page never moves
+ * when a message appears or leaves.
+ * A message never takes clicks away from the page (J5): the area lets every click through and only the cards and the
+ * bands take them. When the selected object is as tall as the page area, so nothing floating is free of it,
+ * use-notice-anchor.ts sets data-notice-placement="inline" and the card joins the layout above the page instead.
+ */
+.vnext-editor-notices { position: relative; z-index: 30; flex: none; pointer-events: none; }
+.vnext-editor-notices .vnext-editor-notice, .vnext-editor-notices .vnext-editor-notice-band { pointer-events: auto; }
+.vnext-editor-notice-bands { display: grid; gap: 6px; padding: 8px 20px; }
+.vnext-editor-notices .vnext-editor-notice-band { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
+.vnext-editor-notice {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  display: flex; width: min(720px, calc(100% - 40px)); align-items: center; gap: 12px; overflow-wrap: anywhere;
+  border: 1px solid #c8dcec; border-left: 4px solid var(--vnext-focus, #0072ce); border-radius: var(--vnext-radius-control, 7px);
+  background: var(--vnext-accent-surface, #eef6fc); box-shadow: 0 6px 18px rgb(23 32 51 / .14);
+  color: var(--vnext-text-secondary, #41546b); font-size: 14px; line-height: 1.5; padding: 6px 12px;
+}
+.vnext-editor-notice[data-tone="success"] { border-color: #bdddc9; border-left-color: var(--vnext-success, #246344); background: var(--vnext-success-surface, #eff8f3); color: var(--vnext-success, #246344); }
+.vnext-editor-notice[data-tone="error"] { border-color: #e2b8b8; border-left-color: var(--vnext-error, #8f3030); background: var(--vnext-error-surface, #fff3f3); color: var(--vnext-error, #8f3030); }
+.vnext-editor-notice p { flex: 1; min-width: 0; margin: 0; }
+.vnext-editor-notice button { flex: none; min-height: 32px; border: 1px solid var(--vnext-control-border, #bdc9d6); border-radius: var(--vnext-radius-control, 7px); background: var(--vnext-surface, #fff); color: var(--vnext-text-secondary, #41546b); cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; padding: 4px 12px; }
+/* Same left/transform as the floating card, so it stays centred on the page column; only it takes room in the flow. */
+.vnext-editor-notices[data-notice-placement="inline"] .vnext-editor-notice { position: relative; top: 0; margin: 4px 0 8px; }
+@media (max-width: 900px) {
+  .vnext-editor-notice-bands { padding: 8px 12px; }
+  .vnext-editor-notice { width: calc(100% - 24px); }
+}
+@media print { .vnext-editor-notices { display: none; } }

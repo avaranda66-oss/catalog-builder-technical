@@ -8,7 +8,7 @@ export const W5_TRANSLATION_PROFILE_VERSION = VNEXT_TRANSLATION_PROFILES[0].prof
 export const W5_TRANSLATION_TOKEN_POLICY_VERSION = VNEXT_TRANSLATION_PROFILES[0].tokenPolicyVersion;
 export const W5_TRANSLATION_PROMPT_VERSION = VNEXT_TRANSLATION_PROFILES[0].promptVersion;
 export const W5_TRANSLATION_PROVIDER_ID = 'gemini' as const;
-export const W5_TRANSLATION_MODEL_ID = 'gemini-2.5-flash' as const;
+export const W5_TRANSLATION_MODEL_ID = VNEXT_TRANSLATION_PROFILES[0].modelId;
 
 export const W5_SUPPORTED_SOURCE_LOCALE = 'pt-BR' as const;
 export const W5_SUPPORTED_TARGET_LOCALE = 'es-ES' as const;

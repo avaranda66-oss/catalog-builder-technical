@@ -47,7 +47,7 @@ const publicationSource = (): PublicationSource | undefined => {
 declare global {
   interface Window {
     __ADVANCED_TABLE__: {
-      state(): { document: typeof seed; dirty: boolean; sequence: number; phase: string; catalogId: string; remoteRevision: number };
+      state(): { document: typeof seed; dirty: boolean; sequence: number; canUndo: boolean; canRedo: boolean; phase: string; catalogId: string; remoteRevision: number };
       source(): string[][];
       reopen(): Promise<unknown>;
     };
@@ -55,7 +55,8 @@ declare global {
 }
 window.__ADVANCED_TABLE__ = {
   state: () => { const snap = runtime.workspace.getSnapshot(); return { document: snap.session.getSnapshot().document,
-    dirty: snap.dirty, sequence: snap.session.getSnapshot().localSequence, phase: snap.save.phase, catalogId: seed.id,
+    dirty: snap.dirty, sequence: snap.session.getSnapshot().localSequence,
+    canUndo: snap.session.getSnapshot().canUndo, canRedo: snap.session.getSnapshot().canRedo, phase: snap.save.phase, catalogId: seed.id,
     remoteRevision: snap.binding.kind === 'PERSISTED' ? snap.binding.remoteRevision : 0 }; },
   source: () => advancedTechnicalMatrix(rows, columns),
   reopen: () => runtime.reopenCoordinator.open(seed.id),

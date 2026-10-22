@@ -1,0 +1,75 @@
+/* FR-31 "Colar tabela do Excel" — sits beside its component (styles.css is owned by slice 1I). */
+.vnext-paste-table-area > .vnext-disclosure-help {
+  margin: 0;
+  color: #31445b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vnext-table-paste-fallback.vnext-paste-table-area textarea {
+  font-weight: 400;
+}
+
+.vnext-paste-table-area .vnext-paste-table-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #31445b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.vnext-paste-table-area .vnext-paste-table-header input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.vnext-paste-table-summary {
+  margin: 0;
+  color: #31445b;
+  font-size: 12px;
+}
+
+.vnext-paste-table-problem {
+  margin: 0;
+  color: #9b1c1c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vnext-paste-table-preview {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #172033;
+  font-size: 11px;
+}
+
+.vnext-paste-table-preview th,
+.vnext-paste-table-preview td {
+  overflow: hidden;
+  border: 1px solid #dbe3ec;
+  padding: 4px 6px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnext-paste-table-preview th {
+  background: #003366;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.vnext-paste-table-notes {
+  margin: 0;
+  padding-left: 18px;
+  color: #31445b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vnext-paste-grow-offer .vnext-tool-group {
+  flex-basis: 100%;
+}

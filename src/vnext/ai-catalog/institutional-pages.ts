@@ -10,13 +10,13 @@ function paragraphs(id: string, text: string): RichText {
   })) };
 }
 function paragraph(id: string, text: string, xMm: number, yMm: number,
-  widthMm: number, heightMm: number, fontSizePt = 10, weight: 400 | 700 = 400) {
+  widthMm: number, heightMm: number, fontSizePt = 10, weight: 400 | 700 = 400, textAlign: 'left' | 'right' = 'left') {
   return {
     type: 'text' as const,
     frame: { xMm, yMm, widthMm, heightMm },
     zIndex: 2, text: paragraphs(id, text),
     style: { fontFamily: 'Noto Sans', fontSizePt, fontWeight: weight,
-      lineHeight: 1.25, color: weight === 700 ? '#003366' : '#172033' },
+      lineHeight: 1.25, color: weight === 700 ? '#003366' : '#172033', textAlign },
   };
 }
 function bar(xMm: number, yMm: number, widthMm: number, heightMm: number) {
@@ -27,10 +27,17 @@ function bar(xMm: number, yMm: number, widthMm: number, heightMm: number) {
   };
 }
 
-/** Institutionally styled document shells. Facts and tables still come ONLY
+/**
+ * Institutionally styled document shells. Facts and tables still come ONLY
  * from the existing verified deterministic compiler, never model-produced HTML.
+ *
+ * FR-81: nothing printed here is a review or demonstration note. Provenance
+ * (source names, revisions, fixture hashes) and the "check before publishing"
+ * reminders live in the review screens, not on the customer's pages.
+ *
+ * `sectionStartPages[i]` is the printed page number where section i starts.
  */
-export function institutionalOpening(input: TechnicalInput, technicalPageCount: number): PageTemplateDefinition[] {
+export function institutionalOpening(input: TechnicalInput, sectionStartPages: readonly number[]): PageTemplateDefinition[] {
   const intro: PageTemplateDefinition = {
     id: 'institutional-cover', label: 'Capa técnica',
     safeArea, objects: [
@@ -39,46 +46,37 @@ export function institutionalOpening(input: TechnicalInput, technicalPageCount: 
       paragraph('kind', 'CADERNO INSTITUCIONAL\nCOMPARAÇÃO TÉCNICA DE INSTRUMENTOS',
         30, 74, 160, 55, 23, 700),
       paragraph('document-title', input.title, 30, 144, 160, 37, 15),
-      paragraph('models-heading', 'MODELOS ANALISADOS', 30, 207, 160, 11, 11, 700),
+      paragraph('models-heading', 'MODELOS', 30, 207, 160, 11, 11, 700),
       paragraph('models', input.models.join('   /   '), 30, 222, 160, 19, 12),
       bar(30, 247, 160, 2.5),
-      paragraph('scope', 'MATERIAL SINTÉTICO DE TESTE · Revisão humana obrigatória',
-        30, 263, 160, 18, 9),
     ],
   };
   const index: PageTemplateDefinition = {
     id: 'institutional-index', label: 'Sumário',
     safeArea, objects: [
-      paragraph('toc-heading', 'SUMÁRIO TÉCNICO', 22, 29, 170, 20, 21, 700),
+      paragraph('toc-heading', 'SUMÁRIO', 22, 29, 170, 20, 21, 700),
       bar(29, 58, 161, 2.5),
-      paragraph('toc-metadata', `${input.models.length} modelos · ${input.sections.length} seções · ${technicalPageCount} páginas de especificações`,
-        29, 69, 162, 13, 11),
-      ...input.sections.map((section, index) => paragraph(
-        'toc-' + index,
-        `${String(index + 1).padStart(2, '0')}    ${section.title}    (${section.rows.length} parâmetros)`,
-        29, 88 + 11.4 * index, 162, 9.6, 10)),
-      paragraph('toc-note', 'A apresentação não substitui a conferência técnica das fontes. Ausências e conflitos precisam de revisão explícita.',
-        29, 269, 162, 13, 9),
+      ...input.sections.flatMap((section, index) => [
+        paragraph('toc-' + index, `${String(index + 1).padStart(2, '0')}    ${section.title}`,
+          29, 70 + 11.4 * index, 140, 9.6, 10),
+        paragraph('toc-page-' + index, sectionStartPages[index] === undefined ? '' : String(sectionStartPages[index]),
+          172, 70 + 11.4 * index, 18, 9.6, 10, 400, 'right'),
+      ]),
     ],
   };
   return [intro, index];
 }
 
+/** Back cover: who made the document and for which models. No sources, hashes or review notes. */
 export function institutionalClosing(input: TechnicalInput): PageTemplateDefinition[] {
   return [{
-    id: 'institutional-sources', label: 'Fontes e revisão',
+    id: 'institutional-back-cover', label: 'Contracapa',
     safeArea, objects: [
-      paragraph('source-heading', 'FONTES E CONTROLE DOCUMENTAL', 22, 29, 171, 21, 19, 700),
+      paragraph('closing-brand', 'PRESYS', 22, 29, 171, 21, 19, 700),
       bar(29, 58, 161, 2.5),
-      paragraph('source-identity', `Documento: ${input.title}\nModelos: ${input.models.join(' / ')}\nSeções técnicas: ${input.sections.length}`,
-        29, 70, 162, 38, 10),
-      ...input.sources.map((source, index) => paragraph(
-        'source-entry-' + index,
-        `${index + 1}. ${source.name} · rev. ${source.revision} · ${source.pages.length} páginas de entrada\nID ${source.id} · hash da fixture: ${source.sha256.slice(0, 16)}…`,
-        29, 121 + index * 23, 162, 20, 9)),
-      paragraph('source-boundary',
-        'CONTROLE DE DEMONSTRAÇÃO\nEstes dados são sintéticos e não representam especificações de instrumentos reais. Os hashes identificam fixtures estruturadas, não autenticam arquivos PDF de fabricantes. Publicação comercial somente após revisão humana e validação das fontes.',
-        29, 239, 162, 42, 9),
+      paragraph('closing-identity', `${input.title}\nModelos: ${input.models.join(' / ')}`,
+        29, 70, 162, 38, 11),
+      paragraph('closing-site', 'www.presys.com.br', 29, 262, 162, 10, 12, 700, 'right'),
     ],
   }];
 }

@@ -257,6 +257,31 @@ export const SetTextContentActionSchema = z.object({
   plainText: richTextEditablePlainText,
 }).strict();
 
+/**
+ * FR-14: the only text style fields the editor changes. Family and line height stay with the document
+ * (an "Avançado" block can add them later through this same action).
+ */
+export const TextStylePatchSchema = TextStyleSchema.pick({
+  fontSizePt: true,
+  fontWeight: true,
+  color: true,
+  textAlign: true,
+}).strict().refine(
+  (patch) => Object.values(patch).some((value) => value !== undefined),
+  'Text style patch must not be empty'
+);
+
+/**
+ * Changes the look of one text box. `expectedStyle` is the style the command was prepared from (like
+ * `expectedText` in `text.setContent`): if the box changed meanwhile, nothing is applied.
+ */
+export const SetTextStyleActionSchema = z.object({
+  type: z.literal('text.setStyle'),
+  objectId: applicationId,
+  expectedStyle: TextStyleSchema,
+  patch: TextStylePatchSchema,
+}).strict();
+
 export const CreateGroupActionSchema = z.object({
   type: z.literal('group.create'),
   pageId: applicationId,
@@ -890,6 +915,7 @@ export const ApplicationActionSchema = z.union([
   ReplaceImageActionSchema,
   RegisterAssetActionSchema,
   SetTextContentActionSchema,
+  SetTextStyleActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
   TableAxisInsertActionSchema,
@@ -934,6 +960,7 @@ export type TableBulkContentTarget = z.infer<typeof TableBulkContentTargetSchema
 export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema>;
 export type TableAnnotationTarget = z.infer<typeof TableAnnotationTargetSchema>;
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
+export type TextStylePatch = z.infer<typeof TextStylePatchSchema>;
 export type CellStylePatch = z.infer<typeof CellStylePatchSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;

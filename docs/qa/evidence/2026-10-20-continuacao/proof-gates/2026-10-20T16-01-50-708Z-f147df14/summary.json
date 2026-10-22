@@ -1,0 +1,873 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-10-20T16-01-50-708Z-f147df14",
+  "startedAt": "2026-10-20T16:01:51.030Z",
+  "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+  "git": {
+    "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+    "branch": "codex/father-ready-continuacao",
+    "dirty": true
+  },
+  "story": "docs/stories/2026-10-17-father-ready-continuacao.md",
+  "workflow": ".github/workflows/quality-gates.yml",
+  "workflowSha256": "e3f60a9b4e0c1761493906a1b7ca8ba618f1c68abde336067ff0e68d0a92de30",
+  "node": "v24.13.0",
+  "boundary": "Local harness regression only; no production, real Gemini/Supabase or human acceptance claim.",
+  "environmentPolicy": {
+    "sanitizedInheritedNames": [],
+    "rule": "Known proof controls removed from inherited environment; literal workflow env and isolated output reapplied. CI=1. System/runtime/cache variables preserved."
+  },
+  "options": {
+    "filters": [],
+    "timeoutMs": 1200000,
+    "list": false,
+    "skipEdge": false,
+    "skipE2e": false
+  },
+  "minimumFreeDiskBytes": 5368709120,
+  "prerequisites": {
+    "chromiumPath": "C:\\Users\\Usuario\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+    "chromiumExists": true,
+    "playwrightError": "",
+    "edgePath": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "e2eEntry": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder\\dist\\e2e\\ai-catalog-prototype.html",
+    "browserCheck": "File presence only; launch is verified by each proof."
+  },
+  "results": [
+    {
+      "id": "editor-text-proof",
+      "path": "tests/vnext/proof/editor-text-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:63 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "4062f4a172eb9d60e819298b209e7db2cfc1b5154a8e01200d358586b056ede4",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "pass",
+      "freeDiskBytesBefore": 8101322752,
+      "artifactDirectory": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder\\scratch\\w2g-editor-proof",
+      "artifactDirectoryExisted": false,
+      "outputVariable": null,
+      "environment": {
+        "CI": "1"
+      },
+      "preexistingReceipts": [],
+      "startedAt": "2026-10-20T16:01:51.180Z",
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "spawnError": null,
+      "logError": null,
+      "stdoutBytes": 9540,
+      "stderrBytes": 0,
+      "positive": true,
+      "fatalStderr": false,
+      "stderrTail": "",
+      "stdoutLog": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\01-editor-text-proof\\stdout.log",
+      "stderrLog": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\01-editor-text-proof\\stderr.log",
+      "finishedAt": "2026-10-20T16:02:03.225Z",
+      "receipts": [
+        {
+          "original": "scratch\\w2g-editor-proof\\evidence.json",
+          "copy": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\01-editor-text-proof\\receipts\\evidence.json",
+          "sha256": "7fa76ae1bb3881d5c96d23e1283b19ef417ef92360fe37fda2d123978e62b85a"
+        }
+      ],
+      "reason": "Exit 0 and explicit PASS output or fresh recognizable JSON receipt."
+    },
+    {
+      "id": "editor-direct-manipulation-proof",
+      "path": "tests/vnext/proof/editor-direct-manipulation-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:64 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "6f54a81e5bb91f233ead051b7b23fd5a9a7bc36eae401dc6ce22bfd9c5d3c64b",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "fail",
+      "freeDiskBytesBefore": 11325222912,
+      "artifactDirectory": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder\\scratch\\w2c-editor-proof",
+      "artifactDirectoryExisted": false,
+      "outputVariable": null,
+      "environment": {
+        "CI": "1"
+      },
+      "preexistingReceipts": [],
+      "startedAt": "2026-10-20T16:02:03.232Z",
+      "exitCode": 1,
+      "signal": null,
+      "timedOut": false,
+      "spawnError": null,
+      "logError": null,
+      "stdoutBytes": 0,
+      "stderrBytes": 2767,
+      "positive": false,
+      "fatalStderr": true,
+      "stderrTail": "The request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-600-normal.woff2\" is outside of Vite serving allow list.\nThe request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-700-normal.woff2\" is outside of Vite serving allow list.\nThe request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-400-normal.woff2\" is outside of Vite serving allow list.\nThe request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-600-normal.woff\" is outside of Vite serving allow list.\nThe request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-700-normal.woff\" is outside of Vite serving allow list.\nThe request url \"C:\\Users\\Usuario\\Desktop\\CONFIGURATOR PCON\\catalog-builder-father-ready\\node_modules\\@fontsource\\noto-sans\\files\\noto-sans-latin-400-normal.woff\" is outside of Vite serving allow list.\nnode:internal/modules/run_main:107\r\n    triggerUncaughtException(\r\n    ^\r\n\r\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\r\n+ actual - expected\r\n\r\n+ [\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n+   'Failed to load resource: the server responded with a status of 403 (Forbidden)'\r\n+ ]\r\n- []\r\n\r\n    at file:///C:/Users/Usuario/.codex/worktrees/father-ready-continuacao/catalog-builder/tests/vnext/proof/editor-direct-manipulation-proof.mjs:244:10 {\r\n  generatedMessage: true,\r\n  code: 'ERR_ASSERTION',\r\n  actual: [\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)',\r\n    'Failed to load resource: the server responded with a status of 403 (Forbidden)'\r\n  ],\r\n  expected: [],\r\n  operator: 'deepStrictEqual',\r\n  diff: 'simple'\r\n}\r\n\r\nNode.js v24.13.0\r\n",
+      "stdoutLog": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\02-editor-direct-manipulation-proof\\stdout.log",
+      "stderrLog": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\02-editor-direct-manipulation-proof\\stderr.log",
+      "finishedAt": "2026-10-20T16:02:28.899Z",
+      "receipts": [
+        {
+          "original": "scratch\\w2c-editor-proof\\evidence.json",
+          "copy": "scratch\\continuacao\\proof-gates\\2026-10-20T16-01-50-708Z-f147df14\\02-editor-direct-manipulation-proof\\receipts\\evidence.json",
+          "sha256": "cc4971cf35c7bff881426565d5eb0f24cc5d0c5a337bf14be36c9da708c0c6ee"
+        }
+      ],
+      "reason": "Process exited 1, signal null.",
+      "stderrNote": "Inspect stderr.log; warnings alone do not override the proof verdict."
+    },
+    {
+      "id": "editor-asset-insert-proof",
+      "path": "tests/vnext/proof/editor-asset-insert-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:65 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "29b4ecf0cf00f21d5564efed25410450f34b3eba47fb2ca6b952384f1e683bc5",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "fail",
+      "freeDiskBytesBefore": 5290647552,
+      "reason": "Runner infrastructure error: Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped.",
+      "finishedAt": "2026-10-20T16:02:28.904Z"
+    },
+    {
+      "id": "editor-snapping-diagnostics-proof",
+      "path": "tests/vnext/proof/editor-snapping-diagnostics-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:66 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "074a9a1fea8fa489358ab6708ac6074f0aad1f79ac4094046676bde69ef381bc",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-template-insertion-proof",
+      "path": "tests/vnext/proof/editor-template-insertion-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:67 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "33de2763fd7ed1f05a0161f84cd8fe5d7b2380d726195ce27ab8411ce07cb0fa",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-group-proof",
+      "path": "tests/vnext/proof/editor-group-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:68 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "b141663e19647d03c4c437da97ab43677357a39ce237699515baa1a50e457725",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "group-export-proof",
+      "path": "tests/vnext/proof/group-export-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:69 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "bd9283ea63e1d6cbffc02a4b8b2337735eafe73257b07b9a5a0b80686d52d046",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "export-proof",
+      "path": "tests/vnext/proof/export-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:70 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "4793d49907ee88b231a62869857e44900ffbac24848e6795b9a8313ab9c596cd",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w3g-asset-persistence-proof",
+      "path": "tests/vnext/proof/w3g-asset-persistence-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:71 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "d6e1b3be01d9c468d549771de145990efec43b8766574b1fed6e91820882dc99",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w3h-autosave-concurrency-proof",
+      "path": "tests/vnext/proof/w3h-autosave-concurrency-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:72 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "71a7207ad830f18a258e99edd1c07b12c70fe71420e6f792b262ba91069db2b9",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w3i-father-browser-flow-proof",
+      "path": "tests/vnext/proof/w3i-father-browser-flow-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:73 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "98bd8cdfef9059ec465d202ef40b342755bb7ed53bb45ef7353ebcb0a5a4f833",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-axis-proof",
+      "path": "tests/vnext/proof/editor-table-axis-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:74 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "35e74e94200fb45ee37ef8d6617bf841f12ec02e2e90144233e273be23543566",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-cell-proof",
+      "path": "tests/vnext/proof/editor-table-cell-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:75 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "028bb1faadd174ece0688e52fcc32c6464e97c365a1c1722bb409025602388da",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-merge-proof",
+      "path": "tests/vnext/proof/editor-table-merge-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:76 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "be70157a7d0e6193d221e4f8735da7e062f4d729a6ec285871f1152af3b688f8",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-bulk-proof",
+      "path": "tests/vnext/proof/editor-table-bulk-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:77 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "afd6602fdf84a64716c300b23eedca931b81f1bd5deba9b15794d8163e419f4f",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-fit-height-proof",
+      "path": "tests/vnext/proof/editor-table-fit-height-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:78 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "222f51c352e4938865d7c6ed9b2fe53420b16538c84189b894b12f3997436dc1",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-professional-dimensions-proof",
+      "path": "tests/vnext/proof/editor-table-professional-dimensions-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:79 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "e8bbe120e55294b29ca3ddf3cab508089d4f46c1be4366428057a2a810d34bab",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-professional-style-proof",
+      "path": "tests/vnext/proof/editor-table-professional-style-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:80 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "d193a94f5562b2608c29067b106a588919e0953cf7c69cd96fd84a2a81027cac",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-table-semantic-content-proof",
+      "path": "tests/vnext/proof/editor-table-semantic-content-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:81 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "cbcfdf38b665ab11539c4a7650e5c314eda0b9c2e2dc6f8e020c28a99cd8a6d2",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-standalone-image-professional-authoring-proof",
+      "path": "tests/vnext/proof/editor-standalone-image-professional-authoring-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:82 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "e64e05d12c7492bcc18018d4bb3604c1b875664fa285760b62a1731c4c6685a0",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-object-arrangement-locking-proof",
+      "path": "tests/vnext/proof/editor-object-arrangement-locking-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:83 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "73297ec2249af0ebf4635d43ff5218d03f0105f0deaedec8c87fb4de7ab92f0c",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "editor-w4-wave4-closeout-proof",
+      "path": "tests/vnext/proof/editor-w4-wave4-closeout-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:84 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "ba7bde5b6ec65721601832fb0a7b1112faa8eb29bae6b25ee0af5c7cd6e8361c",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "productization-p1a-workspace-proof",
+      "path": "tests/vnext/proof/productization-p1a-workspace-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:85 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "8205b7df3ea140420d046ba54d6892522bdda73fee94be6c1353a256f0b5b56b",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "productization-p1b-contextual-inspector-proof",
+      "path": "tests/vnext/proof/productization-p1b-contextual-inspector-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:86 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "40d741ee7c7a5d39ccaa322a528f04ba0d9384c841cbdb4e0c6db4c053f588be",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "productization-p1c-product-coherence-proof",
+      "path": "tests/vnext/proof/productization-p1c-product-coherence-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:87 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "c45b99abbd0a8ea4e1f5a9c78a079134d2d055181401810ae25b4a5a462956f6",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w5a-semantic-translation-foundation-proof",
+      "path": "tests/vnext/proof/w5a-semantic-translation-foundation-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:88 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "ca44fe6db5c367bc1eb4310a2d4769c5c90563c699b88f87e9ac55592462dbb1",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "pilot-a-authorship-trust-proof",
+      "path": "tests/vnext/proof/pilot-a-authorship-trust-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:89 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "94af8c113d2f00cc2638799c6957205c35f5999d8d4c3bf6e74b2e1441581cb7",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "pilot-b-access-entry-proof",
+      "path": "tests/vnext/proof/pilot-b-access-entry-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:90 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "9b47c08581db5edc828ae97e98c7945686b9adef8a30f1701ba09bbad23df1b6",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "l1-authority-loss-proof",
+      "path": "tests/vnext/proof/l1-authority-loss-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:91 (VNext Chromium and PDF proofs)"
+      ],
+      "sourceHash": "5b276ff747e3d64cc77fe28718c21592ece3899c869c39a442876ca9354187ab",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "pilot-c1-official-starter-proof",
+      "path": "tests/vnext/proof/pilot-c1-official-starter-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:94 (C.1 official starter Chromium proof)"
+      ],
+      "sourceHash": "380fa39fe16139a78cde854b17444f87afc9282d500d34a3227e2df11efb0b3f",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w5b-translation-review-copy-proof",
+      "path": "tests/vnext/proof/w5b-translation-review-copy-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:97 (W5.B translation review and copy Chromium proof)"
+      ],
+      "sourceHash": "3610568f5be321130754cfd27bee5cbb995a8dc439e17c415b29d4e624075c65",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "w5c-publication-review-proof",
+      "path": "tests/vnext/proof/w5c-publication-review-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:100 (W5.C canonical publication review Chromium and PDF proof)"
+      ],
+      "sourceHash": "73c9fc696c0725aab99e37eb0902b939dfaa5f866a8e83facc7878635c9db24a",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "p2-multilingual-translation-center-proof",
+      "path": "tests/vnext/proof/p2-multilingual-translation-center-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:103 (P2 multilingual Translation Center Chromium and PDF proof)"
+      ],
+      "sourceHash": "c3a7c4fade3918bb92d1bbdbab0d181e252a4b7f3c5c12bfa248f496b8a0801c",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "father-large-catalog-proof",
+      "path": "tests/vnext/proof/father-large-catalog-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:106 (Father large catalog and table publication proof)"
+      ],
+      "sourceHash": "cbe2a653d955fcf852870e028ab62db6d0343099046736d95e261b6ce9fe7b36",
+      "requirements": {
+        "chromium": true,
+        "edge": true,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "father-translation-batching-proof",
+      "path": "tests/vnext/proof/father-translation-batching-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:109 (Father translation batching and partial failure proof)"
+      ],
+      "sourceHash": "d4ad84c853f8aa14696c1de21dd36cfa65140dd47c70d02b76b7d67d69bf096d",
+      "requirements": {
+        "chromium": true,
+        "edge": true,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "ai-catalog-prototype-proof--chromium",
+      "path": "tests/vnext/proof/ai-catalog-prototype-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:118 (AI-first prototype on the E2E build, Chromium, Edge and PDF proof)"
+      ],
+      "sourceHash": "58a41f61966adbb4914c5521ab69cb6c2185bd886ba319728618ce90c80b9c04",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": true
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "ai-catalog-prototype-proof--msedge",
+      "path": "tests/vnext/proof/ai-catalog-prototype-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:119 (AI-first prototype on the E2E build, Chromium, Edge and PDF proof)"
+      ],
+      "sourceHash": "58a41f61966adbb4914c5521ab69cb6c2185bd886ba319728618ce90c80b9c04",
+      "requirements": {
+        "chromium": false,
+        "edge": true,
+        "e2eBuild": true
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "six-model-comparison-browser-proof",
+      "path": "tests/vnext/proof/six-model-comparison-browser-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:122 (Six model physically split A4 technical tables, zero lost values)"
+      ],
+      "sourceHash": "86f54b9df5f9bbeed41e331ea248faefc65d8952d9683cefdca0664b23b5d135",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "gemini-multiturn-browser-proof",
+      "path": "tests/vnext/proof/gemini-multiturn-browser-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:134 (Two-turn Gemini clarification and approved follow-up browser proof (mock))"
+      ],
+      "sourceHash": "55f9abdf2c91a1019a4c8f1c56b3d1f4744b7429d4cd8e0f8fbb97fc14474e31",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "native-pdf-cell-fill-browser-proof",
+      "path": "tests/vnext/proof/native-pdf-cell-fill-browser-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:149 (Real local PDF byte quotes to reviewed native table, saved A4 PDF and reopen (no paid provider))"
+      ],
+      "sourceHash": "4391653e76221bf56aa00fd56aa8fbf88230ae1a54a2998d4b5749d933eb90eb",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "agent-native-full-workflow-proof",
+      "path": "tests/vnext/proof/agent-native-full-workflow-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:161 (Native agent conversation to saved and reopened A4 PDF proof (fake provider only))"
+      ],
+      "sourceHash": "46ded2cf9d596084266f4c8fc23d56dc0c05314c5ccdba5811ec8fa3305459ee",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "inline-assistant-browser-proof",
+      "path": "tests/vnext/proof/inline-assistant-browser-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:173 (Inline assistant UX on the actual VNext editor, desktop and narrow browser)"
+      ],
+      "sourceHash": "f3e60ce9d003baf6e2cc0f309791ddafd561ce6d6e96bae09901f4388c3115c9",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "byok-agent-conversation-browser-proof",
+      "path": "tests/vnext/proof/byok-agent-conversation-browser-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:185 (BYOK agent conversation to native A4 PDF, mock transport only)"
+      ],
+      "sourceHash": "3cc6a65692255801eeffa399969eb1c4e62ec9489431cbe025dfcadb4c2ba4dd",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "long-institutional-catalog-proof",
+      "path": "tests/vnext/proof/long-institutional-catalog-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:205 (Institutional 27-page technical catalog, controlled Gemini intent, saved catalog and PDF proof)"
+      ],
+      "sourceHash": "23f1729f827c59954c6faad34564a905640098743b41bebdc36cfbd786104750",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": true
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "provider-byok-device-proof",
+      "path": "tests/vnext/proof/provider-byok-device-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:217 (Device local BYOK vault crypto / unlock / reload / deletion proof)"
+      ],
+      "sourceHash": "6135fff8d0daf35cd1f9190f867a1a64ed1f476900e47edd54d9c591eae9cd0f",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "real-pdf-local-index-proof",
+      "path": "tests/vnext/proof/real-pdf-local-index-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:230 (Browser local PDF upload, indexed source, fail-closed invalid PDF)"
+      ],
+      "sourceHash": "f939c1db5cee438b19a31528cb121b033f6da4b08f60291021eb9983e28ada3e",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "advanced-table-matrix-proof",
+      "path": "tests/vnext/proof/advanced-table-matrix-proof.mjs",
+      "origins": [
+        ".github/workflows/quality-gates.yml:251 (Advanced technical table matrix Chromium, Edge and PDF proof)"
+      ],
+      "sourceHash": "239e0c0c7d40d880b1f14bef599f71abffab31dbb097c11d5e8e3edb53f8d9fd",
+      "requirements": {
+        "chromium": true,
+        "edge": true,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "fr24-thumbnails-measure",
+      "path": "tests/vnext/proof/fr24-thumbnails-measure.mjs",
+      "origins": [
+        "supplemental integration proof"
+      ],
+      "sourceHash": "375350a030791bff8962b79a44a1fb65cbbbaa6a252925ed85192dc36f4b6a65",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "fr54-bleed-print-proof",
+      "path": "tests/vnext/proof/fr54-bleed-print-proof.mjs",
+      "origins": [
+        "supplemental integration proof"
+      ],
+      "sourceHash": "f1e261c74996609f7b1813e33c296a5b57b629f008ce59b52d645a48bac782ae",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "fr80-archetypes-layout-proof",
+      "path": "tests/vnext/proof/fr80-archetypes-layout-proof.mjs",
+      "origins": [
+        "supplemental integration proof"
+      ],
+      "sourceHash": "dac0b62e63f5f4f223411a0951aaba1599fe825d216652c917ffb5b19d2080c4",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    },
+    {
+      "id": "hanging-space-browser-proof",
+      "path": "tests/vnext/proof/hanging-space-browser-proof.mjs",
+      "origins": [
+        "supplemental integration proof"
+      ],
+      "sourceHash": "188062fe2dc2ed14cc0c6c1f47599f8cd41b2d59d274e86eb660f9c326743476",
+      "requirements": {
+        "chromium": true,
+        "edge": false,
+        "e2eBuild": false
+      },
+      "status": "skipped",
+      "reason": "Free disk below 5 GiB (5290647552 bytes); further heavy proofs stopped."
+    }
+  ],
+  "finishedAt": "2026-10-20T16:02:28.965Z",
+  "counts": {
+    "pass": 1,
+    "fail": 2,
+    "skipped": 48
+  },
+  "complete": false,
+  "interrupted": false,
+  "cleanupUncertain": false
+}

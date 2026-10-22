@@ -1,0 +1,579 @@
+{
+  "journey": "j11-biblioteca",
+  "title": "J11 — Biblioteca: buscar \"Y18\", duplicar como modelo, arquivar por engano e recuperar",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "at": "2026-10-20T15:55:47.889Z",
+  "steps": [
+    {
+      "name": "três catálogos criados pela interface aparecem em \"Ativos\" (o mais recente primeiro)",
+      "ok": true,
+      "detail": "PCON-Y18 — Folder 2026 · TA-25N — Ficha técnica 2026 · PSV Inspector",
+      "atMs": 2717
+    },
+    {
+      "name": "lista com 3 catálogos: tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 2721
+    },
+    {
+      "name": "a caixa de busca está visível sem rolar e diz \"Buscar catálogos\"",
+      "ok": true,
+      "detail": "dica no campo: \"Buscar catálogos\" · {\"text\":\"Buscar catálogos\",\"fontPx\":16,\"heightPx\":42,\"widthPx\":320,\"top\":248,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 2796
+    },
+    {
+      "name": "digitar \"Y18\" deixa só o PCON-Y18 na lista, em menos de 1 s depois da última letra",
+      "ok": true,
+      "detail": "262 ms · PCON-Y18 — Folder 2026",
+      "atMs": 3341
+    },
+    {
+      "name": "\"y18\" em minúsculas também encontra",
+      "ok": true,
+      "detail": "3 ms",
+      "atMs": 3589
+    },
+    {
+      "name": "um termo sem resultado mostra \"Nenhum catálogo encontrado\" com a dica \"Tente outro termo de busca.\"",
+      "ok": true,
+      "detail": "264 ms · \"Nenhum catálogo encontrado Tente outro termo de busca.\"",
+      "atMs": 4077
+    },
+    {
+      "name": "buscar = 1 clique (na caixa) + digitar; nenhum botão \"Buscar\" é necessário",
+      "ok": true,
+      "detail": "{\"voltar à biblioteca\":3,\"buscar\":1}",
+      "atMs": 4547
+    },
+    {
+      "name": "\"Duplicar\" cria \"Cópia de PCON-Y18 — Folder 2026\" no topo da lista em menos de 2 s",
+      "ok": true,
+      "detail": "2 ms · lista: Cópia de PCON-Y18 — Folder 2026 · PCON-Y18 — Folder 2026 · mensagem: \"(nenhuma; a linha nova aparece no topo)\"",
+      "atMs": 34648
+    },
+    {
+      "name": "diálogo \"Renomear catálogo\": tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 34691
+    },
+    {
+      "name": "\"Renomear\" abre \"Renomear catálogo\" com o nome atual já preenchido e o cursor no campo",
+      "ok": true,
+      "detail": "valor: \"Cópia de PCON-Y18 — Folder 2026\" · foco no campo: true · botões: Salvar nome / Cancelar",
+      "atMs": 34713
+    },
+    {
+      "name": "Enter salva o novo nome e a lista mostra \"PCON-Y18 — Modelo de folder\"",
+      "ok": true,
+      "detail": "2 ms",
+      "atMs": 34751
+    },
+    {
+      "name": "duplicar como modelo = 2 cliques (Duplicar, Renomear) + digitar o nome + Enter",
+      "ok": true,
+      "detail": "{\"voltar à biblioteca\":3,\"buscar\":1,\"duplicar como modelo\":2}",
+      "atMs": 34782
+    },
+    {
+      "name": "o botão \"Mais\" abre um menu com a opção \"Arquivar\" (e só ela)",
+      "ok": true,
+      "detail": "botão: \"Mais\" · itens: Arquivar",
+      "atMs": 34836
+    },
+    {
+      "name": "diálogo \"Arquivar…?\": tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 34880
+    },
+    {
+      "name": "arquivar pede confirmação, explica que não é exclusão e como voltar (\"abra Arquivados e clique em Duplicar\"); o foco começa em \"Cancelar\"",
+      "ok": true,
+      "detail": "foco: \"Cancelar\" · cor do botão \"Arquivar catálogo\": rgb(163, 66, 66) · texto: \"Arquivar “PCON-Y18 — Folder 2026”? Ele sairá da lista de catálogos ativos e passará a aparecer em Arquivados. O catálogo não será excluído permanentemente: para voltar a usá-lo, abra Arquivados e clique em “Duplicar”. Cancelar Arquivar catálogo\"",
+      "atMs": 34911
+    },
+    {
+      "name": "depois de confirmar, o PCON-Y18 some de \"Ativos\" e fica guardado como arquivado",
+      "ok": true,
+      "detail": "1 ms · mensagem: \"(nenhuma)\"",
+      "atMs": 65300
+    },
+    {
+      "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+      "ok": false,
+      "finding": {
+        "id": "A-04",
+        "severity": "P2",
+        "knownFR": "FR-04 (4D: Restaurar)"
+      },
+      "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)",
+      "atMs": null
+    },
+    {
+      "name": "arquivar = 3 cliques (Mais → Arquivar → Arquivar catálogo)",
+      "ok": true,
+      "detail": "{\"voltar à biblioteca\":3,\"buscar\":1,\"duplicar como modelo\":2,\"arquivar\":3}",
+      "atMs": 65300
+    },
+    {
+      "name": "aba \"Arquivados\": tudo em português, sem jargão",
+      "ok": true,
+      "detail": "-",
+      "atMs": 65327
+    },
+    {
+      "name": "em \"Arquivados\" o PCON-Y18 aparece com a dica de como voltar a usá-lo e um botão \"Duplicar\" (sem \"Abrir\")",
+      "ok": true,
+      "detail": "2 ms · busca ao trocar de aba: \"\" (limpa sozinha) · botões: Duplicar · dica: \"Catálogos arquivados não podem ser editados. Para voltar a usar um deles, clique em “Duplicar”: a cópia aparece em Ativos.\"",
+      "atMs": 65352
+    },
+    {
+      "name": "\"Restaurar\" na linha arquivada (voltar com o mesmo nome, sem criar cópia)",
+      "ok": null,
+      "pending": true,
+      "detail": "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados",
+      "atMs": null
+    },
+    {
+      "name": "\"Duplicar\" na linha arquivada volta para \"Ativos\" com a mensagem \"Cópia criada em Ativos…\" visível sem rolar",
+      "ok": true,
+      "detail": "4 ms · \"Cópia criada em Ativos: “Cópia de PCON-Y18 — Folder 2026”. O catálogo arquivado continua guardado.\" · {\"text\":\"Cópia criada em Ativos: “Cópia de PCON-Y18 — Folder 2026”. O catálogo arquivado \",\"fontPx\":14,\"heightPx\":46,\"widthPx\":1116,\"top\":322,\"inViewport\":true,\"fullyVisible\":true}",
+      "atMs": 65445
+    },
+    {
+      "name": "a cópia recuperada \"Cópia de PCON-Y18 — Folder 2026\" está em Ativos com o botão \"Abrir\"",
+      "ok": true,
+      "detail": null,
+      "atMs": 65447
+    },
+    {
+      "name": "recuperar = 2 cliques (Arquivados → Duplicar)",
+      "ok": true,
+      "detail": "{\"voltar à biblioteca\":3,\"buscar\":1,\"duplicar como modelo\":2,\"arquivar\":3,\"recuperar\":2}",
+      "atMs": 65482
+    },
+    {
+      "name": "o catálogo arquivado continua guardado (nada foi excluído)",
+      "ok": true,
+      "detail": null,
+      "atMs": 65484
+    },
+    {
+      "name": "a cópia recuperada abre no editor, salva, com o mesmo conteúdo do original (páginas e objetos)",
+      "ok": true,
+      "detail": "{\"original\":{\"pages\":1,\"objects\":2},\"copy\":{\"pages\":1,\"objects\":2}}",
+      "atMs": 65865
+    },
+    {
+      "name": "alvos de clique da biblioteca com pelo menos 24 px de altura",
+      "ok": true,
+      "detail": "Abrir: 40 px · Duplicar: 40 px · Renomear: 40 px · Mais: 40 px · menu Arquivar: 40 px · Duplicar (arquivado): 40 px · aba Arquivados: 40 px · Salvar nome: 40 px · Arquivar catálogo: 40 px · Cancelar: 40 px",
+      "atMs": 65866
+    },
+    {
+      "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+      "ok": false,
+      "finding": {
+        "id": "A-01",
+        "severity": "P3",
+        "knownFR": "FR-05"
+      },
+      "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px",
+      "atMs": null
+    },
+    {
+      "name": "avisos, dicas e diálogos da biblioteca com pelo menos 13 px",
+      "ok": true,
+      "detail": "aviso \"Cópia criada\": 14 px · dica dos arquivados: 14 px · menu Arquivar: 13 px · texto do diálogo Arquivar: 13 px · Nenhum catálogo encontrado (dica): 13 px",
+      "atMs": 65866
+    },
+    {
+      "name": "zero erros de console e de página (do aplicativo)",
+      "ok": true,
+      "detail": "console: - · página: -",
+      "atMs": 65866
+    }
+  ],
+  "evidence": [
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-01-lista-3-catalogos.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-02-busca-y18.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-03-copia-renomeada.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-04-confirmar-arquivar.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-05-arquivados.png",
+    "scratch/father-journeys/runs/2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e/shots/j11-06-recuperado-em-ativos.png"
+  ],
+  "findings": [
+    {
+      "text": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto).",
+      "severity": "low",
+      "where": "biblioteca, Ativos"
+    }
+  ],
+  "pendingReason": "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados",
+  "pendingSteps": [
+    "pendente Onda 4 (4D, FR-04/FR-05): botão \"Restaurar\"; hoje a recuperação é por \"Duplicar\" e o original continua em Arquivados"
+  ],
+  "findingSteps": [
+    {
+      "id": "A-04",
+      "severity": "P2",
+      "knownFR": "FR-04 (4D: Restaurar)",
+      "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+      "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)"
+    },
+    {
+      "id": "A-01",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+      "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px"
+    }
+  ],
+  "statusRule": "fail = passo funcional vermelho ou achado P0/P1; pending = só passos pendentes (Onda 2/4); pass = critério de pronto cumprido. Achados P2/P3 ficam vermelhos em steps/findingSteps sem mudar o estado.",
+  "viewportUsed": {
+    "width": 1366,
+    "height": 768
+  },
+  "server": "http://127.0.0.1:5190",
+  "timings": {
+    "setupMs": 2703,
+    "searchFilterMs": 262,
+    "duplicateMs": 2,
+    "recoverMs": 4
+  },
+  "clicks": {
+    "voltar à biblioteca": 3,
+    "buscar": 1,
+    "duplicar como modelo": 2,
+    "arquivar": 3,
+    "recuperar": 2,
+    "abrir recuperado": 1
+  },
+  "measures": {
+    "search": {
+      "caixa": {
+        "text": "Buscar catálogos",
+        "fontPx": 16,
+        "heightPx": 42,
+        "widthPx": 320,
+        "top": 248,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "campo": {
+        "text": "",
+        "fontPx": 13,
+        "heightPx": 20,
+        "widthPx": 272,
+        "top": 259,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ordenarCaixa": {
+        "text": "Ordenar catálogosMais recentesTítulo A–ZTítulo Z–A",
+        "fontPx": 16,
+        "heightPx": 42,
+        "widthPx": 167,
+        "top": 248,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "ordenar": {
+        "text": "Mais recentesTítulo A–ZTítulo Z–A",
+        "fontPx": 12,
+        "heightPx": 19,
+        "widthPx": 118,
+        "top": 259,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "emptySearch": {
+      "titulo": {
+        "text": "Nenhum catálogo encontrado",
+        "fontPx": 20,
+        "heightPx": 27,
+        "widthPx": 288,
+        "top": 404,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "dica": {
+        "text": "Tente outro termo de busca.",
+        "fontPx": 13,
+        "heightPx": 20,
+        "widthPx": 173,
+        "top": 439,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "row": {
+      "titulo": {
+        "text": "PCON-Y18 — Folder 2026",
+        "fontPx": 18,
+        "heightPx": 23,
+        "widthPx": 211,
+        "top": 333,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "meta": {
+        "text": "Português (Brasil)·Atualizado em 20 de out. de 2026, 12:54",
+        "fontPx": 12,
+        "heightPx": 17,
+        "widthPx": 698,
+        "top": 363,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abrir": {
+        "text": "Abrir",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 80,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "duplicar": {
+        "text": "Duplicar",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 98,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "renomear": {
+        "text": "Renomear",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 110,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "mais": {
+        "text": "Mais ações de PCON-Y18 — Folder 2026",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 77,
+        "top": 336,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "renameDialog": {
+      "titulo": {
+        "text": "Renomear catálogo",
+        "fontPx": 20,
+        "heightPx": 26,
+        "widthPx": 386,
+        "top": 282,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "campo": {
+        "text": "",
+        "fontPx": 14,
+        "heightPx": 44,
+        "widthPx": 422,
+        "top": 380,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "salvar": {
+        "text": "Salvar nome",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 100,
+        "top": 446,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "cancelar": {
+        "text": "Cancelar",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 78,
+        "top": 446,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "menu": {
+      "arquivar": {
+        "text": "Arquivar",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 176,
+        "top": 491,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "archiveDialog": {
+      "titulo": {
+        "text": "Arquivar “PCON-Y18 — Folder 2026”?",
+        "fontPx": 20,
+        "heightPx": 26,
+        "widthPx": 386,
+        "top": 306,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "texto": {
+        "text": "Ele sairá da lista de catálogos ativos e passará a aparecer em Arquivados. O cat",
+        "fontPx": 13,
+        "heightPx": 60,
+        "widthPx": 422,
+        "top": 340,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "cancelar": {
+        "text": "Cancelar",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 78,
+        "top": 422,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "confirmar": {
+        "text": "Arquivar catálogo",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 133,
+        "top": 422,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "fechar": {
+        "text": "Fechar",
+        "fontPx": 13.3,
+        "heightPx": 36,
+        "widthPx": 36,
+        "top": 296,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "archived": {
+      "dica": {
+        "text": "Catálogos arquivados não podem ser editados. Para voltar a usar um deles, clique",
+        "fontPx": 14,
+        "heightPx": 21,
+        "widthPx": 1116,
+        "top": 320,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "estado": {
+        "text": "Arquivado",
+        "fontPx": 11,
+        "heightPx": 29,
+        "widthPx": 78,
+        "top": 379,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "duplicar": {
+        "text": "Duplicar",
+        "fontPx": 12,
+        "heightPx": 40,
+        "widthPx": 99,
+        "top": 373,
+        "inViewport": true,
+        "fullyVisible": true
+      },
+      "abaArquivados": {
+        "text": "Arquivados",
+        "fontPx": 13,
+        "heightPx": 40,
+        "widthPx": 101,
+        "top": 249,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    },
+    "notice": {
+      "aviso": {
+        "text": "Cópia criada em Ativos: “Cópia de PCON-Y18 — Folder 2026”. O catálogo arquivado ",
+        "fontPx": 14,
+        "heightPx": 46,
+        "widthPx": 1116,
+        "top": 322,
+        "inViewport": true,
+        "fullyVisible": true
+      }
+    }
+  },
+  "texts": {
+    "list": "P\nPRESYS · CATALOG BUILDER\nMeus catálogos\nNovo catálogo\nSeus catálogos técnicos\n\nEncontre um catálogo, continue o trabalho ou comece um novo.\n\nAtivos\nArquivados\nBuscar catálogos\nOrdenar catálogos\nMais recentes\nTítulo A–Z\nTítulo Z–A\nPCON-Y18 — Folder 2026\nPortuguês (Brasil)\n·\nAtualizado em 20 de out. de 2026, 12:54\nAbrir\nDuplicar\nRenomear\nMais\nTA-25N — Ficha técnica 2026\nPortuguês (Brasil)\n·\nAtualizado em 20 de out. de 2026, 12:54\nAbrir\nDuplicar\nRenomear\nMais\nPSV Inspector\nPortuguês (Brasil)\n·\nAtualizado em 20 de out. de 2026, 12:54\nAbrir\nDuplicar\nRenomear\nMais",
+    "emptySearch": "Nenhum catálogo encontrado Tente outro termo de busca.",
+    "renameDialog": "Renomear catálogo O novo nome também será o título oficial do catálogo. Nome do catálogo Cancelar Salvar nome",
+    "archiveDialog": "Arquivar “PCON-Y18 — Folder 2026”? Ele sairá da lista de catálogos ativos e passará a aparecer em Arquivados. O catálogo não será excluído permanentemente: para voltar a usá-lo, abra Arquivados e clique em “Duplicar”. Cancelar Arquivar catálogo",
+    "archived": "P\nPRESYS · CATALOG BUILDER\nMeus catálogos\nNovo catálogo\nSeus catálogos técnicos\n\nEncontre um catálogo, continue o trabalho ou comece um novo.\n\nAtivos\nArquivados\nBuscar catálogos\nOrdenar catálogos\nMais recentes\nTítulo A–Z\nTítulo Z–A\n\nCatálogos arquivados não podem ser editados. Para voltar a usar um deles, clique em “Duplicar”: a cópia aparece em Ativos.\n\nPCON-Y18 — Folder 2026\nPortuguês (Brasil)\n·\nArquivado em 20 de out. de 2026, 12:55\nArquivado\nDuplicar",
+    "recoverNotice": "Cópia criada em Ativos: “Cópia de PCON-Y18 — Folder 2026”. O catálogo arquivado continua guardado."
+  },
+  "status": "pending",
+  "findingSummary": [
+    {
+      "id": "A-04",
+      "severity": "P2",
+      "knownFR": "FR-04 (4D: Restaurar)",
+      "name": "depois de arquivar não aparece mensagem nem \"Desfazer\": a linha só some da lista",
+      "detail": "quem arquivou por engano não tem como voltar na hora; precisa descobrir sozinho a aba \"Arquivados\" (a explicação ficou só no diálogo anterior)"
+    },
+    {
+      "id": "A-01",
+      "severity": "P3",
+      "knownFR": "FR-05",
+      "name": "na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de 13 px",
+      "detail": "meta: 12 px, abrir: 12 px, duplicar: 12 px, renomear: 12 px, mais: 12 px"
+    },
+    {
+      "text": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto).",
+      "severity": "P3",
+      "where": "biblioteca, Ativos",
+      "name": "Duplicar em \"Ativos\" não mostra mensagem: o retorno é só a linha \"Cópia de …\" aparecendo no topo da lista (visível, mas discreto)."
+    }
+  ],
+  "run": {
+    "id": "2026-10-20T15-51-04-727Z-314abc6f-2369-47c4-815f-6e0126a6658e",
+    "executionId": "5476705d-0d01-4279-9fee-c65c16707985",
+    "startedAt": "2026-10-20T15:54:41.690Z",
+    "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+    "git": {
+      "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+      "branch": "codex/father-ready-continuacao",
+      "dirty": false
+    },
+    "nodeVersion": "v24.13.0",
+    "browserVersion": "151.0.7922.34",
+    "server": {
+      "service": "father-journeys-v2",
+      "root": "C:\\Users\\Usuario\\.codex\\worktrees\\father-ready-continuacao\\catalog-builder",
+      "git": {
+        "head": "25a5297857ed3ee8bf22aa72f3c70cec834c797b",
+        "branch": "codex/father-ready-continuacao",
+        "dirty": false
+      },
+      "serverId": "d44a255d-20fe-4596-a667-ab56cd55683b",
+      "startedAt": "2026-10-20T15:51:05.103Z"
+    }
+  },
+  "log": {
+    "consoleErrors": [],
+    "consoleWarnings": [],
+    "pageErrors": [],
+    "dialogs": []
+  }
+}

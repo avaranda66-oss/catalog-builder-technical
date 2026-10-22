@@ -1,0 +1,39 @@
+{
+  "sources": [
+    {
+      "id": "ta-folder",
+      "path": "catalogospdf/presys-ta-folder (4).pdf",
+      "pages": [9, 13],
+      "models": ["TA-25N", "TA-35N", "TA-50N"]
+    },
+    {
+      "id": "ta-manual-pt",
+      "path": "banhos-termicos-tipo-bloco-seco-ta-25n-ta-35n-ta-50n-industrial-avancada-manual (1).pdf",
+      "pages": [5, 8],
+      "models": ["TA-25N", "TA-35N", "TA-50N"]
+    },
+    {
+      "id": "y17-folder",
+      "path": "presyspdfs/pressure-controller-pcon-y17-folder.pdf",
+      "pages": [11, 11],
+      "models": ["PCON-Y17"]
+    }
+  ],
+  "llms": [
+    { "id": "gemini-3.5-flash-lite", "thinkingLevel": "low" },
+    { "id": "gemini-3.5-flash", "thinkingLevel": "low" },
+    { "id": "gemini-3.8-flash", "thinkingLevel": "low" }
+  ],
+  "runs": 2,
+  "temperature": 0,
+  "mediaResolution": "MEDIA_RESOLUTION_MEDIUM",
+  "maxOutputTokens": 16384,
+  "truth": "docs/ai-catalog/spike-extracao/gabarito.json",
+  "knownDivergences": [
+    { "model": "TA-25N", "key": "operating-range", "note": "faixa: até 155 °C no folder x até 140 °C no manual PT (e temperatura ambiente 23 °C x 20 °C)" },
+    { "model": "TA-25N", "key": "dimensions", "note": "dimensões: 260 x 200 x 305 mm no folder x 354,5 x 206 x 318 mm no manual PT" },
+    { "model": "TA-35N", "key": "operating-range", "note": "faixa: até 155 °C x até 140 °C" },
+    { "model": "TA-50N", "key": "operating-range", "note": "faixa: até 155 °C x até 140 °C" },
+    { "model": "TA-25N", "key": "stability", "note": "estabilidade: ± 0.02 °C no folder x 0,02 ºC (sem ±) no manual PT (achado do spike)" }
+  ]
+}

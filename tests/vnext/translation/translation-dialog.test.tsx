@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TranslationReview } from '@/vnext/app/TranslationReview';
+import { TRANSLATION_SAVE_NEEDED_MESSAGE, TranslationReview } from '@/vnext/app/TranslationReview';
+import type { ManualSaveResult } from '@/vnext/persistence/save-coordinator';
 import { createW2CDemoDocument } from '@/vnext/app/editor-defaults';
 import { translationReviewKey, type TranslationReviewRun } from '@/vnext/translation/candidate';
 import type { TranslationReviewCoordinator, TranslationReviewSnapshot } from '@/vnext/translation/review-coordinator';
@@ -13,9 +14,9 @@ const runs: readonly TranslationReviewRun[] = [{ unitId: 'unit-a', runId: 'run-a
   sourceText: 'Precisão ±0,1 °C', translatedText: 'Precisión ±0,1 °C' }];
 const firstKey = translationReviewKey(runs[0].unitId, runs[0].runId);
 
-function setup(initial: Partial<TranslationReviewSnapshot>, sourceLocale = 'pt-BR') {
+function setup(initial: Partial<TranslationReviewSnapshot>, sourceLocale = 'pt-BR', save?: () => Promise<ManualSaveResult>) {
   let snapshot: TranslationReviewSnapshot = { phase: 'idle', pending: false, runs: [], targetLocale: 'es-ES',
-    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0, ...initial };
+    reviewedRunKeys: [], correctedRunKeys: [], invalidRunKeys: [], correctionCount: 0, confirmedReadings: {}, ...initial };
   const listeners = new Set<() => void>();
   const coordinator = {
     getSnapshot: () => snapshot,
@@ -25,7 +26,7 @@ function setup(initial: Partial<TranslationReviewSnapshot>, sourceLocale = 'pt-B
   };
   const close = vi.fn(), openCopy = vi.fn();
   const view = render(<TranslationReview coordinator={coordinator as unknown as TranslationReviewCoordinator} sourceLocale={sourceLocale}
-    sourceTitle="PRESYS TA-25N" onClose={close} onOpenCopy={openCopy} />);
+    sourceTitle="PRESYS TA-25N" onClose={close} onOpenCopy={openCopy} save={save} />);
   const publish = (change: Partial<TranslationReviewSnapshot>) => act(() => {
     snapshot = { ...snapshot, ...change }; listeners.forEach(listener => listener());
   });
@@ -98,7 +99,11 @@ describe('P2 Translation Center presentation and safety guards', () => {
     expect(view.getByText('Precisão ±0,1 °C')).toBeInTheDocument();
     expect(view.container.textContent).not.toContain('catalog-unit-hidden');
     expect(view.container.textContent).not.toContain('run-a');
-    expect(view.getByRole('combobox')).toBeDisabled();
+    // F-09: na revisão o seletor some e os idiomas viram uma linha; a descrição fica só para leitores de tela.
+    expect(view.queryByRole('combobox')).toBeNull();
+    expect(view.container.querySelector('[data-translation-languages="compact"]')).toHaveTextContent(/PRESYS TA-25N·Português \(Brasil\) →.*Inglês \(Estados Unidos\)/);
+    expect(view.getByText(/Gere e revise uma cópia/)).toHaveClass('vnext-translation-description-compact');
+    expect(view.container.querySelector('[data-translation-suggestions-summary]')).toHaveTextContent('1 ajuste de números · 0 perguntas · 0 termos do glossário');
     const translation = view.getByRole('textbox', { name: 'Tradução 2' });
     expect(translation).toHaveAttribute('data-translation-run', '1');
     fireEvent.change(translation, { target: { value: 'Revised accuracy ±0,1 °C' } });
@@ -197,8 +202,9 @@ describe('P2 Translation Center presentation and safety guards', () => {
     const { view, coordinator, close } = setup({ phase: 'error', pending: true, runs, targetLocale: 'en-US',
       message: 'Não foi possível confirmar a cópia. Tente verificar novamente; nenhuma nova cópia será preparada.' });
     expect(view.getByRole('alert')).toHaveTextContent('Tente verificar novamente');
-    expect(view.getByRole('combobox')).toBeDisabled();
-    expect(view.getByRole('combobox')).toHaveValue('en-US');
+    // F-09: com trechos na tela o idioma de destino é só informado (sem seletor).
+    expect(view.queryByRole('combobox')).toBeNull();
+    expect(view.container.querySelector('[data-translation-languages="compact"]')).toHaveTextContent('Inglês (Estados Unidos)');
     expect(view.getByRole('button', { name: 'Fechar' })).toBeDisabled();
     expect(view.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     expect(view.getByRole('textbox', { name: 'Tradução 1' })).toBeDisabled();
@@ -247,5 +253,108 @@ describe('P2 Translation Center presentation and safety guards', () => {
     verify.focus(); fireEvent.keyDown(view.getByRole('dialog'), { key: 'Tab' }); expect(document.activeElement).toBe(region);
     fireEvent.keyDown(view.getByRole('dialog'), { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(verify);
     view.unmount(); expect(background.inert).toBe(false); expect(document.activeElement).toBe(trigger); background.remove();
+  });
+});
+
+describe('E-01 Gerar tradução saves first', () => {
+  it('saves the catalog and only then generates, telling the person it is saving', async () => {
+    let finish!: (result: ManualSaveResult) => void;
+    const save = vi.fn(() => new Promise<ManualSaveResult>(resolve => { finish = resolve; }));
+    const { view, coordinator } = setup({}, 'pt-BR', save);
+    fireEvent.change(view.getByRole('combobox', { name: 'Idioma de destino' }), { target: { value: 'en-US' } });
+    fireEvent.click(view.getByRole('button', { name: 'Gerar tradução' }));
+    expect(save).toHaveBeenCalledOnce();
+    expect(coordinator.generate).not.toHaveBeenCalled();
+    expect(view.getByRole('status')).toHaveTextContent('Salvando o catálogo antes de traduzir…');
+    const button = view.getByRole('button', { name: 'Salvando…' });
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(view.getByRole('combobox', { name: 'Idioma de destino' })).toBeDisabled();
+    // A second click while saving does not save or translate twice.
+    fireEvent.click(button);
+    expect(save).toHaveBeenCalledOnce();
+    await act(async () => { finish({ ok: true, acknowledged: true }); });
+    expect(coordinator.generate).toHaveBeenCalledOnce();
+    expect(coordinator.generate).toHaveBeenCalledWith('en-US');
+    expect(view.queryByRole('alert')).toBeNull();
+    expect(view.getByRole('button', { name: 'Gerar tradução' })).not.toHaveAttribute('aria-busy');
+  });
+
+  it('explains in plain words when the save did not work and does not translate', async () => {
+    const save = vi.fn(async (): Promise<ManualSaveResult> => ({ ok: false, error: { code: 'OFFLINE' } as never }));
+    const { view, coordinator } = setup({}, 'pt-BR', save);
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Gerar tradução' })); });
+    expect(coordinator.generate).not.toHaveBeenCalled();
+    expect(view.getByRole('alert')).toHaveTextContent(TRANSLATION_SAVE_NEEDED_MESSAGE);
+    expect(TRANSLATION_SAVE_NEEDED_MESSAGE).not.toMatch(/OFFLINE|erro|error/i);
+    // A thrown save is explained the same way.
+    save.mockRejectedValueOnce(new Error('storage failed'));
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Gerar tradução' })); });
+    expect(coordinator.generate).not.toHaveBeenCalled();
+    expect(view.getByRole('alert')).toHaveTextContent(TRANSLATION_SAVE_NEEDED_MESSAGE);
+  });
+
+  it('does not translate after the review was closed while it was saving', async () => {
+    let finish!: (result: ManualSaveResult) => void;
+    const save = vi.fn(() => new Promise<ManualSaveResult>(resolve => { finish = resolve; }));
+    const { view, coordinator } = setup({}, 'pt-BR', save);
+    fireEvent.click(view.getByRole('button', { name: 'Gerar tradução' }));
+    view.unmount();
+    await act(async () => { finish({ ok: true, acknowledged: true }); });
+    expect(coordinator.generate).not.toHaveBeenCalled();
+  });
+});
+
+describe('E-02 closing the review with corrections asks first', () => {
+  const corrected = { phase: 'review' as const, runs, correctionCount: 1, correctedRunKeys: [firstKey], reviewedRunKeys: [firstKey] };
+
+  it('asks "Descartar as correções da tradução?" on Cancelar, Fechar and Esc, and keeps the review on "Continuar revisando"', () => {
+    const { view, coordinator, close } = setup(corrected);
+    const cancelButton = view.getByRole('button', { name: 'Cancelar' });
+    cancelButton.focus();
+    fireEvent.click(cancelButton);
+    const confirm = view.getByRole('alertdialog', { name: 'Descartar as correções da tradução?' });
+    expect(confirm).toHaveTextContent('O catálogo original não muda.');
+    expect(coordinator.cancel).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    const keep = within(confirm).getByRole('button', { name: 'Continuar revisando' });
+    expect(document.activeElement).toBe(keep);
+    expect(within(confirm).getByRole('button', { name: 'Descartar correções e fechar' })).toBeInTheDocument();
+    fireEvent.click(keep);
+    expect(view.queryByRole('alertdialog')).toBeNull();
+    expect(view.getByRole('textbox', { name: 'Tradução 1' })).toBeInTheDocument();
+
+    fireEvent.click(view.getByRole('button', { name: 'Fechar' }));
+    expect(view.getByRole('alertdialog')).toBeInTheDocument();
+    // Esc while asking goes back to the review, it never discards.
+    fireEvent.keyDown(view.getByRole('dialog'), { key: 'Escape' });
+    expect(view.queryByRole('alertdialog')).toBeNull();
+    fireEvent.keyDown(view.getByRole('textbox', { name: 'Tradução 1' }), { key: 'Escape' });
+    expect(view.getByRole('alertdialog')).toBeInTheDocument();
+    expect(coordinator.cancel).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('discards and closes only after "Descartar correções e fechar"', () => {
+    const { view, coordinator, close } = setup(corrected);
+    fireEvent.click(view.getByRole('button', { name: 'Cancelar' }));
+    fireEvent.click(view.getByRole('button', { name: 'Descartar correções e fechar' }));
+    expect(coordinator.cancel).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('counts a correction still being typed as work to protect', () => {
+    const { view, coordinator } = setup({ phase: 'review', runs });
+    fireEvent.change(view.getByRole('textbox', { name: 'Tradução 1' }), { target: { value: 'Precisión corregida ±0,1 °C' } });
+    fireEvent.keyDown(view.getByRole('textbox', { name: 'Tradução 1' }), { key: 'Escape' });
+    expect(view.getByRole('alertdialog', { name: 'Descartar as correções da tradução?' })).toBeInTheDocument();
+    expect(coordinator.cancel).not.toHaveBeenCalled();
+  });
+
+  it('closes right away when nothing was corrected or reviewed yet', () => {
+    const { view, coordinator, close } = setup({ phase: 'review', runs });
+    fireEvent.click(view.getByRole('button', { name: 'Cancelar' }));
+    expect(view.queryByRole('alertdialog')).toBeNull();
+    expect(coordinator.cancel).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
   });
 });

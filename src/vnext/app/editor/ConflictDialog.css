@@ -1,0 +1,68 @@
+/* FR-43 conflict dialog: same navy/white look as the other editor dialogs; fits a 320 px screen. */
+.vnext-conflict-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(23 32 51 / .5);
+  font-family: var(--vnext-font-family, 'Noto Sans', Arial, sans-serif);
+}
+.vnext-conflict-dialog {
+  box-sizing: border-box;
+  width: min(600px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  border: 1px solid var(--vnext-border, #d8e0e8);
+  border-radius: var(--vnext-radius-dialog, 12px);
+  background: var(--vnext-surface, #fff);
+  box-shadow: var(--vnext-dialog-shadow, 0 18px 48px rgb(23 32 51 / .24));
+  color: var(--vnext-text, #172033);
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.vnext-conflict-dialog:focus { outline: none; }
+.vnext-conflict-dialog h2 { margin: 0 0 10px; color: var(--vnext-primary, #1f3a5f); font-size: 20px; line-height: 1.3; }
+.vnext-conflict-dialog p, .vnext-conflict-dialog li { font-size: 15px; line-height: 1.55; }
+.vnext-conflict-dialog p { margin: 0 0 10px; }
+.vnext-conflict-choices { display: grid; gap: 10px; margin: 0 0 14px; padding-left: 20px; }
+.vnext-conflict-confirm {
+  margin: 0 0 14px;
+  border-left: 4px solid var(--vnext-warning, #b7791f);
+  background: var(--vnext-surface-muted, #f7f9fb);
+  padding: 10px 12px;
+}
+.vnext-conflict-confirm p:last-child { margin-bottom: 0; }
+.vnext-conflict-problem {
+  border: 1px solid #e2b8b8;
+  border-radius: var(--vnext-radius-control, 7px);
+  background: var(--vnext-error-surface, #fff3f3);
+  color: var(--vnext-error, #8f3030);
+  padding: 8px 12px;
+}
+.vnext-conflict-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.vnext-conflict-actions button { max-width: 100%; min-height: 44px; font-size: 15px; white-space: normal; text-align: center; }
+.vnext-conflict-actions .vnext-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--vnext-error, #8f3030);
+  border-radius: var(--vnext-radius-control, 7px);
+  background: var(--vnext-surface, #fff);
+  color: var(--vnext-error, #8f3030);
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 9px 14px;
+}
+.vnext-conflict-actions .vnext-btn-danger:hover { background: var(--vnext-error-surface, #fff3f3); }
+.vnext-conflict-actions button:focus-visible { outline: 3px solid rgb(0 114 206 / .35); outline-offset: 2px; }
+.vnext-conflict-progress { margin: 10px 0 0; color: var(--vnext-text-muted, #66758a); }
+@media (max-width: 480px) {
+  .vnext-conflict-backdrop { padding: 12px; }
+  .vnext-conflict-dialog { max-height: calc(100dvh - 24px); padding: 18px; }
+  .vnext-conflict-actions button { width: 100%; }
+}
+@media print { .vnext-conflict-backdrop { display: none; } }

@@ -5,6 +5,7 @@ import { createCatalogDocument, createDocumentSession } from '../../../src/vnext
 import { createInsertSpec } from '../../../src/vnext/app/editor-defaults';
 import { CatalogNativeComposer } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
 import type { NativeComposeFunctionsClient } from '../../../src/vnext/ai-catalog/native-compose-client';
+import { clearByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
 
 vi.mock('../../../src/vnext/ai-catalog/ProviderCredentialsSettings', () => ({
   ProviderCredentialsSettings: ({ onUnlock }: {
@@ -12,7 +13,7 @@ vi.mock('../../../src/vnext/ai-catalog/ProviderCredentialsSettings', () => ({
   }) => <button type="button" onClick={() => onUnlock('gemini', 'fake-temporary-test-key')}>Autorizar Gemini de teste</button>,
 }));
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
-afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); localStorage.clear(); clearByokCredential(); vi.restoreAllMocks(); });
 afterAll(() => vi.unstubAllGlobals());
 const id = () => crypto.randomUUID();
 function setup() {
@@ -36,8 +37,6 @@ function setup() {
   return { session, selected, invoke, ui, doc };
 }
 async function requestRewrite() {
-  fireEvent.click(screen.getByRole('button', { name: 'Conectar Gemini' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Autorizar Gemini de teste' }));
   fireEvent.click(screen.getByRole('button', { name: 'Reescrever este texto com Gemini' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Como deseja reescrever o texto selecionado?' }), {
     target: { value: 'Reescreva esta frase em linguagem institucional mais clara.' },
@@ -55,10 +54,13 @@ describe('Selected-text Gemini editing in the same conversation and canonical do
       .toHaveTextContent('Novo texto');
     expect(screen.getByRole('group', { name:'Revisão de texto selecionado' }))
       .toHaveTextContent('Apresentação institucional dos instrumentos');
-    const [name, request] = f.invoke.mock.calls[0];
+    // The first call is the free readiness check (task "status"); the rewrite follows it.
+    const [name, request] = f.invoke.mock.calls.find(([, options]) => options.body.task !== 'status')!;
     expect(name).toBe('vnext-catalog-composer');
     expect(request.body.task).toBe('revise_selected_text');
     expect(request.body.target.objectId).toBe(f.selected.objectId);
+    // Server key by default: no personal credential travels with the rewrite.
+    expect(request.body).not.toHaveProperty('credential');
     expect(JSON.stringify(request.body)).not.toContain('schemaVersion');
     fireEvent.click(screen.getByRole('button', {name:'Confirmar reescrita selecionada'}));
     const changed=f.session.getSnapshot().document;

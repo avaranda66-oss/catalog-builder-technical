@@ -1,0 +1,105 @@
+import { describe, expect, it } from 'vitest';
+import {
+  displayLocale, excelSerialToDate, formatExcelBoolean, formatExcelDate, formatExcelDateValue, formatExcelNumber, formatGeneralNumber,
+  isCurrencyFormat, isDateFormat,
+} from '../../../src/vnext/ai-catalog/excel-display-format';
+
+const pt = displayLocale('pt-BR');
+const en = displayLocale('en-US');
+const show = (value: number, format: string, locale = pt) => formatExcelNumber(value, format, locale).text;
+
+describe('Excel display formatting (what the father sees in Excel)', () => {
+  it('shows General numbers without float artifacts and with the Brazilian decimal comma', () => {
+    expect(formatGeneralNumber(0.30000000000000004, pt)).toBe('0,3');
+    expect(formatGeneralNumber(1234.5, pt)).toBe('1234,5');
+    expect(formatGeneralNumber(1 / 3, pt)).toBe('0,3333333333');
+    expect(formatGeneralNumber(-5, pt)).toBe('-5');
+    expect(formatGeneralNumber(123456789012, pt)).toBe('1,23457E+11');
+    expect(formatExcelNumber(0.1 + 0.2, 'General', en).text).toBe('0.3');
+  });
+
+  it('keeps decimal places, percent, thousands and quoted unit suffixes', () => {
+    expect(show(0.01, '0.000')).toBe('0,010');
+    expect(show(0.0005, '0.00%')).toBe('0,05%');
+    expect(show(1234.5, '#,##0.00')).toBe('1.234,50');
+    expect(show(1234.5, '#,##0.00', en)).toBe('1,234.50');
+    expect(show(0.025, '0.000 "%FS"')).toBe('0,025 %FS');
+    expect(show(5500, '"$"#,##0')).toBe('$5.500');
+    expect(show(5000, '[$€]#,##0')).toBe('€5.000');
+    expect(show(1.005, '0.00')).toBe('1,01');
+    expect(show(42, '00000')).toBe('00042');
+    expect(show(1234567, '#,##0,')).toBe('1.235');
+    expect(show(12345, '0.00E+00')).toBe('1,23E+04');
+  });
+
+  it('drops optional decimals like Excel and uses the negative section', () => {
+    expect(show(1.5, '0.0#')).toBe('1,5');
+    expect(show(1, '0.0#')).toBe('1,0');
+    expect(show(-1234, '#,##0;(#,##0)')).toBe('(1.234)');
+    expect(show(-1234, '#,##0')).toBe('-1.234');
+    expect(show(-0.4, '0')).toBe('0');
+  });
+
+  it('marks formats it cannot reproduce instead of guessing silently', () => {
+    expect(formatExcelNumber(150, '[>100]0;0', pt)).toEqual({ text: '150', exact: false });
+    expect(formatExcelNumber(0.5, '# ?/?', pt).exact).toBe(false);
+    // Engineering notation follows Excel's rule (exponent in steps of 3) but stays marked for review.
+    expect(formatExcelNumber(12345, '##0.0E+0', pt)).toEqual({ text: '12,3E+3', exact: false });
+    expect(formatExcelNumber(0.00012345, '##0.0E+0', pt).text).toBe('123,5E-6');
+  });
+
+  it('drops the spaces Excel only uses to align columns ("_)", "?", accounting)', () => {
+    expect(show(0.1, '0.0_)')).toBe('0,1');
+    expect(show(1234.5, '#,##0.00_);(#,##0.00)')).toBe('1.234,50');
+    expect(show(-1234.5, '#,##0.00_);(#,##0.00)')).toBe('(1.234,50)');
+    const accounting = '_-* #,##0.00_-;-* #,##0.00_-;_-* "-"??_-;_-@_-';
+    expect(show(1234.5, accounting)).toBe('1.234,50');
+    expect(show(-1234.5, accounting)).toBe('-1.234,50');
+    expect(show(0, accounting)).toBe('-');
+    expect(show(0.5, '0.0??')).toBe('0,5');
+    expect(show(5, '??0')).toBe('5');
+  });
+
+  it('tells money formats apart from language codes', () => {
+    expect(isCurrencyFormat('"R$" #,##0.00')).toBe(true);
+    expect(isCurrencyFormat('[$€-2] #,##0')).toBe(true);
+    expect(isCurrencyFormat('$#,##0.00')).toBe(true);
+    expect(isCurrencyFormat('[$-416]dd/mm/yyyy')).toBe(false);
+    expect(isCurrencyFormat('0.000 "%FS"')).toBe(false);
+    expect(isCurrencyFormat(undefined)).toBe(false);
+  });
+
+  it('shows dates as dd/mm/aaaa (time only when the format has it) and booleans as Sim/Não', () => {
+    const date = new Date(Date.UTC(2026, 9, 14, 14, 20, 7));
+    expect(formatExcelDate(date, 'mm-dd-yy', pt)).toBe('14/10/2026');
+    expect(formatExcelDate(date, 'm/d/yyyy h:mm:ss', pt)).toBe('14/10/2026 14:20:07');
+    expect(formatExcelDate(date, 'mm-dd-yy', en)).toBe('10/14/2026');
+    expect(isDateFormat('dd/mm/yyyy')).toBe(true);
+    expect(isDateFormat('0.000 "%FS"')).toBe(false);
+    expect(formatExcelNumber(46309, 'dd/mm/yyyy', pt).text).toBe('14/10/2026');
+    expect(formatExcelBoolean(true, pt)).toBe('Sim');
+    expect(formatExcelBoolean(false, pt)).toBe('Não');
+    expect(formatExcelBoolean(true, en)).toBe('Yes');
+  });
+
+  it('shows durations past 24 hours as Excel does ([h]:mm)', () => {
+    expect(formatExcelNumber(1.5, '[h]:mm', pt)).toEqual({ text: '36:00', exact: true });
+    expect(formatExcelDateValue(excelSerialToDate(1.5 + 5 / 86_400), '[h]:mm:ss', pt)).toEqual({ text: '36:00:05', exact: true });
+    expect(formatExcelNumber(0.5 / 24, '[mm]:ss', pt).text).toBe('30:00');
+    expect(formatExcelNumber(90 / 86_400, '[ss]', pt).text).toBe('90');
+  });
+
+  it('keeps only the date parts the format shows and marks month names for review', () => {
+    const date = new Date(Date.UTC(2026, 9, 14, 14, 20, 7));
+    expect(formatExcelDateValue(date, 'mmm-yy', pt)).toEqual({ text: '10/2026', exact: false });
+    expect(formatExcelDateValue(date, 'yyyy', pt)).toEqual({ text: '2026', exact: true });
+    expect(formatExcelDateValue(date, 'dd/mm', pt)).toEqual({ text: '14/10', exact: false });
+    expect(formatExcelDateValue(date, 'h:mm', pt)).toEqual({ text: '14:20', exact: true });
+    expect(formatExcelDateValue(date, 'h:mm AM/PM', pt).exact).toBe(false);
+    expect(formatExcelDateValue(date, 'dd/mm/yyyy', pt)).toEqual({ text: '14/10/2026', exact: true });
+  });
+
+  it('falls back to Brazilian Portuguese for an invalid language tag', () => {
+    expect(displayLocale('not a locale!!')).toMatchObject({ decimal: ',', group: '.', yes: 'Sim', no: 'Não' });
+  });
+});

@@ -1,0 +1,30 @@
+{
+  "llm": "gemini-3.8-flash",
+  "sourceId": "y17-folder",
+  "run": 1,
+  "promptVersion": "fr66a-2026-10-15.1",
+  "transport": "files-api",
+  "ok": true,
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "modelVersion": "gemini-3.8-flash",
+  "usage": {
+    "promptTokenCount": 7136,
+    "candidatesTokenCount": 1198,
+    "totalTokenCount": 8334,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 752
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 6384
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "ms": 9577,
+  "uploadMs": 20540,
+  "text": "{\n  \"title\": \"PCON-Y17\",\n  \"models\": [\n    \"PCON-Y17\"\n  ],\n  \"sections\": [\n    {\n      \"title\": \"Technical Specifications\",\n      \"rows\": [\n        {\n          \"key\": \"pneumatic-connection\",\n          \"label\": \"Pneumatic Connections (Pressure Control Module - C1)\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"1/8\\\" Female BSPP\",\n              \"condition\": \"Supply (+) / Supply (-) / Output / Reference\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Pneumatic Connections (Pressure Control Module - C1): 1/8\\\" Female BSPP (Supply (+) / Supply (-) / Output / Reference).\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"power-supply\",\n          \"label\": \"Power Supply\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"100 to 240\",\n              \"unit\": \"Vac\",\n              \"condition\": \"50/60 Hz\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Power Supply: 100 to 240 Vac 50/60 Hz.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"ambient-temperature\",\n          \"label\": \"Operating Ambient\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"0 to 50\",\n              \"unit\": \"°C\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"operating-humidity\",\n          \"label\": \"Operating Ambient\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"90\",\n              \"unit\": \"%\",\n              \"condition\": \"maximum relative humidity\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Operating Ambient: 0 to 50 °C, 90 % maximum relative humidity.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"dimensions\",\n          \"label\": \"Dimensions\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"125 mm x 300 mm x 265 mm\",\n              \"condition\": \"DT Version\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"\n              }\n            },\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"132 mm x 483 mm x 300 mm\",\n              \"condition\": \"RM Version\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Dimensions: 125 mm x 300 mm x 265 mm (DT Version) / 132 mm x 483 mm x 300 mm (RM Version) (HxWxD).\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"weight\",\n          \"label\": \"Weight\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"6.2\",\n              \"unit\": \"kg\",\n              \"condition\": \"DT Version, nominal\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"\n              }\n            },\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"8.5\",\n              \"unit\": \"kg\",\n              \"condition\": \"RM Version, nominal\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Weight: 6.2 kg (DT Version) / 8.5 kg (RM Version) nominal.\"\n              }\n            }\n          ]\n        },\n        {\n          \"key\": \"warranty\",\n          \"label\": \"Warranty\",\n          \"values\": [\n            {\n              \"model\": \"PCON-Y17\",\n              \"literal\": \"1\",\n              \"unit\": \"year\",\n              \"sourceRef\": {\n                \"page\": 11,\n                \"quote\": \"Warranty: 1 year\"\n              }\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+}

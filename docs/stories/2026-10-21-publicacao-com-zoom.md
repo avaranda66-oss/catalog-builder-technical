@@ -39,9 +39,9 @@ Prova `publication-zoom-proof.mjs` com os 5 catálogos profissionais reais (PCON
 
 Medido primeiro no ramo `claude/father-ready-final` (onde a checagem FR-51 `UNRESOLVED_PLACEHOLDER` bloqueia 4 dos 5 catálogos igualmente em todas as escalas, por texto "a confirmar"). A linha de base também foi reproduzida em produção (`e932e87`): PCON "Pronto para imprimir" em 100% e "Publicação bloqueada" com 2.184 itens em 110% e 3.681 em 90%.
 
-PR para `main` (cherry-pick de `0996d11` sobre `e932e87`, só as linhas da correção): os 5 catálogos ficam READY e com impressão aprovada em 100/90/110/125%, sem nenhum diagnóstico.
+PR #88, primeiro sobre `e932e87` (cherry-pick de `0996d11`): os 5 catálogos READY e com impressão aprovada em 100/90/110/125%, sem nenhum diagnóstico. Gates nessa base: lint 0 erros (0 avisos nos arquivos alterados), typecheck ok, test 3.864 passam (0 falhas), build ok.
 
-Gates sobre `main`: lint 0 erros (269 avisos preexistentes; 0 nos arquivos alterados com `--max-warnings 0`); typecheck ok; test 3.864 passam (336 arquivos, 0 falhas); build ok.
+Depois que o `main` recebeu o #87 (Father-Ready Ondas 1 e 2, árvore igual a `5e372e7`), o PR foi atualizado por merge do `main`. A árvore resultante é idêntica à já validada em `9607cc3`: typecheck ok; prova de zoom PASS (PCON READY e impressão aprovada em todas as escalas; os outros 4 com os mesmos diagnósticos de 100%, bloqueados só por `UNRESOLVED_PLACEHOLDER`); suíte completa 5.205 passam, com 1 timeout intermitente de 5 s (`father-editor-safety`) que passa isolado.
 
 ## File List
 

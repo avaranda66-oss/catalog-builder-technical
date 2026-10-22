@@ -63,17 +63,17 @@ describe('W2.D canonical authoring diagnostics', () => {
     expect(JSON.stringify(session.getSnapshot().document.pages[0].objects[0].frame)).toBe(beforeDiagnostics);
   });
 
-  it('keeps outside-page geometry authored and reports OBJECT_OUTSIDE_PAGE as blocking ERROR', () => {
+  it('keeps outside-page geometry authored and reports OBJECT_OUTSIDE_PAGE as blocking ERROR beyond the FR-54 bleed tolerance', () => {
     const session = createDocumentSession(shapeDocument(), { createId: ids('outside') });
-    const moved = session.execute({ type: 'object.move', objectId: 'shape-target', xU: mmToU(-1), yU: mmToU(20) });
+    const moved = session.execute({ type: 'object.move', objectId: 'shape-target', xU: mmToU(-4), yU: mmToU(20) });
     expect(moved.ok).toBe(true);
-    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-1);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-4);
     expect(authoredFrameDiagnostics(session.getSnapshot().document)).toContainEqual(expect.objectContaining({
       code: 'OBJECT_OUTSIDE_PAGE',
       severity: 'ERROR',
       objectId: 'shape-target',
     }));
-    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-1);
+    expect(session.getSnapshot().document.pages[0].objects[0].frame.xMm).toBe(-4);
   });
 
   it('reports TEXT_OBJECT_OVERFLOW as ERROR without resizing the Text frame', () => {

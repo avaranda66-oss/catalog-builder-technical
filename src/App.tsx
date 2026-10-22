@@ -12,7 +12,12 @@ import { LibraryExperienceGate } from './components/library-v2';
 import { PublicationsView } from './components/publications/PublicationsView';
 import { MediaGalleryModal } from './components/common/MediaGalleryModal';
 import { LoginView } from './components/auth/LoginView';
-import { consumeTrustedV2ReturnTarget } from './components/auth/return-target';
+import {
+  clearRootRedirectGuard,
+  resolveSignedInEntry,
+  rootEntryNavigation,
+  type SignedInEntryDecision,
+} from './components/auth/root-entry';
 import { PrintDocumentView } from './components/export/PrintDocumentView';
 import { useAuthStore } from './stores/useAuthStore';
 import { useWorkbookDraftStore } from './stores/useWorkbookDraftStore';
@@ -47,17 +52,27 @@ export const App: React.FC = () => {
 
   const bootstrappedUserIdRef = React.useRef<string | null>(null);
   const redirectingToV2Ref = React.useRef(false);
+  // Signed-in visits to "/" go to "Meus catálogos" (/v2); the classic editor only stays with ?classico=1.
+  const [entryDecision, setEntryDecision] = React.useState<SignedInEntryDecision | null>(null);
+  const staysInClassic = entryDecision?.kind === 'stay';
 
   useEffect(() => {
     void initializeAuth();
   }, [initializeAuth]);
 
   useEffect(() => {
-    if (status !== 'authenticated' || redirectingToV2Ref.current) return;
-    const target = consumeTrustedV2ReturnTarget();
-    if (!target) return;
-    redirectingToV2Ref.current = true;
-    window.location.replace(target);
+    if (redirectingToV2Ref.current) return;
+    if (status !== 'authenticated') {
+      setEntryDecision(null);
+      if (status === 'unauthenticated') clearRootRedirectGuard();
+      return;
+    }
+    const decision = resolveSignedInEntry();
+    if (decision.kind === 'redirect') {
+      redirectingToV2Ref.current = true;
+      rootEntryNavigation.replace(decision.target);
+    }
+    setEntryDecision(decision);
   }, [status, userId]);
 
   // Atalho Global Profissional: Ctrl+S / Cmd+S (Salva documento ou planilha ativa)
@@ -79,6 +94,8 @@ export const App: React.FC = () => {
       bootstrappedUserIdRef.current = null;
       return;
     }
+    // The classic workspace loads only when this visit really stays in the classic app.
+    if (!staysInClassic) return;
 
     // 1. BOOTSTRAP DO WORKSPACE EXECUTADO UMA ÚNICA VEZ POR USUÁRIO/SESSÃO
     if (userId && bootstrappedUserIdRef.current !== userId) {
@@ -219,7 +236,7 @@ export const App: React.FC = () => {
         void supabase.removeChannel(rawChannel);
       }
     };
-  }, [loadProducts, loadLatestCatalog, loadAssets, loadTemplates, handleRealtimeTemplateEvent, status, userId]);
+  }, [loadProducts, loadLatestCatalog, loadAssets, loadTemplates, handleRealtimeTemplateEvent, status, userId, staysInClassic]);
 
   if (status === 'loading') {
     return <main className="vnext-login-shell"><section className="vnext-login-card" role="status"><p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p><p className="vnext-dialog-description">Validando acesso…</p></section></main>;
@@ -247,6 +264,30 @@ export const App: React.FC = () => {
         </section>
       </main>
     );
+  }
+
+  if (entryDecision?.kind === 'loop-blocked') {
+    const target = entryDecision.target;
+    return (
+      <main className="vnext-login-shell">
+        <section className="vnext-login-card" aria-labelledby="entry-blocked-title">
+          <p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p>
+          <h1 id="entry-blocked-title">Não foi possível abrir seus catálogos</h1>
+          <p className="vnext-status" data-tone="error" role="alert">
+            Tentamos abrir “Meus catálogos”, mas a página voltou para cá. Clique em “Abrir meus catálogos” para tentar de novo.
+          </p>
+          <p className="vnext-login-help">Se continuar, clique em Sair e entre novamente.</p>
+          <div className="vnext-login-actions">
+            <button onClick={() => rootEntryNavigation.assign(target)} className="vnext-btn-primary">Abrir meus catálogos</button>
+            <button onClick={() => void signOut()} className="vnext-btn-secondary">Sair</button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!staysInClassic) {
+    return <main className="vnext-login-shell"><section className="vnext-login-card" role="status"><p className="vnext-dialog-eyebrow">PRESYS · Catalog Builder</p><p className="vnext-dialog-description">Abrindo seus catálogos…</p></section></main>;
   }
 
   const isPrintRoute = typeof window !== 'undefined' && (

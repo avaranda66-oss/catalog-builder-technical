@@ -204,6 +204,12 @@ async function seedRecovery(
   return record;
 }
 
+/** J7: only the recommended choice is in view; the others are behind "Mais opções". */
+function openMoreOptions(view: ReturnType<typeof render>): void {
+  const toggle = view.getByRole('button', { name: 'Mais opções' });
+  if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
+}
+
 async function waitForEditor(container: HTMLElement): Promise<void> {
   await waitFor(() => expect(
     container.querySelector('[data-editor-action="add-shape"]')
@@ -424,6 +430,7 @@ describe('W3.D startup recovery race defense', () => {
     act(() => {
       expect(session.execute({ type: 'document.rename', title: 'Current work must survive' }).ok).toBe(true);
     });
+    openMoreOptions(view);
     fireEvent.click(view.getByRole('button', { name: 'Abrir versão salva na nuvem' }));
 
     await waitFor(() => expect(view.getByText(
@@ -545,20 +552,24 @@ describe('W3.D startup recovery race defense', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByText(
-      'O registro local é inválido ou incompatível e não será aberto.'
+      'Esta cópia de segurança está danificada e não pode ser aberta.'
     )).toBeTruthy());
+    // Nothing can be recovered from a damaged copy: looking at it is the recommended (safe) choice, never discarding.
+    expect(view.getByRole('button', { name: 'Ver alterações recuperadas' }).className).toBe('vnext-btn-primary');
+    expect(view.queryByRole('button', { name: 'Apagar a cópia deste computador' })).toBeNull();
     fireEvent.click(view.getByRole('button', { name: 'Ver alterações recuperadas' }));
-    expect(view.getByText('Registro local inválido preservado')).toBeTruthy();
+    expect(view.getByText('Não é possível mostrar o conteúdo desta cópia. Ela pode ser descartada.')).toBeTruthy();
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect(deleteInvalid).not.toHaveBeenCalled();
     expect((await memory.get(key))?.status).toBe('INVALID');
 
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
-    expect(view.getByRole('button', { name: 'Confirmar descarte local' })).toBeTruthy();
+    openMoreOptions(view);
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    expect(view.getByRole('button', { name: 'Sim, apagar a cópia' })).toBeTruthy();
     expect(deleteInvalid).not.toHaveBeenCalled();
     expect((await memory.get(key))?.status).toBe('INVALID');
 
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
     await waitForEditor(view.container);
     expect(deleteInvalid).toHaveBeenCalledTimes(1);
     expect(await memory.get(key)).toBeUndefined();
@@ -584,13 +595,14 @@ describe('W3.D startup recovery race defense', () => {
     const view = render(<VNextApp runtime={runtime} />);
 
     await waitFor(() => expect(view.getByText(
-      'O registro local é inválido ou incompatível e não será aberto.'
+      'Esta cópia de segurança está danificada e não pode ser aberta.'
     )).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    openMoreOptions(view);
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.getByText(
-      'Não foi possível descartar a recuperação local. Tente novamente.'
+      'Não foi possível descartar a cópia de segurança. Tente novamente.'
     )).toBeTruthy());
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect(view.container.textContent).not.toContain('storage details');
@@ -616,14 +628,15 @@ describe('W3.D startup recovery race defense', () => {
     const { runtime } = makeRuntime(memory, cloud);
     const view = render(<VNextApp runtime={runtime} />);
 
-    await waitFor(() => expect(view.getByRole('button', { name: 'Descartar recuperação local' })).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Descartar recuperação local' }));
+    await waitFor(() => expect(view.getByRole('button', { name: 'Mais opções' })).toBeTruthy());
+    openMoreOptions(view);
+    fireEvent.click(view.getByRole('button', { name: 'Apagar a cópia deste computador' }));
     memory.seedRaw(key, record);
-    fireEvent.click(view.getByRole('button', { name: 'Confirmar descarte local' }));
+    fireEvent.click(view.getByRole('button', { name: 'Sim, apagar a cópia' }));
 
     await waitFor(() => expect(view.getByRole('button', { name: 'Recuperar minhas alterações' })).toBeTruthy());
     expect(view.getByText(
-      'O registro mudou e foi verificado novamente. Escolha uma opção segura para continuar.'
+      'A cópia de segurança mudou e foi verificada novamente. Escolha uma opção para continuar.'
     )).toBeTruthy();
     expect(view.container.querySelector('[data-editor-action="add-shape"]')).toBeNull();
     expect((await memory.get(key))?.status).toBe('VALID');

@@ -1,4 +1,9 @@
 /** Pure VNext metadata shared by the browser and server gateway. No Legacy authority. */
+// Explicit .ts path: the Deno gateway bundles this file and its imports as they are.
+import { GEMINI_RETIRED_TRANSLATION_MODELS, GEMINI_TRANSLATION_MODEL } from '../ai-catalog/gemini-models.ts';
+
+/** Model of every translation profile, from the single Gemini model registry (no 2.5 family). */
+export const VNEXT_TRANSLATION_MODEL_ID = GEMINI_TRANSLATION_MODEL;
 export type VNextTranslationLocale = 'pt-BR' | 'es-ES' | 'en-US';
 export type VNextTranslationTargetLocale = 'es-ES' | 'en-US';
 export type VNextTranslationProfileVersion = 'w5-ptbr-eses-v2' | 'p2-ptbr-enus-v1';
@@ -40,13 +45,13 @@ export interface RegisteredTranslationProfile {
   readonly sourceLocale: 'pt-BR';
   readonly targetLocale: VNextTranslationTargetLocale;
   readonly providerId: 'gemini';
-  readonly modelId: 'gemini-2.5-flash';
+  readonly modelId: typeof VNEXT_TRANSLATION_MODEL_ID;
   readonly promptVersion: 'w5-technical-es-v2' | 'p2-technical-en-v1';
   readonly tokenPolicyVersion: 'p2-tech-tokens-v2';
   readonly contractVersion: 'w5a-v1';
 }
 
-const sharedProfile = { sourceLocale: 'pt-BR', providerId: 'gemini', modelId: 'gemini-2.5-flash',
+const sharedProfile = { sourceLocale: 'pt-BR', providerId: 'gemini', modelId: VNEXT_TRANSLATION_MODEL_ID,
   tokenPolicyVersion: 'p2-tech-tokens-v2', contractVersion: 'w5a-v1' } as const;
 export const VNEXT_TRANSLATION_PROFILES = Object.freeze([
   Object.freeze({ ...sharedProfile, targetLocale: 'es-ES', profileVersion: 'w5-ptbr-eses-v2', promptVersion: 'w5-technical-es-v2' } as const),
@@ -59,4 +64,15 @@ export function getTranslationLanguage(locale: string): VNextTranslationLanguage
 
 export function findRegisteredTranslationProfile(sourceLocale: string, targetLocale: string): RegisteredTranslationProfile | undefined {
   return VNEXT_TRANSLATION_PROFILES.find(profile => profile.sourceLocale === sourceLocale && profile.targetLocale === targetLocale);
+}
+
+/**
+ * A gateway answer names the model that really translated. The current model
+ * is always accepted; a retired one only so this client keeps working with the
+ * gateway still deployed (and with results produced by it) until the gateway is
+ * redeployed from the merged SHA. Profile versions are unchanged, so old and new
+ * clients and gateways keep talking to each other.
+ */
+export function isAcceptedTranslationModelId(profile: Pick<RegisteredTranslationProfile, 'modelId'>, modelId: string): boolean {
+  return modelId === profile.modelId || GEMINI_RETIRED_TRANSLATION_MODELS.includes(modelId);
 }
