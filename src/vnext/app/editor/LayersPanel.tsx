@@ -17,6 +17,9 @@ export interface LayersPanelProps {
   onReorder(objectId: string, targetIndex: number): void;
   /** Double-click on a text inside a group: edit it where it is. */
   onEditGroupedText?(childId: string, groupId: string): void;
+  /** The list is folded by default so the properties stay short; "Camadas" in the toolbar opens it. */
+  open: boolean;
+  onOpenChange(open: boolean): void;
 }
 
 /** Row `row` of a top-first list of `count` rows is stacking index `count - 1 - row` (0 = back). */
@@ -32,7 +35,7 @@ const selectModeFor = (event: React.MouseEvent | React.KeyboardEvent): LayerSele
  * (Shift/Ctrl adds), the eye hides (not printed), the padlock locks, dragging a row (or Alt+↑/↓) changes the order.
  * Keyboard: ↑/↓ move between rows, Enter/Espaço select, → / ← open or close a group.
  */
-export function LayersPanel({ page, document, selectedIds, onSelect, onToggleHidden, onToggleLocked, onReorder, onEditGroupedText }: LayersPanelProps) {
+export function LayersPanel({ page, document, selectedIds, onSelect, onToggleHidden, onToggleLocked, onReorder, onEditGroupedText, open: panelOpen, onOpenChange }: LayersPanelProps) {
   const layers = layersTopFirst(page);
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const [focusId, setFocusId] = React.useState<string | undefined>(undefined);
@@ -108,7 +111,14 @@ export function LayersPanel({ page, document, selectedIds, onSelect, onToggleHid
 
   return (
     <section className="vnext-layers" data-layers-panel="" aria-labelledby="vnext-layers-title">
-      <h3 id="vnext-layers-title">Camadas desta página <span className="vnext-layers-count">({layers.length})</span></h3>
+      <h3 id="vnext-layers-title">
+        <button type="button" className="vnext-layers-toggle" data-layers-toggle="" aria-expanded={panelOpen} aria-controls="vnext-layers-body"
+          onClick={() => onOpenChange(!panelOpen)}>
+          {panelOpen ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}
+          Camadas desta página <span className="vnext-layers-count">({layers.length})</span>
+        </button>
+      </h3>
+      {panelOpen && <div id="vnext-layers-body">
       <p className="vnext-layers-help">O primeiro da lista fica na frente. Arraste pela alça ⋮ para mudar a ordem. O olho esconde (não sai no PDF).</p>
       {layers.length === 0 ? <p className="vnext-layers-empty">Esta página ainda não tem objetos.</p> : (
         <ul ref={listRef} className="vnext-layers-list" role="tree" aria-label="Camadas da página" aria-multiselectable="true">
@@ -185,6 +195,7 @@ export function LayersPanel({ page, document, selectedIds, onSelect, onToggleHid
           })}
         </ul>
       )}
+      </div>}
     </section>
   );
 }

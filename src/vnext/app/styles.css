@@ -913,6 +913,9 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   content: 'Clique em um objeto da página para duplicar, excluir ou editar.';
   height: 44px; margin-bottom: 6px; overflow: hidden; color: #5c6c80; font-size: 13px; line-height: 44px; text-overflow: ellipsis; white-space: nowrap;
 }
-.vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar > :is([data-editor-action="toggle-advanced-tools"], [data-editor-action="show-layers"]) { flex: none; }
+.vnext-shell[data-simple-by-default="true"] .vnext-authoring-toolbar > [data-editor-action="toggle-advanced-tools"] { flex: none; }
+.vnext-show-layers { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; border: 1px solid #c7d1dd; border-radius: 999px; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; padding: 0 12px; }
+.vnext-show-layers:hover { background: #edf5ff; border-color: #8db4db; }
+.vnext-show-layers:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
 /* With several objects selected there are no selection buttons on that line: it keeps its height, without the hint. */
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-area:has([data-editor-object-id][data-selected="true"]) .vnext-toolbar-primary::after { visibility: hidden; }

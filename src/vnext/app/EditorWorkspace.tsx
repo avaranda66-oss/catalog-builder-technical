@@ -5,7 +5,7 @@ import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
-import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { FolderOpen, Layers, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
@@ -2821,6 +2821,7 @@ export function EditorWorkspace({
   };
   const showLayers = () => {
     setAssistantOpen(false);
+    setLayersOpen(true);
     queueMicrotask(() => {
       const panel = globalThis.document.querySelector<HTMLElement>('[data-layers-panel]');
       panel?.scrollIntoView?.({ block: 'nearest' });
@@ -3047,11 +3048,22 @@ export function EditorWorkspace({
   const editorOverlayRef = React.useRef<HTMLDivElement>(null);
   const lastPointerTargetRef = React.useRef<{ pageId: string; objectId: string } | null>(null);
   const collapseOnClickRef = React.useRef<string | null>(null);
+  const pendingTextEditRef = React.useRef<{ objectId: string; clientX: number; clientY: number } | null>(null);
+  /** The quick second press on a selected text: edit it now (used when no drag can start). */
+  const startPendingTextEdit = (): boolean => {
+    const pending = pendingTextEditRef.current;
+    pendingTextEditRef.current = null;
+    const text = pending ? selectedPage.objects.find((entry) => entry.id === pending.objectId) : undefined;
+    if (!text) return false;
+    controller.cancel('superseded');
+    return startTextEdit(text);
+  };
   const marqueeRef = React.useRef<{
     pointerId: number; startClientX: number; startClientY: number; startU: PointU; additive: boolean;
     base: readonly string[]; active: boolean; onClick: () => void;
   } | null>(null);
   const [marquee, setMarquee] = React.useState<RectU | null>(null);
+  const [layersOpen, setLayersOpen] = React.useState(false);
   const pageAssetUrls = persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS;
   React.useEffect(() => {
     for (const object of selectedPage.objects) {
@@ -3137,6 +3149,8 @@ export function EditorWorkspace({
 
   const beginGesture = (event: React.PointerEvent<HTMLElement>, clickedObject: EditorialObject, kind: GestureKind) => {
     if (event.button !== 0) return;
+    pendingTextEditRef.current = null;
+    collapseOnClickRef.current = null;
     event.preventDefault();
     event.stopPropagation();
     if (textEditRef.current) return;
@@ -3196,11 +3210,13 @@ export function EditorWorkspace({
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      if (isSecondActivation) {
+      if (isSecondActivation && event.detail >= 2) {
         controller.cancel('superseded');
         startTextEdit(object);
         return;
       }
+      // A quick second press that turns into a drag moves the text (Onda 3.5, S03); released in place, it edits.
+      if (isSecondActivation) pendingTextEditRef.current = { objectId: object.id, clientX: event.clientX, clientY: event.clientY };
     }
     if (kind.type === 'move' && object.type === 'table') {
       const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
@@ -3266,14 +3282,18 @@ export function EditorWorkspace({
     const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;
     const canonicalPage = stage?.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]');
     const rect = canonicalPage?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) { startPendingTextEdit(); return; }
     try {
       const started = controller.begin({
         pointerId: event.pointerId, objectId: object.id, pageId: selectedPage.id, kind,
         clientX: event.clientX, clientY: event.clientY, pageClientWidthPx: rect.width, pageClientHeightPx: rect.height,
         snapThresholdPx: SNAP_RADIUS_PX, companionObjectIds: companions,
       });
-      if (!started) { setStatusMessage('Este objeto não pode ser movido agora.'); return; }
+      if (!started) {
+        if (startPendingTextEdit()) return;
+        setStatusMessage('Este objeto não pode ser movido agora.');
+        return;
+      }
       event.currentTarget.setPointerCapture?.(event.pointerId);
       setStatusMessage(null);
     } catch {
@@ -3302,6 +3322,13 @@ export function EditorWorkspace({
     if (!controller.isActive()) return;
     const collapseTo = collapseOnClickRef.current;
     collapseOnClickRef.current = null;
+    const pending = pendingTextEditRef.current;
+    // Released within a few pixels (a double click, even a shaky one): edit the text, do not move it.
+    if (pending && Math.hypot(event.clientX - pending.clientX, event.clientY - pending.clientY) <= 6) {
+      startPendingTextEdit();
+      return;
+    }
+    pendingTextEditRef.current = null;
     try {
       const result = controller.finish(event.pointerId, event.clientX, event.clientY);
       // A click (no drag) on one of several selected objects keeps only that one selected.
@@ -4273,7 +4300,9 @@ export function EditorWorkspace({
             issues={{ document, diagnostics: canonicalDiagnostics, simple: simpleByDefault, onLocate: goToIssue, session,
               measurement: measuredLayout?.source === document ? measuredLayout : null,
               prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
-            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'} />
+            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}
+            pageActions={<button type="button" className="vnext-show-layers" data-editor-action="show-layers" onClick={showLayers}
+              title="Lista de todos os objetos da página: selecionar, esconder, travar e mudar a ordem"><Layers size={16} aria-hidden="true" />Camadas</button>} />
           <div className="vnext-authoring-toolbar" aria-label="Ferramentas de edição">
             <div className="vnext-tool-group vnext-toolbar-primary" aria-label="Adicionar conteúdo">
               <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
@@ -4294,8 +4323,6 @@ export function EditorWorkspace({
                 <button type="button" data-editor-action="edit-table" disabled={selectedObject?.type !== 'table' || selectedMutationLocked} onClick={() => selectedObject && startTableGrid(selectedObject)}>Editar tabela</button>
               )}
             </div>
-            <button type="button" className="vnext-more-options vnext-show-layers" data-editor-action="show-layers" onClick={showLayers}
-              title="Lista de todos os objetos da página: selecionar, esconder, travar e mudar a ordem">Camadas</button>
             {simpleByDefault && (
               <button
                 type="button"
@@ -5022,12 +5049,14 @@ export function EditorWorkspace({
             const where = layerPosition(selectedPage, selectedObject.id);
             return where ? <p className="vnext-layer-position" data-layer-position="">Camada {where.position} de {where.count} (1 = mais ao fundo)</p> : null;
           })()}
-          <LayersPanel page={selectedPage} document={document} selectedIds={editorState.selectedObjectIds}
+          {/* While a table grid or a text is being edited the layers are not offered (the panel stays short). */}
+          {editorState.mode === 'select' && <LayersPanel page={selectedPage} document={document} selectedIds={editorState.selectedObjectIds}
             onSelect={selectFromLayers} onToggleHidden={toggleLayerHidden} onToggleLocked={toggleLayerLocked}
+            open={layersOpen} onOpenChange={setLayersOpen}
             onReorder={reorderFromLayers} onEditGroupedText={(childId, groupId) => {
               const child = findPageText(selectedPage, childId);
               if (child) startTextEdit(child.object, groupId);
-            }} />
+            }} />}
           {!simpleByDefault && <>
           <div className="vnext-divider" />
           <h3>Salvamento</h3>

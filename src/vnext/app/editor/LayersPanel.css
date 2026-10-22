@@ -1,6 +1,9 @@
 /* Onda 3.5 (S1): "Camadas" — navy/white like the rest of the properties panel. */
 .vnext-layers { margin-top: 14px; border-top: 1px solid #dbe3ec; padding-top: 10px; }
 .vnext-layers h3 { margin: 0 0 4px; color: #172033; font-size: 13px; }
+.vnext-layers-toggle { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 32px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-weight: 700; padding: 0 4px; cursor: pointer; text-align: left; }
+.vnext-layers-toggle:hover { background: #f6f8fb; }
+.vnext-layers-toggle:focus-visible { outline: 2px solid rgba(0,114,206,.45); outline-offset: 1px; }
 .vnext-layers-count { color: #5b6b80; font-weight: 500; }
 .vnext-layers-help, .vnext-layers-empty { margin: 0 0 8px; color: #5b6b80; font-size: 11px; line-height: 1.4; }
 .vnext-layers-list, .vnext-layers-children { list-style: none; margin: 0; padding: 0; }

@@ -4,6 +4,8 @@ import { createDocumentSession } from '@/vnext/application';
 import { plainRichText, type CatalogDocument, type EditorialObject } from '@/vnext/domain';
 import { createW2CDemoDocument, W2C_PRIMARY_ASSET_ID } from '@/vnext/app/editor-defaults';
 import { VNextApp } from '@/vnext/app/VNextApp';
+import { compactAxes, visibleHandles } from '@/vnext/app/editor/SelectionLayer';
+import { mmToU } from '@/vnext/domain';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -56,6 +58,10 @@ function setup(document = coverDocument()) {
   // 2 px per mm: clientX = mm * 2.
   const page = view.container.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]')!;
   page.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 420, bottom: 594, width: 420, height: 594, toJSON: () => ({}) });
+  // "Camadas" starts folded (the properties stay short); the toolbar button opens it.
+  expect(view.container.querySelector('[data-layers-panel] [role="tree"]')).toBeNull();
+  fireEvent.click(view.container.querySelector<HTMLButtonElement>('[data-editor-action="show-layers"]')!);
+  expect(view.container.querySelector('[data-layers-toggle]')).toHaveAttribute('aria-expanded', 'true');
   return { session, ...view };
 }
 const hit = (container: HTMLElement, id: string) => container.querySelector<HTMLElement>(`[data-editor-object-id="${id}"]`)!;
@@ -217,5 +223,32 @@ describe('Onda 3.5 · several objects at once', () => {
     const order = [...objectsOf(session)].sort((left, right) => left.zIndex - right.zIndex).map((object) => object.id);
     expect(order.indexOf('title')).toBe(order.indexOf('overlay') + 1);
     expect(screen.getByText(/continua na frente do fundo da página/)).toBeInTheDocument();
+  });
+});
+
+describe('Onda 3.5 · small objects stay easy to grab', () => {
+  it('drops the side handles that would cover a small box and keeps the corners outside it', () => {
+    const pill = { xU: 0, yU: 0, widthU: mmToU(17), heightU: mmToU(4) };
+    expect(compactAxes(pill, 1)).toEqual({ x: false, y: true });
+    expect(visibleHandles(compactAxes(pill, 1))).toEqual(['ne', 'e', 'se', 'sw', 'w', 'nw']);
+    expect(visibleHandles(compactAxes({ ...pill, widthU: mmToU(5) }, 1))).toEqual(['ne', 'se', 'sw', 'nw']);
+    expect(visibleHandles(compactAxes({ ...pill, heightU: mmToU(30) }, 1))).toHaveLength(8);
+  });
+
+  it('a quick second press on a selected text that turns into a drag moves it (no text editing)', () => {
+    const { container, session } = setup(openDocument());
+    const target = hit(container, 'a');
+    press(target, 30, 25);
+    const before = objectsOf(session)[0].frame.xMm;
+    fireEvent.pointerDown(target, { pointerId: 7, button: 0, clientX: 60, clientY: 50 });
+    fireEvent.pointerMove(target, { pointerId: 7, clientX: 90, clientY: 50 });
+    fireEvent.pointerUp(target, { pointerId: 7, button: 0, clientX: 90, clientY: 50 });
+    expect(container.querySelector('[data-text-edit-textarea]')).toBeNull();
+    expect(objectsOf(session)[0].frame.xMm - before).toBeGreaterThan(10);
+    // A double click released in place (even a shaky one) edits the text.
+    press(target, 45, 25, {}, 8);
+    fireEvent.pointerDown(target, { pointerId: 9, button: 0, clientX: 90, clientY: 50 });
+    fireEvent.pointerUp(target, { pointerId: 9, button: 0, clientX: 92, clientY: 51 });
+    expect(container.querySelector('[data-text-edit-textarea]')).not.toBeNull();
   });
 });
