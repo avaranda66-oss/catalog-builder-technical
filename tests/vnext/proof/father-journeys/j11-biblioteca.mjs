@@ -1,6 +1,6 @@
 // J11 — Biblioteca (grupo A, Equipe B). O pai cria três catálogos pela interface, acha o PCON-Y18
 // buscando "Y18", duplica como modelo (Duplicar + Renomear), arquiva o original por engano e recupera
-// pela aba "Arquivados" → "Duplicar" na linha arquivada. "Restaurar" é da Onda 4 (4D) → pendente.
+// pela aba "Arquivados" → "Restaurar", preservando a identidade e o conteúdo.
 //   BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j11-biblioteca.mjs
 //   VP=1280 BASE_URL=http://127.0.0.1:5190 node tests/vnext/proof/father-journeys/j11-biblioteca.mjs
 import {
@@ -8,7 +8,7 @@ import {
   waitLibrary, waitSaved,
 } from './lib.mjs';
 import {
-  MIN_BODY_FONT_PX, MIN_TARGET_PX, classifyConsole, clickCounter, findingStep, finishJourneyGraded, measureAll, pendingStep, scanJargon,
+  MIN_BODY_FONT_PX, classifyConsole, clickCounter, findingStep, finishJourneyGraded, measureAll, scanJargon,
   waitMs,
 } from './fixtures/father-eyes.mjs';
 
@@ -196,8 +196,9 @@ try {
   await menu.waitFor({ timeout: 5000 });
   const menuItems = (await menu.getByRole('menuitem').allInnerTexts()).map((item) => item.trim());
   measures.menu = await measureAll({ arquivar: menu.getByRole('menuitem', { name: 'Arquivar' }) });
-  j.step('o botão "Mais" abre um menu com a opção "Arquivar" (e só ela)',
-    menuItems.length === 1 && menuItems[0] === 'Arquivar', `botão: "${moreText}" · itens: ${menuItems.join(' · ')}`);
+  j.step('o botão "Mais" reúne Duplicar, Renomear, Usar como modelo e Arquivar',
+    menuItems.length === 4 && ['Duplicar', 'Renomear', 'Usar como modelo', 'Arquivar'].every(label => menuItems.includes(label)),
+    `botão: "${moreText}" · itens: ${menuItems.join(' · ')}`);
   await clicks.click('arquivar', menu.getByRole('menuitem', { name: 'Arquivar' }));
   const archiveDialog = page.getByRole('dialog', { name: `Arquivar “${Y18}”?` });
   await archiveDialog.waitFor({ timeout: 5000 });
@@ -213,8 +214,8 @@ try {
     fechar: archiveDialog.getByRole('button', { name: 'Fechar' }),
   });
   const confirmColor = await confirmButton.evaluate((button) => getComputedStyle(button).backgroundColor);
-  j.step('arquivar pede confirmação, explica que não é exclusão e como voltar ("abra Arquivados e clique em Duplicar"); o foco começa em "Cancelar"',
-    /não será excluído permanentemente/.test(texts.archiveDialog) && /Arquivados e clique em “Duplicar”/.test(texts.archiveDialog) && focusedButton === 'Cancelar',
+  j.step('arquivar pede confirmação, explica como Restaurar; o foco começa em "Cancelar"',
+    /não será excluído permanentemente/.test(texts.archiveDialog) && /Restaurar/.test(texts.archiveDialog) && focusedButton === 'Cancelar',
     `foco: "${focusedButton}" · cor do botão "Arquivar catálogo": ${confirmColor} · texto: "${texts.archiveDialog}"`);
   j.addEvidence(await shot(page, 'j11-04-confirmar-arquivar'));
   await clicks.click('arquivar', confirmButton);
@@ -240,7 +241,7 @@ try {
   j.addEvidence(await shot(page, 'j11-04b-arquivado-aviso'));
   j.step('arquivar = 3 cliques (Mais → Arquivar → Arquivar catálogo)', clicks.counts.arquivar === 3, JSON.stringify(clicks.counts));
 
-  // 4. Recuperar: "Ver Arquivados" no aviso (ou a aba "Arquivados") → "Duplicar" na linha arquivada → volta para "Ativos" com aviso.
+  // 4. Restaurar o próprio catálogo, sem criar outra cópia.
   await clicks.click('recuperar', (await showArchived.count()) ? showArchived : page.getByRole('tab', { name: 'Arquivados' }));
   j.step('"Ver Arquivados" abre a aba "Arquivados"',
     (await page.getByRole('tab', { name: 'Arquivados' }).getAttribute('aria-selected')) === 'true');
@@ -255,57 +256,82 @@ try {
     dica: hint,
     estado: archivedRow.locator('.vnext-library-archived-state'),
     duplicar: archivedRow.getByRole('button', { name: 'Duplicar', exact: true }),
+    restaurar: archivedRow.getByRole('button', { name: 'Restaurar', exact: true }),
     abaArquivados: page.getByRole('tab', { name: 'Arquivados' }),
   });
-  j.step('em "Arquivados" o PCON-Y18 aparece com a dica de como voltar a usá-lo e um botão "Duplicar" (sem "Abrir")',
-    archivedRowMs >= 0 && (await hint.isVisible()) && archivedButtons.join() === 'Duplicar',
+  j.step('em "Arquivados" o PCON-Y18 oferece Restaurar e Duplicar, com ajuda em português',
+    archivedRowMs >= 0 && (await hint.isVisible()) && archivedButtons.includes('Restaurar') && archivedButtons.includes('Duplicar'),
     `${archivedRowMs} ms · busca ao trocar de aba: "${searchAfterTab}" (limpa sozinha) · botões: ${archivedButtons.join(' · ')} · dica: "${(await hint.innerText()).replace(/\s+/g, ' ')}"`);
   j.addEvidence(await shot(page, 'j11-05-arquivados'));
-  pendingStep(j, '"Restaurar" na linha arquivada (voltar com o mesmo nome, sem criar cópia)',
-    'pendente Onda 4 (4D, FR-04/FR-05): botão "Restaurar"; hoje a recuperação é por "Duplicar" e o original continua em Arquivados');
-  await clicks.click('recuperar', archivedRow.getByRole('button', { name: 'Duplicar', exact: true }));
+  const archivedBefore = await state(page);
+  const originalBefore = archivedBefore.catalogs.find(item => item.title === Y18);
+  const snapshotBefore = await page.evaluate(id => JSON.parse(localStorage.getItem(`father-journeys:catalog:${id}`)).documentSnapshot, originalBefore.id);
+  await clicks.click('recuperar', archivedRow.getByRole('button', { name: 'Restaurar', exact: true }));
+  const restoreDialog = page.getByRole('dialog', { name: `Restaurar “${Y18}”?` });
+  await restoreDialog.waitFor();
+  j.step('Restaurar pede confirmação e começa com foco em Cancelar',
+    await restoreDialog.getByRole('button', { name: 'Cancelar' }).evaluate(button => button === document.activeElement));
+  await restoreDialog.getByRole('button', { name: 'Cancelar' }).click();
+  j.step('Cancelar mantém o catálogo em Arquivados', (await state(page)).catalogs.some(item => item.id === originalBefore.id && item.archivedAt));
+  await archivedRow.getByRole('button', { name: 'Restaurar', exact: true }).click();
+  await clicks.click('recuperar', restoreDialog.getByRole('button', { name: 'Restaurar catálogo', exact: true }));
   const recoverMs = await waitMs(async () =>
     (await page.getByRole('tab', { name: 'Ativos' }).getAttribute('aria-selected')) === 'true'
     && (await notice().isVisible().catch(() => false)), { timeout: 10000 });
   timings.recoverMs = recoverMs;
   texts.recoverNotice = await noticeText();
   measures.notice = await measureAll({ aviso: notice() });
-  const recoveredRow = rowOf(COPY);
+  const recoveredRow = rowOf(Y18);
   const recoveredVisible = await recoveredRow.isVisible().catch(() => false);
-  j.step('a cópia feita a partir de Arquivados também fica destacada em "Ativos" ("Cópia nova")',
-    (await recoveredRow.getAttribute('data-library-highlighted').catch(() => null)) !== null
-    && await recoveredRow.getByText('Cópia nova', { exact: true }).isVisible().catch(() => false));
-  j.step('"Duplicar" na linha arquivada volta para "Ativos" com a mensagem "Cópia criada em Ativos…" visível sem rolar',
-    recoverMs >= 0 && /Cópia criada em Ativos/.test(texts.recoverNotice) && Boolean(measures.notice.aviso?.fullyVisible),
+  j.step('Restaurar volta para Ativos com confirmação visível sem rolar',
+    recoverMs >= 0 && /restaurado/i.test(texts.recoverNotice) && Boolean(measures.notice.aviso?.fullyVisible),
     `${recoverMs} ms · "${texts.recoverNotice}" · ${JSON.stringify(measures.notice.aviso)}`);
-  j.step(`a cópia recuperada "${COPY}" está em Ativos com o botão "Abrir"`,
+  j.step(`o próprio catálogo "${Y18}" está em Ativos com o botão "Abrir"`,
     recoveredVisible && (await recoveredRow.getByRole('button', { name: 'Abrir', exact: true }).isVisible()));
   j.addEvidence(await shot(page, 'j11-06-recuperado-em-ativos'));
-  j.step('recuperar = 2 cliques (Arquivados → Duplicar)', clicks.counts.recuperar === 2, JSON.stringify(clicks.counts));
+  j.step('recuperar = 3 cliques (Arquivados → Restaurar → Restaurar catálogo)', clicks.counts.recuperar === 3, JSON.stringify(clicks.counts));
   const afterRecover = await state(page);
-  j.step('o catálogo arquivado continua guardado (nada foi excluído)',
-    afterRecover.catalogs.some((item) => item.title === Y18 && item.archivedAt));
+  const restored = afterRecover.catalogs.find(item => item.title === Y18);
+  const snapshotAfter = await page.evaluate(id => JSON.parse(localStorage.getItem(`father-journeys:catalog:${id}`)).documentSnapshot, restored.id);
+  j.step('restauração preserva ID, nome e todo conteúdo, sem criar uma cópia',
+    restored.id === originalBefore.id && !restored.archivedAt && afterRecover.catalogs.length === archivedBefore.catalogs.length
+    && JSON.stringify(snapshotAfter) === JSON.stringify(snapshotBefore));
 
   // 5. A cópia recuperada abre e tem o mesmo conteúdo do original.
   const originalId = afterRecover.catalogs.find((item) => item.title === Y18)?.id;
-  const copyId = afterRecover.catalogs.find((item) => item.title === COPY)?.id;
+  const copyId = afterRecover.catalogs.find((item) => item.title === MODEL)?.id;
   const shapes = await page.evaluate(([idA, idB]) => {
     const read = (id) => JSON.parse(localStorage.getItem(`father-journeys:catalog:${id}`)).documentSnapshot;
     const shape = (doc) => ({ pages: doc.pages.length, objects: doc.pages.reduce((sum, item) => sum + item.objects.length, 0) });
     return { original: shape(read(idA)), copy: shape(read(idB)) };
   }, [originalId, copyId]);
-  await clicks.click('abrir recuperado', recoveredRow.getByRole('button', { name: 'Abrir', exact: true }));
+  await clicks.click('abrir recuperado', recoveredRow.getByRole('heading', { name: Y18, exact: true }));
   await waitEditor(page);
   await waitSaved(page);
   const opened = await state(page);
-  j.step('a cópia recuperada abre no editor, salva, com o mesmo conteúdo do original (páginas e objetos)',
-    opened.mode === 'editor' && opened.runtime?.title === COPY && opened.runtime?.saveLabel === 'Saved'
+  j.step('o cartão inteiro abre o catálogo restaurado no editor, com o mesmo conteúdo',
+    opened.mode === 'editor' && opened.runtime?.title === Y18 && opened.runtime?.saveLabel === 'Saved'
     && shapes.original.pages === shapes.copy.pages && shapes.original.objects === shapes.copy.objects, JSON.stringify(shapes));
+
+  // Usar como modelo pede nome e abre uma cópia independente.
+  await page.getByRole('button', { name: 'Voltar aos catálogos' }).click();
+  await waitLibrary(page);
+  await rowOf(Y18).getByRole('button', { name: `Mais ações de ${Y18}` }).click();
+  await page.getByRole('menuitem', { name: 'Usar como modelo', exact: true }).click();
+  const modelDialog = page.getByRole('dialog', { name: 'Usar como modelo', exact: true });
+  await modelDialog.getByRole('textbox', { name: 'Nome do novo catálogo' }).fill('Y18 — Nova ficha');
+  await modelDialog.getByRole('button', { name: 'Criar e abrir catálogo' }).click();
+  await waitEditor(page);
+  await waitSaved(page);
+  const modelOpened = await state(page);
+  j.step('Usar como modelo abre cópia com o nome escolhido, mantendo o original',
+    modelOpened.runtime?.title === 'Y18 — Nova ficha' && modelOpened.runtime.document.id !== originalBefore.id
+    && modelOpened.catalogs.some(item => item.id === originalBefore.id && item.title === Y18 && !item.archivedAt));
 
   // 6. Tamanhos (A-01/A-02): alvos ≥ 44 px; botões, campos e avisos ≥ 15 px; textos secundários ≥ 13 px.
   const targets = {
     'Abrir': measures.row.abrir, 'Duplicar': measures.row.duplicar, 'Renomear': measures.row.renomear, 'Mais': measures.row.mais,
-    'menu Arquivar': measures.menu.arquivar, 'Duplicar (arquivado)': measures.archived.duplicar, 'aba Arquivados': measures.archived.abaArquivados,
+    'menu Arquivar': measures.menu.arquivar, 'Restaurar': measures.archived.restaurar, 'Duplicar (arquivado)': measures.archived.duplicar, 'aba Arquivados': measures.archived.abaArquivados,
     'Salvar nome': measures.renameDialog.salvar, 'Arquivar catálogo': measures.archiveDialog.confirmar, 'Cancelar': measures.archiveDialog.cancelar,
     'Fechar (Arquivar)': measures.archiveDialog.fechar, 'Ver Arquivados': measures.archiveNotice?.verArquivados, 'Ordenar catálogos': measures.search.ordenar,
   };

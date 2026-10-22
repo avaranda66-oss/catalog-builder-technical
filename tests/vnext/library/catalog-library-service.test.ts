@@ -23,6 +23,7 @@ import type {
   CreateCatalogRequest,
   PersistenceResult,
   SaveCatalogCasRequest,
+  UnarchiveCatalogCasRequest,
 } from '@/vnext/persistence';
 
 function uuid(value: number): string {
@@ -50,6 +51,7 @@ class MemoryCatalogRepository implements CatalogRepository {
   private tick = 0;
   beforeNextSave?: () => void;
   beforeNextArchive?: () => void;
+  beforeNextRestore?: () => void;
   readonly listCatalogs = vi.fn(async (query = {}): Promise<PersistenceResult<readonly CatalogListItem[]>> => {
     const values = [...this.catalogs.values()]
       .filter((item) => query.includeArchived || item.archivedAt === null)
@@ -122,6 +124,26 @@ class MemoryCatalogRepository implements CatalogRepository {
     return { ok: true, value: metadata };
   });
 
+  readonly unarchiveCAS = vi.fn(async (request: UnarchiveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceMetadata>> => {
+    this.beforeNextRestore?.();
+    this.beforeNextRestore = undefined;
+    const current = this.catalogs.get(request.catalogId);
+    if (!current) return { ok: false, error: { code: 'NOT_FOUND' } };
+    if (!current.archivedAt || current.remoteRevision !== request.expectedRemoteRevision) {
+      return { ok: false, error: { code: 'CONFLICT' } };
+    }
+    const envelope: CatalogPersistenceEnvelope = {
+      ...current,
+      remoteRevision: current.remoteRevision + 1,
+      lastMutationId: request.mutationId,
+      archivedAt: null,
+      updatedAt: this.timestamp(),
+    };
+    this.catalogs.set(request.catalogId, envelope);
+    const { documentSnapshot: _snapshot, ...metadata } = envelope;
+    return { ok: true, value: metadata };
+  });
+
   seed(envelope: CatalogPersistenceEnvelope): void {
     this.catalogs.set(envelope.catalogId, envelope);
   }
@@ -167,6 +189,147 @@ async function create(repository: MemoryCatalogRepository, title: string, start:
   if (!created.ok) throw new Error(created.error.code);
   return created.value;
 }
+
+describe('FR-04 restauração e FR-02 usar como modelo', () => {
+  it('restaura a mesma identidade e conteúdo e retorna à lista de ativos', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Catálogo de pressão', 10000);
+    const library = service(repository, 10100);
+    await library.archive(source.catalogId);
+    const archived = repository.current(source.catalogId);
+
+    const restored = await library.restore(source.catalogId);
+
+    expect(restored).toMatchObject({ ok: true, value: {
+      catalogId: source.catalogId, remoteRevision: archived.remoteRevision + 1, archivedAt: null,
+    } });
+    expect(repository.unarchiveCAS).toHaveBeenCalledWith({
+      catalogId: source.catalogId,
+      expectedRemoteRevision: archived.remoteRevision,
+      mutationId: expect.any(String),
+    });
+    expect(repository.current(source.catalogId).documentSnapshot).toEqual(source.documentSnapshot);
+    expect(repository.current(source.catalogId).createdAt).toBe(source.createdAt);
+    expect(repository.current(source.catalogId).origin).toEqual(source.origin);
+    expect(await library.list()).toMatchObject({ ok: true, value: [{ catalogId: source.catalogId }] });
+    expect(await library.list({ view: 'archived' })).toEqual({ ok: true, value: [] });
+    expect(repository.createCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('recusa catálogo já ativo e adaptador antigo sem enviar mutação', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Catálogo ativo', 10200);
+    expect(await service(repository, 10300).restore(source.catalogId))
+      .toMatchObject({ ok: false, error: { code: 'ACTION_REJECTED', message: expect.stringContaining('Ativos') } });
+    expect(repository.unarchiveCAS).not.toHaveBeenCalled();
+
+    const oldRepository: CatalogRepository = {
+      listCatalogs: repository.listCatalogs,
+      getCatalog: repository.getCatalog,
+      createCatalog: repository.createCatalog,
+      saveCAS: repository.saveCAS,
+      archiveCAS: repository.archiveCAS,
+    };
+    const ids = idSequence(10400);
+    const oldLibrary = new CatalogLibraryService({
+      repository: oldRepository, applicationDependencies: dependencies,
+      createId: ids, createMutationId: ids, createOpenSessionId: ids,
+      authLineage: () => 'user-a:1', authorityScopeId: () => 'workspace:user-a',
+    });
+    repository.getCatalog.mockClear();
+    expect(await oldLibrary.restore(source.catalogId))
+      .toMatchObject({ ok: false, error: { code: 'ACTION_REJECTED', message: expect.stringContaining('não está disponível') } });
+    expect(repository.getCatalog).not.toHaveBeenCalled();
+  });
+
+  it('recusa a restauração quando a revisão muda entre leitura e mutação', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Conflito', 10500);
+    const library = service(repository, 10600);
+    await library.archive(source.catalogId);
+    repository.beforeNextRestore = () => repository.advance(source.catalogId);
+
+    expect(await library.restore(source.catalogId)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(repository.current(source.catalogId).archivedAt).not.toBeNull();
+    expect(repository.unarchiveCAS).toHaveBeenCalledTimes(1);
+  });
+
+  it('propaga autorização recusada sem enviar mutação de restauração', async () => {
+    const repository = new MemoryCatalogRepository();
+    repository.getCatalog.mockResolvedValueOnce({ ok: false, error: { code: 'UNAUTHORIZED' } });
+    expect(await service(repository, 10700).restore(uuid(10500)))
+      .toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+    expect(repository.unarchiveCAS).not.toHaveBeenCalled();
+  });
+
+  it.each(['read', 'restore'] as const)('descarta resposta se a conta muda durante %s', async (phase) => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Conta A', 10800);
+    await service(repository, 10900).archive(source.catalogId);
+    let lineage = 'user-a:1';
+    const ids = idSequence(11000);
+    const library = new CatalogLibraryService({
+      repository, applicationDependencies: dependencies,
+      createId: ids, createMutationId: ids, createOpenSessionId: ids,
+      authLineage: () => lineage, authorityScopeId: () => 'workspace:user-a',
+    });
+    const readPending = deferred<PersistenceResult<CatalogPersistenceEnvelope>>();
+    const restorePending = deferred<PersistenceResult<CatalogPersistenceMetadata>>();
+    if (phase === 'read') repository.getCatalog.mockImplementationOnce(() => readPending.promise);
+    else repository.unarchiveCAS.mockImplementationOnce(() => restorePending.promise);
+
+    const restoration = library.restore(source.catalogId);
+    if (phase === 'restore') await vi.waitFor(() => expect(repository.unarchiveCAS).toHaveBeenCalledOnce());
+    lineage = 'user-b:2';
+    if (phase === 'read') readPending.resolve({ ok: true, value: repository.current(source.catalogId) });
+    else restorePending.resolve({ ok: false, error: { code: 'CONFLICT' } });
+    expect(await restoration).toMatchObject({ ok: false, error: { code: 'STALE_RESULT' } });
+    if (phase === 'read') expect(repository.unarchiveCAS).not.toHaveBeenCalled();
+  });
+
+  it('não anuncia sucesso com metadados divergentes nem repete uma mutação ambígua', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Verificação', 11100);
+    const library = service(repository, 11200);
+    await library.archive(source.catalogId);
+    const { documentSnapshot: _snapshot, ...metadata } = repository.current(source.catalogId);
+    repository.unarchiveCAS.mockResolvedValueOnce({ ok: true, value: metadata });
+    expect(await library.restore(source.catalogId)).toMatchObject({ ok: false, error: { code: 'ENVELOPE_MISMATCH' } });
+    repository.unarchiveCAS.mockResolvedValueOnce({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(await library.restore(source.catalogId)).toMatchObject({ ok: false, error: { code: 'AMBIGUOUS_COMMIT_OUTCOME' } });
+    expect(repository.unarchiveCAS).toHaveBeenCalledTimes(2);
+    expect(repository.current(source.catalogId).archivedAt).not.toBeNull();
+  });
+
+  it('usar como modelo cria cópia com nome escolhido e preserva o original arquivado', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Modelo da família', 11300);
+    const library = service(repository, 11400);
+    await library.archive(source.catalogId);
+    const before = JSON.stringify(repository.current(source.catalogId));
+
+    const copy = await library.useAsModel(source.catalogId, '  Novo\ncatálogo de pressão  ');
+
+    expect(copy).toMatchObject({ ok: true, value: {
+      title: 'Novo catálogo de pressão', archivedAt: null,
+      origin: { originKind: 'duplicate', originId: source.catalogId, originRevision: 2 },
+    } });
+    if (!copy.ok) return;
+    expect(copy.value.catalogId).not.toBe(source.catalogId);
+    expect(copy.value.documentSnapshot.pages[0].id).not.toBe(source.documentSnapshot.pages[0].id);
+    expect(JSON.stringify(repository.current(source.catalogId))).toBe(before);
+  });
+
+  it('nome sugerido do modelo respeita o limite e mantém acentos', async () => {
+    const repository = new MemoryCatalogRepository();
+    const source = await create(repository, 'Pressão '.repeat(40), 11500);
+    const copy = await service(repository, 11600).useAsModel(source.catalogId);
+    expect(copy.ok).toBe(true);
+    if (!copy.ok) return;
+    expect(copy.value.title).toBe(normalizeCatalogTitle(`Modelo de ${source.title}`));
+    expect([...copy.value.title].length).toBeLessThanOrEqual(CATALOG_TITLE_MAX_LENGTH);
+  });
+});
 
 describe('W3.E CatalogLibraryService', () => {
   it('LIB-01/02/03 lists lightweight active metadata without fetching documents', async () => {
@@ -595,11 +758,11 @@ describe('W3.E CatalogLibraryService', () => {
     expect(repository.current(original.catalogId).title).toBe('Ativo');
   });
 
-  it('W3.F activates Duplicate while hard delete and restore remain excluded', () => {
+  it('FR-04 activates restore while permanent deletion remains excluded', () => {
     const library = service(new MemoryCatalogRepository(), 2200) as unknown as Record<string, unknown>;
     expect(library.duplicate).toBeTypeOf('function');
     expect(library.delete).toBeUndefined();
-    expect(library.restore).toBeUndefined();
+    expect(library.restore).toBeTypeOf('function');
   });
 
   it('LIB-21 propagates unauthorized Library access without fabricating rows or mutations', async () => {

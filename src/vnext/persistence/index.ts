@@ -18,6 +18,7 @@ export type {
   PersistenceErrorCode,
   PersistenceResult,
   SaveCatalogCasRequest,
+  UnarchiveCatalogCasRequest,
 } from './contracts';
 export {
   PersistenceContractError,
