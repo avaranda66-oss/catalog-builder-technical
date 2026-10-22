@@ -6,7 +6,9 @@
 
 [data-editorial-root] { font-family:'Noto Sans',sans-serif; font-synthesis:none; transform:none; zoom:1; width:max-content; }
 [data-editorial-root],[data-editorial-root] * { box-sizing:border-box; }
-[data-editorial-root] .editorial-page { position:relative; background:white; padding:0; border:0; overflow:visible; }
+/* Onda 3.5: the page is its own stacking context, so a background object with a negative zIndex (a diagonal band put
+   behind everything) is painted above the page colour and below the content, never hidden behind the page. */
+[data-editorial-root] .editorial-page { position:relative; isolation:isolate; background:white; padding:0; border:0; overflow:visible; }
 [data-editorial-root] .editorial-object { position:absolute; padding:0; margin:0; border:0; overflow:visible; }
 [data-editorial-root] .table-intrinsic { margin:0; padding:0; border:0; }
 [data-editorial-root] .editorial-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }

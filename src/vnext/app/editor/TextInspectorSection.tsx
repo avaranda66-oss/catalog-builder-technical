@@ -14,6 +14,10 @@ import {
   textColorOptions,
   textKindPatch,
 } from '../../editor/text-style-authoring';
+import { AdvancedToggle } from './NativeStyleSection';
+import { TableColorField } from './TableColorField';
+import { TableDecimalField } from './TableDecimalField';
+import { TextDecorationSection } from './TextDecorationSection';
 import './TextInspectorSection.css';
 
 export interface TextInspectorSectionProps {
@@ -73,6 +77,7 @@ export function TextInspectorSection({
   const overflowing = measurement?.source === document && Boolean(measurement.diagnostics?.some((diagnostic) =>
     diagnostic.code === 'TEXT_OBJECT_OVERFLOW' && diagnostic.objectId === object.id));
   const lockedReason = disabled ? `${idBase}-locked` : undefined;
+  const [advanced, setAdvanced] = React.useState(false);
 
   // The patch is chosen from the style on screen, so that style is the one the change expects.
   const shownStyle = current.style;
@@ -119,6 +124,13 @@ export function TextInspectorSection({
           {effective.kind === undefined && effective.fontSizePt !== undefined && (
             <p className="vnext-text-basic-hint">Tamanho atual: {formatDecimalPtBr(effective.fontSizePt, 2)} pt</p>
           )}
+          {/* Onda 3.5 (P1.3): any size, typed with comma or point (e.g. 7,2). */}
+          <label className="vnext-native-field">
+            <span>Tamanho</span>
+            <TableDecimalField name="Tamanho do texto" value={effective.fontSizePt} unit="pt" max={200} example="7,2"
+              className="vnext-style-number" disabled={disabled} describedBy={lockedReason} inputProps={{ 'data-text-size': '' }}
+              onCommit={(value) => { if (value !== null) change({ fontSizePt: value }); }} />
+          </label>
         </div>
 
         <button type="button" className="vnext-text-basic-bold" data-text-bold="" aria-pressed={effective.fontWeight === 700}
@@ -137,6 +149,9 @@ export function TextInspectorSection({
                 onClick={() => change({ color: option.value })} />
             ))}
           </div>
+          {/* Onda 3.5 (P1.3): any colour, like the gold of a cover that is not in the catalog colours. */}
+          <TableColorField swatchLabel="Cor do texto" pickerLabel="Outra cor do texto" value={effective.color} palette={[]} showSwatches={false}
+            disabled={disabled} describedBy={lockedReason} pickerProps={{ 'data-text-color-picker': '' }} onPick={(color) => change({ color })} />
         </div>
 
         <div className="vnext-text-basic-group" role="group" aria-labelledby={`${idBase}-align`}>
@@ -151,6 +166,25 @@ export function TextInspectorSection({
             ))}
           </div>
         </div>
+
+        {advanced && (
+          <div className="vnext-text-basic-group" data-text-advanced="">
+            <label className="vnext-native-field">
+              <span>Espaço entre letras</span>
+              <TableDecimalField name="Espaço entre letras" value={Math.round((current.style.letterSpacingEm ?? 0) * 1000) / 10} unit="%"
+                range="zeroOrMore" max={100} example="10" className="vnext-style-number" disabled={disabled} describedBy={lockedReason}
+                inputProps={{ 'data-text-letter-spacing': '' }} onCommit={(value) => { if (value !== null) change({ letterSpacingEm: value / 100 }); }} />
+            </label>
+            <label className="vnext-native-field">
+              <span>Altura da linha</span>
+              <TableDecimalField name="Altura da linha" value={current.style.lineHeight ?? document.style.defaultText.lineHeight ?? 1.2}
+                max={4} example="1,2" className="vnext-style-number" disabled={disabled} describedBy={lockedReason}
+                inputProps={{ 'data-text-line-height': '' }} onCommit={(value) => { if (value !== null) change({ lineHeight: Math.max(0.5, value) }); }} />
+            </label>
+          </div>
+        )}
+        <AdvancedToggle open={advanced} onToggle={() => setAdvanced((open) => !open)} id={`${idBase}-advanced`}
+          disabled={disabled} describedBy={lockedReason} />
 
         <div className="vnext-fit-height-section" data-text-fit-height=""
           data-fit-height-prepared-u={fit?.ok ? fit.prepared.preparedHeightU : undefined}>
@@ -172,6 +206,9 @@ export function TextInspectorSection({
           )}
         </div>
       </section>
+      {(current.box || current.leader || advanced) && (
+        <TextDecorationSection object={current} disabled={disabled} session={session} prepare={prepare} onMessage={onMessage} />
+      )}
     </>
   );
 }

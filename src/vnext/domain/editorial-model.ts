@@ -65,6 +65,8 @@ export const TextStyleSchema=z.object({
   fontFamily:clean.optional(),fontSizePt:positive.optional(),lineHeight:positive.optional(),
   fontWeight:z.union([z.literal(400),z.literal(700)]).optional(),
   color:color.optional(),textAlign:z.enum(['left','center','right']).optional(),
+  /** Onda 3.5 (P1.3): extra space between letters, in em (0,1 = 10% of the font size). */
+  letterSpacingEm:finite.min(-0.1).max(1).optional(),
 }).strict();
 export type TextStyle=z.infer<typeof TextStyleSchema>;
 export const TableStyleSchema=z.object({
@@ -113,16 +115,72 @@ export const DocumentStyleSchema=z.object({
   defaultText:CellStyleSchema,palette:z.array(color).min(1),
 }).strict();
 export type DocumentStyle=z.infer<typeof DocumentStyleSchema>;
-const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optional()};
+/**
+ * Onda 3.5 (P1/P2): native styles that replace the art baked into cover PNGs. Every field is optional and additive,
+ * so documents written before keep loading and rendering exactly as before (schemaVersion stays 1: the database
+ * accepts only 1, and nothing old changes meaning).
+ */
+const unitInterval=finite.min(0).max(1);
+export const StrokeDashSchema=z.enum(['solid','dashed','dotted']);
+export type StrokeDash=z.infer<typeof StrokeDashSchema>;
+/** Fill of a polygon: one colour, a two-colour linear gradient, or a printable vector pattern over an optional base. */
+export const PaintSchema=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('solid'),color}).strict(),
+  z.object({kind:z.literal('linear'),from:color,to:color,angleDeg:finite.min(0).max(360)}).strict(),
+  z.object({kind:z.literal('pattern'),pattern:z.enum(['dots','lines','waves']),color,background:color.optional(),spacingMm:finite.min(1).max(30)}).strict(),
+]);
+export type Paint=z.infer<typeof PaintSchema>;
+export const ShapeStyleSchema=z.object({
+  fill:color.optional(),stroke:BorderSchema.optional(),
+  strokeDash:StrokeDashSchema.optional(),cornerRadiusMm:nonnegative.max(150).optional(),opacity:unitInterval.optional(),
+}).strict();
+export type ShapeStyle=z.infer<typeof ShapeStyleSchema>;
+/** Vertices as fractions of the frame (0 = left/top, 1 = right/bottom): resizing the box scales the polygon. */
+export const PolygonPointSchema=z.object({x:unitInterval,y:unitInterval}).strict();
+export type PolygonPoint=z.infer<typeof PolygonPointSchema>;
+export const PolygonStyleSchema=z.object({
+  fill:PaintSchema.optional(),stroke:BorderSchema.optional(),strokeDash:StrokeDashSchema.optional(),opacity:unitInterval.optional(),
+}).strict();
+export type PolygonStyle=z.infer<typeof PolygonStyleSchema>;
+/**
+ * A text box with its own background ("Selo"/pílula, E2): one object, so the shape and the words always move
+ * together. Without `cornerRadiusMm` the ends are fully round (pill). `fitText` keeps the words on one line and
+ * makes them smaller when they do not fit (never larger than the chosen size).
+ */
+export const TextBoxSchema=z.object({
+  fill:color.optional(),stroke:BorderSchema.optional(),cornerRadiusMm:nonnegative.max(150).optional(),
+  paddingMm:nonnegative.max(20),fitText:z.boolean(),
+}).strict();
+export type TextBox=z.infer<typeof TextBoxSchema>;
+/**
+ * A pointer drawn from a text box to a point ("Chamada", E3): the text is the label, the anchor is measured from
+ * the box's top-left corner, so moving the label moves the whole callout. `elbow` draws a horizontal (or
+ * vertical) first segment, as in technical drawings.
+ */
+export const TextLeaderSchema=z.object({
+  anchorXMm:finite.min(-300).max(300),anchorYMm:finite.min(-300).max(300),
+  head:z.enum(['arrow','dot','none']),elbow:z.boolean(),color,thicknessPt:positive.max(12),
+}).strict();
+export type TextLeader=z.infer<typeof TextLeaderSchema>;
+export const PageBackgroundSchema=z.object({
+  color:color.optional(),
+  image:z.object({assetId:id,fit:z.enum(['contain','cover'])}).strict().optional(),
+}).strict().refine(background=>background.color!==undefined||background.image!==undefined,'PAGE_BACKGROUND_EMPTY');
+export type PageBackground=z.infer<typeof PageBackgroundSchema>;
+/** `hidden`: the person turned the object off in "Camadas". It stays in the document but is not painted on screen nor printed (preflight warns). */
+const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optional(),hidden:z.boolean().optional()};
 export const ImageFocalPointSchema=z.object({x:finite.min(0).max(1),y:finite.min(0).max(1)}).strict();
 export type ImageFocalPoint=z.infer<typeof ImageFocalPointSchema>;
 export const DEFAULT_IMAGE_FOCAL_POINT:Readonly<ImageFocalPoint>=Object.freeze({x:0.5,y:0.5});
 export const LeafEditorialObjectSchema=z.discriminatedUnion('type',[
   z.object({...objectBase,type:z.literal('table'),table:TableModelSchema}).strict(),
-  z.object({...objectBase,type:z.literal('text'),text:RichTextSchema,style:TextStyleSchema}).strict(),
+  z.object({...objectBase,type:z.literal('text'),text:RichTextSchema,style:TextStyleSchema,
+    box:TextBoxSchema.optional(),leader:TextLeaderSchema.optional()}).strict(),
   z.object({...objectBase,type:z.literal('image'),assetId:id,fit:z.enum(['contain','cover']),focalPoint:ImageFocalPointSchema.optional()}).strict(),
-  z.object({...objectBase,type:z.literal('shape'),shape:z.enum(['rectangle','ellipse']),style:z.object({fill:color.optional(),stroke:BorderSchema.optional()}).strict()}).strict(),
-  z.object({...objectBase,type:z.literal('line'),axis:z.enum(['horizontal','vertical']),color}).strict(),
+  z.object({...objectBase,type:z.literal('shape'),shape:z.enum(['rectangle','ellipse']),style:ShapeStyleSchema}).strict(),
+  z.object({...objectBase,type:z.literal('line'),axis:z.enum(['horizontal','vertical']),color,
+    thicknessPt:positive.max(72).optional(),dash:StrokeDashSchema.optional(),opacity:unitInterval.optional()}).strict(),
+  z.object({...objectBase,type:z.literal('polygon'),points:z.array(PolygonPointSchema).min(3).max(16),style:PolygonStyleSchema}).strict(),
   z.object({...objectBase,type:z.literal('icon'),assetId:id}).strict(),
 ]);
 export type LeafEditorialObject=z.infer<typeof LeafEditorialObjectSchema>;
@@ -155,8 +213,10 @@ export type TableObject=Extract<EditorialObject,{type:'table'}>;
 export type ShapeObject=Extract<EditorialObject,{type:'shape'}>;
 export type LineObject=Extract<EditorialObject,{type:'line'}>;
 export type IconObject=Extract<EditorialObject,{type:'icon'}>;
+export type PolygonObject=Extract<EditorialObject,{type:'polygon'}>;
 export const PageSchema=z.object({id,widthMm:z.literal(210),heightMm:z.literal(297),
   safeArea:z.object({topMm:nonnegative,rightMm:nonnegative,bottomMm:nonnegative,leftMm:nonnegative}).strict().optional(),
+  background:PageBackgroundSchema.optional(),
   objects:z.array(EditorialObjectSchema)}).strict();
 export type Page=z.infer<typeof PageSchema>;
 export const CatalogDocumentSchema=z.object({schemaVersion:z.literal(1),id,title:clean,locale:clean,

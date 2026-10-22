@@ -112,7 +112,10 @@ describe('FR-14 applyTextStyle', () => {
     const session = createDocumentSession(textDocument(), { createId: ids() });
     expect(applyTextStyle(session, 'missing', { fontWeight: 700 }, 'x'))
       .toEqual({ ok: false, message: 'Selecione uma caixa de texto para mudar o estilo.' });
-    expect(applyTextStyle(session, 'text', { color: '#FF0000' }, 'x'))
+    // Onda 3.5: any colour is accepted now; a font face the document does not declare still cannot be used.
+    const document = textDocument();
+    const regularOnly = createDocumentSession({ ...document, style: { ...document.style, fonts: document.style.fonts.filter((font) => font.weight === 400) } }, { createId: ids() });
+    expect(applyTextStyle(regularOnly, 'text', { fontWeight: 700 }, 'x'))
       .toEqual({ ok: false, message: 'Não foi possível mudar o estilo do texto.' });
   });
 });

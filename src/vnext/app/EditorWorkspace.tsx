@@ -5,7 +5,7 @@ import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
-import { FolderOpen, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { FolderOpen, Layers, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
@@ -128,7 +128,14 @@ import { PasteGrowOffer, PasteTableArea } from './editor/PasteTableArea';
 import { createTableFromPastedText, decidePendingTableFit, describeRowsByColumns, growTableAndPaste, isPageLevelPasteTarget, newTableTransactionId, tablePasteGrowthOffer, type PendingTableFit, type TablePasteGrowthOffer, type TablePasteSource } from './editor/table-paste-actions';
 import { isTabularClipboardText } from '../editor/table-paste-import';
 import { successNotice, type EditorNoticeInput } from '../editor/editor-notices';
-import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview, type ResizeHandle } from './editor-interaction';
+import { EditorInteractionController, frameToU, type FinishGestureResult, type GestureKind, type GesturePreview } from './editor-interaction';
+import { LayersPanel, type LayerSelectMode } from './editor/LayersPanel';
+import { SelectionLayer, type SelectionBox } from './editor/SelectionLayer';
+import { alphaMaskFor, preloadAlphaMask } from './editor/image-alpha-masks';
+import {
+  coveringObjectsAbove, groupRefusal, imageTransparentAt, layerName, layerPosition, nextObjectBelow, normalizeRect,
+  objectsAtPoint, objectsInsideRect, resolvePlainClickTarget, sendToBackTarget, type PointU, type RectU, type TransparencyProbe,
+} from '../editor/object-layers';
 import { W2E_PAGE_TEMPLATE_ID } from './page-template-fixtures';
 import { hasPresysPageReuse, insertPresysPage } from '../library/starter-dependencies';
 import { isPresysTa25nPageTemplate } from '../library/presys-ta25n-starter';
@@ -151,6 +158,10 @@ import type { TableGridCommand } from '../editor/table-grid-commands';
 import { TableGridPasteFallback, TableGridToolbar } from './editor/TableGridToolbar';
 import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
+import { NativeStyleSection } from './editor/NativeStyleSection';
+import { PageBackgroundSection } from './editor/PageBackgroundSection';
+import { ElementInsertButtons } from './editor/ElementInsertButtons';
+import { polygonHitClipPath } from '../editor/native-element-authoring';
 import { TextEditToolbar } from './editor/TextEditToolbar';
 import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
 import { AssistantDock, assistantSelectionLabel, useAssistantWide } from './editor/AssistantDock';
@@ -178,7 +189,6 @@ type ImageFocalGesture = {
   expectedImage: ImageExpectedState;
   pointerId?: number;
 };
-const resizeHandles: readonly ResizeHandle[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 const technicalSymbols = ['±', '°C', 'Ω', 'µ', '≤', '≥', '≈'] as const;
 const SNAP_RADIUS_PX = 8;
 
@@ -212,6 +222,20 @@ function canonicalImageFocal(value: number): number {
 
 function useDocumentSession(session: DocumentSession) {
   return React.useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+}
+
+/** A text of the page, also one inside a group (edited where it is), with its frame on the page. */
+function findPageText(page: Page, objectId: string): { object: TextObject; frameU: FrameU; groupId?: string } | undefined {
+  for (const object of page.objects) {
+    if (object.id === objectId) return object.type === 'text' ? { object, frameU: frameToU(object.frame) } : undefined;
+    if (object.type !== 'group') continue;
+    const child = object.objects.find((entry) => entry.id === objectId);
+    if (!child) continue;
+    if (child.type !== 'text') return undefined;
+    const group = frameToU(object.frame), own = frameToU(child.frame);
+    return { object: child, frameU: { xU: group.xU + own.xU, yU: group.yU + own.yU, widthU: own.widthU, heightU: own.heightU }, groupId: object.id };
+  }
+  return undefined;
 }
 
 function visualObjects(page: Page): EditorialObject[] {
@@ -561,9 +585,8 @@ export function EditorWorkspace({
     setImageFitDraft(selectedImageObject.fit);
     setImageFocalDraft({ ...expected.focalPoint });
   }, [document.id, editorState.activePageId, selectedImageObject]);
-  const editingObject = textEdit
-    ? selectedPage.objects.find((object): object is TextObject => object.id === textEdit.objectId && object.type === 'text')
-    : undefined;
+  const editingEntry = textEdit ? findPageText(selectedPage, textEdit.objectId) : undefined;
+  const editingObject = editingEntry?.object;
   const previewDocument = React.useMemo(() => ({ ...document, pages: [selectedPage] }), [document, selectedPage]);
   const compiledPreview = React.useMemo(() => compilePlans(previewDocument), [previewDocument]);
   const plans = measuredLayout?.source === document ? measuredLayout.plans : compiledPreview.plans;
@@ -795,8 +818,7 @@ export function EditorWorkspace({
   React.useEffect(() => {
     if (!textEdit) return;
     const page = document.pages.find((entry) => entry.id === textEdit.pageId);
-    const object = page?.objects.find((entry) => entry.id === textEdit.objectId);
-    if (page && object?.type === 'text') return;
+    if (page && findPageText(page, textEdit.objectId)) return;
     textEditRef.current = null;
     compositionRef.current = false;
     setTextEdit(null);
@@ -1259,9 +1281,10 @@ export function EditorWorkspace({
     persistenceRuntime?.workspace.notifyDraftStateChanged();
   }, [persistenceOpenSessionId, persistenceRuntime, recoveredOverlay, session]);
 
-  const startTextEdit = (object: EditorialObject): boolean => {
+  const startTextEdit = (object: EditorialObject, groupId?: string): boolean => {
     if (object.type !== 'text') return false;
-    if (object.locked) {
+    const group = groupId ? selectedPage.objects.find((entry) => entry.id === groupId) : undefined;
+    if (object.locked || group?.locked) {
       setStatusMessage('Texto bloqueado não pode ser editado.');
       return false;
     }
@@ -1280,7 +1303,7 @@ export function EditorWorkspace({
     textEditRef.current = edit;
     setTextEdit(edit);
     setMultiSelectArmed(false);
-    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [object.id], mode: 'text-edit' });
+    setEditorState({ activePageId: selectedPage.id, selectedObjectIds: [group?.id ?? object.id], mode: 'text-edit' });
     setStatusMessage(null);
     persistence?.runtime.workspace.notifyDraftStateChanged();
     return true;
@@ -2555,6 +2578,7 @@ export function EditorWorkspace({
   };
 
   const deleteSelected = () => {
+    if (selectedObjects.length > 1) { runObjectShortcut({ type: 'delete' }); return; }
     if (!selectedObject) return;
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
@@ -2564,7 +2588,33 @@ export function EditorWorkspace({
     setStatusMessage('Objeto excluído.');
   };
 
+  /** Duplicates every selected object as one undo step; the copies (5 mm to the right and down) become the selection. */
+  const duplicateSeveral = () => {
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const ids = selectedVisualOrder.filter((object) => editorState.selectedObjectIds.includes(object.id)).map((object) => object.id);
+    if (ids.some((id) => {
+      const object = selectedPage.objects.find((entry) => entry.id === id);
+      return !object || Boolean(objectClosureLockedId(object));
+    })) { setStatusMessage('Um dos objetos está travado. Destrave-o em Camadas para duplicar.'); return; }
+    const transactionId = 'duplicar-varios:' + Date.now() + ':' + Math.random().toString(36).slice(2);
+    const offsetU = mmToU(5);
+    const created: string[] = [];
+    for (const id of ids) {
+      const object = session.getSnapshot().document.pages.find((page) => page.id === selectedPage.id)?.objects.find((entry) => entry.id === id);
+      if (!object) continue;
+      const frame = frameToU(object.frame);
+      const result = session.execute({ type: 'object.duplicate', objectId: id, xU: frame.xU + offsetU, yU: frame.yU + offsetU }, { transactionId });
+      if (!result.ok) { setStatusMessage('Não foi possível duplicar todos os objetos. Use Desfazer para voltar.'); break; }
+      if (result.metadata.createdIds[0]) created.push(result.metadata.createdIds[0]);
+    }
+    if (created.length === 0) return;
+    setEditorState((current) => ({ ...current, selectedObjectIds: created, mode: 'select' }));
+    setStatusMessage(created.length + ' objetos duplicados. As cópias estão selecionadas: arraste para posicionar.');
+  };
+
   const duplicateSelected = () => {
+    if (selectedObjects.length > 1) { duplicateSeveral(); return; }
     if (!selectedObject) return;
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
@@ -2576,14 +2626,20 @@ export function EditorWorkspace({
   };
 
   const groupSelected = () => {
-    if (editorState.selectedObjectIds.length < 2) return;
+    const refusal = groupRefusal(selectedPage, editorState.selectedObjectIds);
+    if (refusal) { setStatusMessage(refusal); return; }
     if (!finishTextEditBeforeCommand()) return;
     controller.cancel('superseded');
     const result = session.execute({ type: 'group.create', pageId: selectedPage.id, objectIds: [...editorState.selectedObjectIds] });
-    if (!result.ok) { setStatusMessage('Não foi possível agrupar os objetos.'); return; }
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'OBJECT_LOCKED'
+        ? 'Um dos objetos está travado. Destrave-o (cadeado em Camadas) e tente de novo.'
+        : 'Não foi possível agrupar: a página mudou. Selecione os objetos de novo e tente outra vez.');
+      return;
+    }
     const groupId = result.metadata.createdIds[0];
     setEditorState((current) => ({ ...current, selectedObjectIds: groupId ? [groupId] : [] }));
-    setStatusMessage('Objetos agrupados.');
+    setStatusMessage('Objetos agrupados. Agora se movem juntos; dois cliques num texto do grupo editam o texto.');
   };
 
   const ungroupSelected = () => {
@@ -2606,9 +2662,31 @@ export function EditorWorkspace({
     const ordered = visualObjects(currentPage);
     const currentIndex = ordered.findIndex((object) => object.id === selectedObject.id);
     if (currentIndex < 0) return;
-    const targetIndex = target === 'back' ? 0 : target === 'front' ? ordered.length - 1 : target === 'backward' ? Math.max(0, currentIndex - 1) : Math.min(ordered.length - 1, currentIndex + 1);
-    const result = session.execute({ type: 'object.reorder', objectId: selectedObject.id, targetIndex });
-    setStatusMessage(result.ok ? 'Ordem do objeto atualizada.' : 'Não foi possível alterar a ordem.');
+    const back = target === 'back' ? sendToBackTarget(currentPage, selectedObject.id) : undefined;
+    const targetIndex = back ? back.targetIndex : target === 'front' ? ordered.length - 1 : target === 'backward' ? Math.max(0, currentIndex - 1) : Math.min(ordered.length - 1, currentIndex + 1);
+    runReorder(selectedObject.id, targetIndex, back?.keptAbove);
+  };
+
+  /** One undoable reorder; says where the object is now and warns when something above may cover it. */
+  const runReorder = (objectId: string, targetIndex: number, keptAbove?: EditorialObject) => {
+    const result = session.execute({ type: 'object.reorder', objectId, targetIndex });
+    if (!result.ok) {
+      setStatusMessage(result.error.code === 'OBJECT_LOCKED'
+        ? 'Um objeto travado está no caminho. Destrave-o em Camadas para mudar a ordem.'
+        : 'Não foi possível alterar a ordem.');
+      return;
+    }
+    const page = result.document.pages.find((entry) => entry.id === selectedPage.id);
+    const object = page?.objects.find((entry) => entry.id === objectId);
+    if (!page || !object) return;
+    const where = layerPosition(page, objectId);
+    const position = where ? ' Agora está na camada ' + where.position + ' de ' + where.count + ' (1 = mais ao fundo).' : '';
+    const covering = coveringObjectsAbove(page, objectId)[0];
+    setStatusMessage(keptAbove
+      ? 'Enviado para trás, mas continua na frente do fundo da página (' + layerName(keptAbove, document, page) + ') para não sumir.' + position + ' Para ir atrás do fundo, arraste em Camadas.'
+      : covering
+        ? 'Atenção: agora este objeto está atrás de ' + layerName(covering, document, page) + ' e pode ficar escondido.' + position + ' Use Desfazer ou Camadas para trazer de volta.'
+        : 'Ordem do objeto atualizada.' + position);
   };
 
   const liveArrangementSelection = () => {
@@ -2701,6 +2779,58 @@ export function EditorWorkspace({
     setStatusMessage(result.metadata.changed
       ? locked ? 'Objeto bloqueado.' : 'Objeto desbloqueado.'
       : locked ? 'O objeto já está bloqueado.' : 'O objeto já está desbloqueado.');
+  };
+
+  // ---- "Camadas" (Onda 3.5, S1) ----
+  const liveLayerObject = (objectId: string) => session.getSnapshot().document.pages
+    .find((entry) => entry.id === editorState.activePageId)?.objects.find((entry) => entry.id === objectId);
+  const selectFromLayers = (objectId: string, mode: LayerSelectMode) => {
+    if (!prepareAuthoringForContextChangeRef.current()) return;
+    controller.cancel('superseded');
+    if (editorState.mode === 'table-grid') leaveTableGrid('');
+    if (mode === 'toggle') { toggleObjectSelection(objectId); return; }
+    selectObject(objectId);
+    const object = liveLayerObject(objectId);
+    if (object) setStatusMessage(describeLayer(object, object.hidden ? ' Está escondido: clique no olho para mostrar.' : ''));
+  };
+  const toggleLayerHidden = (target: EditorialObject) => {
+    const object = liveLayerObject(target.id);
+    if (!object) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const hidden = !object.hidden;
+    const result = session.execute({ type: 'object.setHidden', objectId: object.id, expectedHidden: object.hidden === true, hidden });
+    if (!result.ok) { setStatusMessage('Não foi possível esconder ou mostrar o objeto.'); return; }
+    if (hidden) setEditorState((current) => ({ ...current, selectedObjectIds: current.selectedObjectIds.filter((id) => id !== object.id) }));
+    setStatusMessage(hidden
+      ? layerName(object, document) + ' escondido: não aparece na página nem sai no PDF. Para mostrar, clique no olho em Camadas.'
+      : layerName(object, document) + ' voltou a aparecer.');
+  };
+  const toggleLayerLocked = (target: EditorialObject) => {
+    const object = liveLayerObject(target.id);
+    if (!object) return;
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    const locked = !object.locked;
+    const result = session.execute({ type: 'object.setLocked', objectId: object.id, expectedLocked: object.locked === true, locked });
+    if (!result.ok) { setStatusMessage('Não foi possível travar ou destravar o objeto.'); return; }
+    setStatusMessage(locked
+      ? layerName(object, document) + ' travado: não sai do lugar e os cliques passam para o que está embaixo.'
+      : layerName(object, document) + ' destravado.');
+  };
+  const reorderFromLayers = (objectId: string, targetIndex: number) => {
+    if (!finishTextEditBeforeCommand()) return;
+    controller.cancel('superseded');
+    runReorder(objectId, targetIndex);
+  };
+  const showLayers = () => {
+    setAssistantOpen(false);
+    setLayersOpen(true);
+    queueMicrotask(() => {
+      const panel = globalThis.document.querySelector<HTMLElement>('[data-layers-panel]');
+      panel?.scrollIntoView?.({ block: 'nearest' });
+      panel?.querySelector<HTMLElement>('[role="treeitem"][tabindex="0"]')?.focus();
+    });
   };
 
   const liveSelectedImage = () => {
@@ -2917,14 +3047,147 @@ export function EditorWorkspace({
     setStatusMessage(next ? 'Encaixe ativado.' : 'Encaixe desativado.');
   };
 
-  const beginGesture = (event: React.PointerEvent<HTMLElement>, object: EditorialObject, kind: GestureKind) => {
+  // ---- Onda 3.5 (S1): reach any object, selection box, multiple selection ----
+  const pageStageRef = React.useRef<HTMLDivElement>(null);
+  const editorOverlayRef = React.useRef<HTMLDivElement>(null);
+  const lastPointerTargetRef = React.useRef<{ pageId: string; objectId: string } | null>(null);
+  const collapseOnClickRef = React.useRef<string | null>(null);
+  const pendingTextEditRef = React.useRef<{ objectId: string; clientX: number; clientY: number } | null>(null);
+  /** The quick second press on a selected text: edit it now (used when no drag can start). */
+  const startPendingTextEdit = (): boolean => {
+    const pending = pendingTextEditRef.current;
+    pendingTextEditRef.current = null;
+    const text = pending ? selectedPage.objects.find((entry) => entry.id === pending.objectId) : undefined;
+    if (!text) return false;
+    controller.cancel('superseded');
+    return startTextEdit(text);
+  };
+  const marqueeRef = React.useRef<{
+    pointerId: number; startClientX: number; startClientY: number; startU: PointU; additive: boolean;
+    base: readonly string[]; active: boolean; onClick: () => void;
+  } | null>(null);
+  const [marquee, setMarquee] = React.useState<RectU | null>(null);
+  const [layersOpen, setLayersOpen] = React.useState(false);
+  const pageAssetUrls = persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS;
+  React.useEffect(() => {
+    for (const object of selectedPage.objects) {
+      if (object.type !== 'image' || object.hidden) continue;
+      const asset = document.assets.find((entry) => entry.id === object.assetId);
+      if (asset && asset.mime !== 'image/jpeg') preloadAlphaMask(pageAssetUrls.get(object.assetId));
+    }
+  }, [document.assets, pageAssetUrls, selectedPage]);
+  const transparencyProbe: TransparencyProbe = (object, point) => {
+    if (object.type !== 'image') return false;
+    const mask = alphaMaskFor(pageAssetUrls.get(object.assetId));
+    return mask ? imageTransparentAt(object, mask, point) : false;
+  };
+  /** Pointer position on the page in canonical units; undefined when the page has no size on screen (tests). */
+  const pagePointU = (clientX: number, clientY: number): PointU | undefined => {
+    const rect = pageStageRef.current?.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]')?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return undefined;
+    return { xU: Math.round(((clientX - rect.left) / rect.width) * pageWidthU), yU: Math.round(((clientY - rect.top) / rect.height) * pageHeightU) };
+  };
+  const describeLayer = (object: EditorialObject, extra = ''): string => {
+    const where = layerPosition(selectedPage, object.id);
+    return 'Selecionado: ' + layerName(object, document, selectedPage)
+      + (where ? ' (camada ' + where.position + ' de ' + where.count + ', contando do fundo)' : '') + '.' + extra;
+  };
+  const clearSelection = () => {
+    controller.cancel('superseded');
+    if (editorState.mode === 'table-grid') leaveTableGrid('');
+    setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
+  };
+  /** Empty page area or grey margin: a click deselects, a drag draws a selection box. */
+  const beginEmptyAreaPointer = (event: React.PointerEvent<HTMLElement>, onClick: () => void = clearSelection) => {
+    const startU = pagePointU(event.clientX, event.clientY);
+    if (!startU || !editorOverlayRef.current) { onClick(); return; }
+    controller.cancel('superseded');
+    event.preventDefault();
+    editorOverlayRef.current.setPointerCapture?.(event.pointerId);
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    marqueeRef.current = {
+      pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY, startU, additive,
+      base: additive ? editorState.selectedObjectIds : [], active: false, onClick,
+    };
+  };
+  const moveMarquee = (event: React.PointerEvent<HTMLElement>) => {
+    const current = marqueeRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current.active && Math.hypot(event.clientX - current.startClientX, event.clientY - current.startClientY) < 5) return;
+    const point = pagePointU(event.clientX, event.clientY);
+    if (!point) return;
+    current.active = true;
+    setMarquee(normalizeRect(current.startU, point));
+  };
+  const finishMarquee = (event: React.PointerEvent<HTMLElement>) => {
+    const current = marqueeRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    marqueeRef.current = null;
+    setMarquee(null);
+    const point = pagePointU(event.clientX, event.clientY);
+    if (!current.active || !point) { current.onClick(); return; }
+    if (!prepareAuthoringForContextChangeRef.current()) return;
+    if (editorState.mode === 'table-grid') leaveTableGrid('');
+    const inside = objectsInsideRect(selectedPage, normalizeRect(current.startU, point));
+    const ids = [...new Set([...current.base, ...inside])];
+    setEditorState((state) => ({ ...state, selectedObjectIds: ids, mode: 'select' }));
+    setStatusMessage(inside.length === 0
+      ? 'Nenhum objeto ficou inteiro dentro da caixa. Objetos travados não entram: destrave em Camadas.'
+      : ids.length === 1 ? 'Um objeto selecionado.' : ids.length + ' objetos selecionados. Arraste um deles para mover todos juntos.');
+  };
+  const cancelMarquee = () => { marqueeRef.current = null; setMarquee(null); };
+  /** Double click on a group: edit the text of the group that is under the pointer, where it is. */
+  const editGroupedTextAt = (event: React.MouseEvent<HTMLElement>, group: Extract<EditorialObject, { type: 'group' }>) => {
+    const point = pagePointU(event.clientX, event.clientY);
+    const groupFrame = frameToU(group.frame);
+    const texts = [...group.objects].reverse().filter((child) => child.type === 'text');
+    const hit = point
+      ? texts.find((child) => {
+        const own = frameToU(child.frame);
+        return point.xU >= groupFrame.xU + own.xU && point.xU <= groupFrame.xU + own.xU + own.widthU
+          && point.yU >= groupFrame.yU + own.yU && point.yU <= groupFrame.yU + own.yU + own.heightU;
+      })
+      : texts[0];
+    if (hit) startTextEdit(hit, group.id);
+  };
+
+  const beginGesture = (event: React.PointerEvent<HTMLElement>, clickedObject: EditorialObject, kind: GestureKind) => {
     if (event.button !== 0) return;
+    pendingTextEditRef.current = null;
+    collapseOnClickRef.current = null;
     event.preventDefault();
     event.stopPropagation();
     if (textEditRef.current) return;
+    // What the pointer reaches: transparent parts of images and locked objects let the click through;
+    // Alt+click goes to the next object below under the pointer.
+    let object = clickedObject;
+    let cycledStack: EditorialObject[] | undefined;
+    const point = kind.type === 'move' ? pagePointU(event.clientX, event.clientY) : undefined;
+    if (point && !(editorState.mode === 'table-grid' && selectedTableObject?.id === clickedObject.id)) {
+      // Only objects from the one the browser hit downwards: what is above it on screen already had its chance.
+      const stack = objectsAtPoint(selectedPage, point);
+      const from = stack.findIndex((entry) => entry.id === clickedObject.id);
+      if (from >= 0) {
+        if (event.altKey) {
+          object = nextObjectBelow(stack, selectedObjectId) ?? clickedObject;
+          cycledStack = stack;
+        } else {
+          object = resolvePlainClickTarget(stack.slice(from), transparencyProbe, point) ?? clickedObject;
+        }
+      }
+    }
+    lastPointerTargetRef.current = { pageId: selectedPage.id, objectId: object.id };
     if (editorState.mode === 'table-grid') {
       if (selectedTableObject?.id === object.id) return;
       leaveTableGrid('');
+    }
+    if (cycledStack) {
+      controller.cancel('superseded');
+      selectObject(object.id);
+      event.currentTarget.focus();
+      const index = cycledStack.findIndex((entry) => entry.id === object.id);
+      setStatusMessage(describeLayer(object, ' Objeto ' + (index + 1) + ' de ' + cycledStack.length + ' sob o ponteiro: Alt+clique de novo pega o de baixo.'));
+      return;
     }
     if (kind.type === 'move' && multiSelectArmed) {
       controller.cancel('superseded');
@@ -2951,11 +3214,13 @@ export function EditorWorkspace({
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      if (isSecondActivation) {
+      if (isSecondActivation && event.detail >= 2) {
         controller.cancel('superseded');
         startTextEdit(object);
         return;
       }
+      // A quick second press that turns into a drag moves the text (Onda 3.5, S03); released in place, it edits.
+      if (isSecondActivation) pendingTextEditRef.current = { objectId: object.id, clientX: event.clientX, clientY: event.clientY };
     }
     if (kind.type === 'move' && object.type === 'table') {
       const selected = editorState.selectedObjectIds.length === 1 && editorState.selectedObjectIds[0] === object.id;
@@ -2982,16 +3247,36 @@ export function EditorWorkspace({
         return;
       }
     }
-    if (kind.type === 'move' && (event.ctrlKey || event.metaKey)) {
+    if (kind.type === 'move' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
       controller.cancel('superseded');
       toggleObjectSelection(object.id);
       event.currentTarget.focus();
       return;
     }
     if (kind.type === 'resize' && object.type === 'group') return;
-    selectObject(object.id);
-    event.currentTarget.focus();
+    // Dragging one of several selected objects moves all of them together (one undo step).
+    const companions = kind.type === 'move' && editorState.selectedObjectIds.length > 1 && editorState.selectedObjectIds.includes(object.id)
+      ? editorState.selectedObjectIds.filter((id) => id !== object.id)
+      : [];
     const closureLockedId = objectClosureLockedId(object);
+    if (closureLockedId && kind.type === 'move' && point && !groupHasLockedDescendant(object)) {
+      // A locked object does not move: dragging on it draws a selection box; a click selects it (to unlock it).
+      beginEmptyAreaPointer(event, () => {
+        selectObject(object.id);
+        setStatusMessage(describeLayer(object, ' Está travado: destrave pelo cadeado (aqui ou em Camadas) para mover.'));
+      });
+      return;
+    }
+    if (companions.length === 0) selectObject(object.id);
+    collapseOnClickRef.current = companions.length > 0 ? object.id : null;
+    event.currentTarget.focus();
+    if (companions.some((id) => {
+      const companion = selectedPage.objects.find((entry) => entry.id === id);
+      return !companion || Boolean(objectClosureLockedId(companion));
+    })) {
+      setStatusMessage('Um dos objetos selecionados está travado. Destrave-o em Camadas para mover todos juntos.');
+      return;
+    }
     if (closureLockedId) {
       setStatusMessage(groupHasLockedDescendant(object)
         ? 'Este grupo contém um objeto interno bloqueado e não pode ser organizado nesta versão.'
@@ -3001,14 +3286,18 @@ export function EditorWorkspace({
     const stage = event.currentTarget.closest('[data-vnext-page-stage]') as HTMLElement | null;
     const canonicalPage = stage?.querySelector<HTMLElement>('[data-editorial-root] [data-page-id]');
     const rect = canonicalPage?.getBoundingClientRect();
-    if (!rect) return;
+    if (!rect) { startPendingTextEdit(); return; }
     try {
       const started = controller.begin({
         pointerId: event.pointerId, objectId: object.id, pageId: selectedPage.id, kind,
         clientX: event.clientX, clientY: event.clientY, pageClientWidthPx: rect.width, pageClientHeightPx: rect.height,
-        snapThresholdPx: SNAP_RADIUS_PX,
+        snapThresholdPx: SNAP_RADIUS_PX, companionObjectIds: companions,
       });
-      if (!started) { setStatusMessage('Este objeto não pode ser movido agora.'); return; }
+      if (!started) {
+        if (startPendingTextEdit()) return;
+        setStatusMessage('Este objeto não pode ser movido agora.');
+        return;
+      }
       event.currentTarget.setPointerCapture?.(event.pointerId);
       setStatusMessage(null);
     } catch {
@@ -3026,7 +3315,8 @@ export function EditorWorkspace({
   const describeFinish = (result: FinishGestureResult) => {
     if (result.status === 'committed') {
       lastTextPointerDownRef.current = null;
-      setStatusMessage(result.action.type === 'object.move' ? 'Objeto movido.' : 'Objeto redimensionado.');
+      setStatusMessage(result.action.type === 'objects.move' ? 'Objetos movidos juntos.'
+        : result.action.type === 'object.move' ? 'Objeto movido.' : 'Objeto redimensionado.');
     }
     else if (result.status === 'cancelled') setStatusMessage('Gesto cancelado porque o documento mudou.');
     else if (result.status === 'failed') setStatusMessage('A alteração final não pôde ser aplicada.');
@@ -3034,7 +3324,21 @@ export function EditorWorkspace({
 
   const finishGesture = (event: React.PointerEvent<HTMLElement>) => {
     if (!controller.isActive()) return;
-    try { describeFinish(controller.finish(event.pointerId, event.clientX, event.clientY)); }
+    const collapseTo = collapseOnClickRef.current;
+    collapseOnClickRef.current = null;
+    const pending = pendingTextEditRef.current;
+    // Released within a few pixels (a double click, even a shaky one): edit the text, do not move it.
+    if (pending && Math.hypot(event.clientX - pending.clientX, event.clientY - pending.clientY) <= 6) {
+      startPendingTextEdit();
+      return;
+    }
+    pendingTextEditRef.current = null;
+    try {
+      const result = controller.finish(event.pointerId, event.clientX, event.clientY);
+      // A click (no drag) on one of several selected objects keeps only that one selected.
+      if (result.status === 'noop' && collapseTo) selectObject(collapseTo);
+      describeFinish(result);
+    }
     catch { controller.cancel('capture-loss'); setStatusMessage('Gesto cancelado.'); }
   };
 
@@ -3104,8 +3408,7 @@ export function EditorWorkspace({
 
   const runObjectShortcut = (shortcut: Exclude<EditorShortcut, { type: 'save' }>) => {
     if (shortcut.type === 'duplicate') {
-      if (editorState.selectedObjectIds.length !== 1) setStatusMessage('Selecione um só objeto para duplicar.');
-      else duplicateSelected();
+      duplicateSelected();
       return;
     }
     if (!finishTextEditBeforeCommand()) return;
@@ -3157,8 +3460,18 @@ export function EditorWorkspace({
 
   const objectPreviewFrame = (object: EditorialObject): FrameU => {
     if (preview?.objectId === object.id && preview.pageId === selectedPage.id) return preview.frameU;
+    const companion = preview?.pageId === selectedPage.id ? preview.companions?.find((entry) => entry.objectId === object.id) : undefined;
+    if (companion) return companion.frameU;
     return frameToU(object.frame);
   };
+  const selectionBoxes: SelectionBox[] = selectedPage.objects
+    .filter((object) => !object.hidden && editorState.selectedObjectIds.includes(object.id))
+    .map((object) => ({
+      object,
+      frameU: objectPreviewFrame(object),
+      resizable: object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && !objectClosureLockedId(object),
+      previewing: preview?.objectId === object.id || Boolean(preview?.companions?.some((entry) => entry.objectId === object.id)),
+    }));
 
   const cancelOnRootKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -3293,6 +3606,19 @@ export function EditorWorkspace({
     if (event.key === 'Escape' && controller.cancel('escape')) {
       event.preventDefault();
       setStatusMessage('Gesto cancelado.');
+      return;
+    }
+    if (event.key === 'Escape' && marqueeRef.current) {
+      event.preventDefault();
+      cancelMarquee();
+      return;
+    }
+    // Esc on the page (or in "Camadas") lets go of the selection.
+    if (event.key === 'Escape' && editorState.mode === 'select' && editorState.selectedObjectIds.length > 0
+        && !isNativeInput && (isCanvasKeyboardTarget(target) || target.closest('[data-layers-panel]') || target === globalThis.document.body)) {
+      event.preventDefault();
+      setEditorState((current) => ({ ...current, selectedObjectIds: [] }));
+      setStatusMessage('Seleção desfeita.');
     }
   };
 
@@ -3978,7 +4304,9 @@ export function EditorWorkspace({
             issues={{ document, diagnostics: canonicalDiagnostics, simple: simpleByDefault, onLocate: goToIssue, session,
               measurement: measuredLayout?.source === document ? measuredLayout : null,
               prepare: () => prepareAuthoringForContextChangeRef.current(), onMessage: setStatusMessage }}
-            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'} />
+            memoryStatus={simpleByDefault ? undefined : persistence ? fatherSaveLabel(persistence.save.label) : 'Rascunho nesta aba'}
+            pageActions={<button type="button" className="vnext-show-layers" data-editor-action="show-layers" onClick={showLayers}
+              title="Lista de todos os objetos da página: selecionar, esconder, travar e mudar a ordem"><Layers size={16} aria-hidden="true" />Camadas</button>} />
           <div className="vnext-authoring-toolbar" aria-label="Ferramentas de edição">
             <div className="vnext-tool-group vnext-toolbar-primary" aria-label="Adicionar conteúdo">
               <button type="button" data-editor-action="add-text" onClick={() => insertObject('text')}>{simpleByDefault ? 'Texto' : 'Adicionar texto'}</button>
@@ -3986,10 +4314,10 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
               <button type="button" className="vnext-more-options" data-editor-action="new-table-size" aria-expanded={newTableSizeOpen} aria-controls="vnext-new-table-size" onClick={() => setNewTableSizeOpen((open) => !open)}>Tamanho da nova tabela</button>
               <button type="button" data-editor-action="paste-table-from-excel" aria-expanded={pasteTableAreaOpen} aria-controls="vnext-paste-table-area" onClick={() => setPasteTableAreaOpen((open) => !open)}>Colar tabela do Excel</button>
-              {(!simpleByDefault || selectedObject) && (
+              {(!simpleByDefault || selectedObjects.length > 0) && (
                 <>
-                  <button type="button" data-editor-action="duplicate" disabled={!selectedObject || selectedMutationLocked} onClick={duplicateSelected}>Duplicar</button>
-                  <button type="button" data-editor-action="delete" disabled={!selectedObject || selectedMutationLocked} onClick={deleteSelected}>Excluir</button>
+                  <button type="button" data-editor-action="duplicate" disabled={selectedObjects.length === 0 || selectedHasLockedClosure} onClick={duplicateSelected}>Duplicar</button>
+                  <button type="button" data-editor-action="delete" disabled={selectedObjects.length === 0 || selectedHasLockedClosure} onClick={deleteSelected}>Excluir</button>
                 </>
               )}
               {(!simpleByDefault || selectedObject?.type === 'text') && (
@@ -4017,6 +4345,10 @@ export function EditorWorkspace({
                   <button type="button" data-editor-action="add-shape" onClick={() => insertObject('shape')}>{simpleByDefault ? 'Forma' : 'Adicionar forma'}</button>
                   <button type="button" data-editor-action="add-line" onClick={() => insertObject('line')}>{simpleByDefault ? 'Linha' : 'Adicionar linha'}</button>
                 </div>
+                <ElementInsertButtons session={session} pageId={editorState.activePageId}
+                  prepare={() => { if (!finishTextEditBeforeCommand()) return false; controller.cancel('superseded'); return true; }}
+                  onInserted={(objectId, message) => { if (objectId) selectObject(objectId); setStatusMessage(message); }}
+                  onMessage={setStatusMessage} />
                 <div className="vnext-tool-group" aria-label="Seleção e posicionamento">
                   <button type="button" data-editor-action="toggle-snapping" aria-pressed={snappingEnabled} className={snappingEnabled ? 'is-active' : undefined} onClick={toggleSnapping}>
                     {simpleByDefault ? (snappingEnabled ? 'Encaixe ligado' : 'Encaixe desligado') : (snappingEnabled ? 'Encaixe: ligado' : 'Encaixe: desligado')}
@@ -4035,7 +4367,7 @@ export function EditorWorkspace({
                   >Selecionar vários</button>
                 </div>
                 <div className="vnext-tool-group" aria-label="Organização avançada">
-                  <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2 || selectedHasLockedClosure} onClick={groupSelected}>Agrupar</button>
+                  <button type="button" data-editor-action="group" disabled={editorState.selectedObjectIds.length < 2} onClick={groupSelected}>Agrupar</button>
                   <button type="button" data-editor-action="ungroup" disabled={selectedObject?.type !== 'group' || selectedMutationLocked} onClick={ungroupSelected}>Desagrupar</button>
                   <button type="button" data-editor-action="send-back" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('back')}>{simpleByDefault ? 'Enviar ao fundo' : 'Enviar para o fundo'}</button>
                   <button type="button" data-editor-action="send-backward" disabled={!selectedObject || selectedMutationLocked || selectedVisualIndex <= 0} onClick={() => reorderSelected('backward')}>{simpleByDefault ? 'Recuar camada' : 'Recuar uma camada'}</button>
@@ -4095,22 +4427,30 @@ export function EditorWorkspace({
               setTablePasteFallbackOpen={setTablePasteFallbackOpen} applyNativePasteFallback={applyNativePasteFallback} />
           )}
 
-          <div className="vnext-document-preview" tabIndex={-1} data-table-auto-fit={pendingTableFit ? 'pending' : undefined} aria-label={'Editor da página ' + (selectedPageIndex + 1)}>
-            <div className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
+          <div className="vnext-document-preview" tabIndex={-1} data-table-auto-fit={pendingTableFit ? 'pending' : undefined} aria-label={'Editor da página ' + (selectedPageIndex + 1)}
+            onPointerDown={(event) => {
+              // The grey margin around the page: a click deselects, a drag draws a selection box (covers that fill the page).
+              if (event.button !== 0 || event.target !== event.currentTarget) return;
+              if (textEditRef.current || editorState.mode === 'cell-edit') return;
+              beginEmptyAreaPointer(event);
+            }}>
+            <div ref={pageStageRef} className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
               <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
-              <div className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor" onPointerDown={(event) => {
-                if (event.target === event.currentTarget) {
-                  controller.cancel('superseded');
-                  if (editorState.mode === 'table-grid') leaveTableGrid('');
-                  setEditorState((current) => ({ ...current, selectedObjectIds: [], mode: 'select' }));
-                }
-              }}>
+              <div ref={editorOverlayRef} className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor"
+                onPointerDown={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (event.button !== 0 || (target !== event.currentTarget && !target.matches('[data-editor-hit-layer], [data-selection-layer]'))) return;
+                  beginEmptyAreaPointer(event);
+                }}
+                onPointerMove={moveMarquee}
+                onPointerUp={finishMarquee}
+                onPointerCancel={cancelMarquee}>
                 {textEdit && editingObject && (
                   <div
                     className="vnext-text-edit-session"
                     data-text-edit-session=""
                     data-text-edit-object-id={editingObject.id}
-                    style={frameStyle(frameToU(editingObject.frame))}
+                    style={frameStyle(editingEntry?.frameU ?? frameToU(editingObject.frame))}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
                     <textarea
@@ -4156,7 +4496,9 @@ export function EditorWorkspace({
                     aria-hidden="true"
                   />
                 ))}
+                <div className="vnext-hit-layer" data-editor-hit-layer="">
                 {selectedPage.objects.map((object) => {
+                  if (object.hidden) return null;
                   const selected = editorState.selectedObjectIds.includes(object.id);
                   const displayedFrame = objectPreviewFrame(object);
                   const objectDiagnostics = pageDiagnostics.filter((diagnostic) => diagnostic.objectId === object.id);
@@ -4171,11 +4513,17 @@ export function EditorWorkspace({
                       data-editor-object-id={object.id}
                       data-selected={selected ? 'true' : 'false'}
                       data-editor-preview={preview?.objectId === object.id ? 'true' : undefined}
-                      style={{ ...frameStyle(displayedFrame), zIndex: selected ? Number.MAX_SAFE_INTEGER : object.zIndex }}
+                      style={{ ...frameStyle(displayedFrame), zIndex: object.zIndex,
+                        ...(object.type === 'polygon' ? { clipPath: polygonHitClipPath(object.points) } : {}) }}
                       onPointerDown={(event) => beginGesture(event, object, { type: 'move' })}
-                      onDoubleClick={() => {
-                        if (object.type === 'text') startTextEdit(object);
-                        if (object.type === 'table' && editorState.mode === 'select') startTableGrid(object);
+                      onDoubleClick={(event) => {
+                        // The double click acts on the object the first click reached (it may be below this box).
+                        const resolved = lastPointerTargetRef.current;
+                        const target = resolved && resolved.pageId === selectedPage.id
+                          ? selectedPage.objects.find((entry) => entry.id === resolved.objectId) ?? object : object;
+                        if (target.type === 'text') startTextEdit(target);
+                        if (target.type === 'table' && editorState.mode === 'select') startTableGrid(target);
+                        if (target.type === 'group') editGroupedTextAt(event, target);
                       }}
                       onPointerMove={moveGesture}
                       onPointerUp={finishGesture}
@@ -4197,8 +4545,6 @@ export function EditorWorkspace({
                       )}
                       {selected && (
                         <>
-                          <div className="vnext-selection-outline" aria-hidden="true" />
-                          {preview?.objectId === object.id && <div className="vnext-preview-fill" aria-hidden="true" />}
                           {object.type === 'table'
                             && (editorState.mode === 'table-grid' || editorState.mode === 'cell-edit')
                             && !object.locked
@@ -4253,25 +4599,17 @@ export function EditorWorkspace({
                                 }}
                               />
                             )}
-                          {object.type !== 'group' && editorState.mode === 'select' && editorState.selectedObjectIds.length === 1 && !objectClosureLockedId(object) && resizeHandles.map((handle) => (
-                            <button
-                              key={handle}
-                              type="button"
-                              className={'vnext-resize-handle handle-' + handle}
-                              data-resize-handle={handle}
-                              aria-label={'Redimensionar ' + handle}
-                              onPointerDown={(event) => beginGesture(event, object, { type: 'resize', handle })}
-                              onPointerMove={moveGesture}
-                              onPointerUp={finishGesture}
-                              onPointerCancel={cancelPointerGesture}
-                              onLostPointerCapture={cancelCaptureLoss}
-                            />
-                          ))}
                         </>
                       )}
                     </div>
                   );
                 })}
+                </div>
+                <SelectionLayer boxes={selectionBoxes} marquee={marquee} handlers={{
+                  onHandlePointerDown: (event, object, handle) => beginGesture(event, object, { type: 'resize', handle }),
+                  onPointerMove: moveGesture, onPointerUp: finishGesture,
+                  onPointerCancel: cancelPointerGesture, onLostPointerCapture: cancelCaptureLoss,
+                }} />
               </div>
             </div>
           </div>
@@ -4283,11 +4621,12 @@ export function EditorWorkspace({
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
-              ? selectedObject.type === 'text' ? 'Texto'
+              ? selectedObject.type === 'text' ? selectedObject.box ? 'Selo' : selectedObject.leader ? 'Chamada' : 'Texto'
                 : selectedObject.type === 'image' ? 'Imagem'
                   : selectedObject.type === 'table' ? 'Tabela'
                     : selectedObject.type === 'shape' ? 'Forma'
                       : selectedObject.type === 'line' ? 'Linha'
+                        : selectedObject.type === 'polygon' ? 'Polígono'
                         : selectedObject.type === 'group' ? 'Grupo'
                           : 'Objeto'
               : 'Geometria do objeto'
@@ -4412,6 +4751,11 @@ export function EditorWorkspace({
               {selectedObject.type === 'text' && (
                 <TextInspectorSection object={selectedObject} simple={simpleByDefault} disabled={selectedMutationLocked} session={session}
                   measurement={measuredLayout?.source === document ? measuredLayout : null}
+                  prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                  onMessage={setStatusMessage} />
+              )}
+              {(selectedObject.type === 'shape' || selectedObject.type === 'line' || selectedObject.type === 'polygon') && (
+                <NativeStyleSection object={selectedObject} disabled={selectedMutationLocked} session={session}
                   prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
                   onMessage={setStatusMessage} />
               )}
@@ -4713,9 +5057,28 @@ export function EditorWorkspace({
                 ))}
               </div>
             </>
-          ) : <p className="vnext-context-help">{simpleByDefault
-            ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
-            : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>}
+          ) : <>
+            <p className="vnext-context-help">{simpleByDefault
+              ? 'Clique em um texto, imagem ou tabela para editar. Para adicionar conteúdo, use a barra acima da página.'
+              : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>
+            {editorState.activePageId && selectedObjects.length === 0 && (
+              <PageBackgroundSection pageId={editorState.activePageId} session={session}
+                prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                onMessage={setStatusMessage} />
+            )}
+          </>}
+          {selectedObject && (() => {
+            const where = layerPosition(selectedPage, selectedObject.id);
+            return where ? <p className="vnext-layer-position" data-layer-position="">Camada {where.position} de {where.count} (1 = mais ao fundo)</p> : null;
+          })()}
+          {/* While a table grid or a text is being edited the layers are not offered (the panel stays short). */}
+          {editorState.mode === 'select' && <LayersPanel page={selectedPage} document={document} selectedIds={editorState.selectedObjectIds}
+            onSelect={selectFromLayers} onToggleHidden={toggleLayerHidden} onToggleLocked={toggleLayerLocked}
+            open={layersOpen} onOpenChange={setLayersOpen}
+            onReorder={reorderFromLayers} onEditGroupedText={(childId, groupId) => {
+              const child = findPageText(selectedPage, childId);
+              if (child) startTextEdit(child.object, groupId);
+            }} />}
           {!simpleByDefault && <>
           <div className="vnext-divider" />
           <h3>Salvamento</h3>

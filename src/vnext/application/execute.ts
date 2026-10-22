@@ -1,4 +1,4 @@
-import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject, type TextStyle } from '../domain';
+import { AssetRefSchema, frameToCanonicalU, mmToU, visualPageObjects, type AssetRef, type CatalogDocument, type Cell, type CellContent, type EditorialObject, type Frame, type GroupObject, type LeafEditorialObject, type Page, type RichText, type TableModel, type TableObject, type TextObject, type TextStyle } from '../domain';
 import { CellContentSchema, type CellContentPresentation, type CellStyle } from '../domain/editorial-model';
 import { resolveCellStyle } from '../domain/style-resolution';
 import { VNextError } from '../domain/diagnostics';
@@ -39,6 +39,7 @@ import {
   objectInstantiationSeedFromObject,
   parseCanonicalDocument,
   type ObjectInstantiationSeed,
+  type ObjectLocation,
 } from './document';
 import {
   plainRichTextSemanticallyEquals,
@@ -151,7 +152,11 @@ function insertSpecSeed(spec: ObjectInsertSpec, frame: Frame): ObjectInstantiati
   };
   switch (spec.type) {
     case 'text':
-      return { ...base, type: 'text', text: spec.text, style: spec.style };
+      return {
+        ...base, type: 'text', text: spec.text, style: spec.style,
+        ...(spec.box ? { box: spec.box } : {}),
+        ...(spec.leader ? { leader: spec.leader } : {}),
+      };
     case 'image':
       return {
         ...base,
@@ -165,7 +170,14 @@ function insertSpecSeed(spec: ObjectInsertSpec, frame: Frame): ObjectInstantiati
     case 'shape':
       return { ...base, type: 'shape', shape: spec.shape, style: spec.style };
     case 'line':
-      return { ...base, type: 'line', axis: spec.axis, color: spec.color };
+      return {
+        ...base, type: 'line', axis: spec.axis, color: spec.color,
+        ...(spec.thicknessPt !== undefined ? { thicknessPt: spec.thicknessPt } : {}),
+        ...(spec.dash !== undefined ? { dash: spec.dash } : {}),
+        ...(spec.opacity !== undefined ? { opacity: spec.opacity } : {}),
+      };
+    case 'polygon':
+      return { ...base, type: 'polygon', points: spec.points, style: spec.style };
     case 'icon':
       return { ...base, type: 'icon', assetId: spec.assetId };
   }
@@ -650,7 +662,50 @@ function validateTableStyleFonts(document: CatalogDocument, table: TableModel): 
   return undefined;
 }
 
-const TEXT_STYLE_KEYS = ['fontFamily', 'fontSizePt', 'lineHeight', 'fontWeight', 'color', 'textAlign'] as const;
+const TEXT_STYLE_KEYS = ['fontFamily', 'fontSizePt', 'lineHeight', 'fontWeight', 'color', 'textAlign', 'letterSpacingEm'] as const;
+
+/** Onda 3.5: structural equality of the small style records of native elements (key order does not matter). */
+function sameValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  const leftRecord = left as Record<string, unknown>, rightRecord = right as Record<string, unknown>;
+  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)]);
+  return [...keys].every((key) => sameValue(leftRecord[key], rightRecord[key]));
+}
+
+/** Without undefined fields, so an applied style is canonical (and equal to the same style typed by hand). */
+function compact<T extends object>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+/**
+ * Replaces one leaf object where it lives: at the top of the page or inside its group. Style-only changes of native
+ * elements keep every frame, so they are allowed inside a group (the family bar is a group of "Selos").
+ */
+function replaceLeafObject(document: CatalogDocument, location: ObjectLocation, next: LeafEditorialObject): CatalogDocument {
+  const objects = location.page.objects.map((object, index) => {
+    if (index !== location.objectIndex) return object;
+    if (!location.parentGroup || object.type !== 'group') return next;
+    return { ...object, objects: object.objects.map((child, childIndex) => childIndex === location.childIndex ? next : child) };
+  });
+  return pageWithObjects(document, location.pageIndex, objects);
+}
+
+/** Common checks of the Onda 3.5 style actions: the object exists, is not locked (nor its group) and has the type. */
+function styleTarget<T extends LeafEditorialObject['type']>(
+  document: CatalogDocument,
+  objectId: string,
+  types: readonly T[]
+): { location: ObjectLocation; object: Extract<LeafEditorialObject, { type: T }> } | ApplicationActionFailure {
+  const location = findObjectLocation(document, objectId);
+  if (!location) return failure('OBJECT_NOT_FOUND', objectId);
+  if (objectLocked(location.object) || (location.parentGroup && objectLocked(location.parentGroup))) return failure('OBJECT_LOCKED', objectId);
+  if (location.object.type === 'group' || !(types as readonly string[]).includes(location.object.type)) {
+    return failure('OBJECT_TYPE_MISMATCH', objectId);
+  }
+  return { location, object: location.object as Extract<LeafEditorialObject, { type: T }> };
+}
 
 /** Field-by-field comparison, so a style that went through JSON in another key order still matches. */
 function textStyleEquals(left: TextStyle, right: TextStyle): boolean {
@@ -662,10 +717,7 @@ function validateTextStylePatch(
   current: TextStyle,
   patch: TextStylePatch
 ): ApplicationActionFailure | undefined {
-  if (patch.color !== undefined
-    && !document.style.palette.some((value) => value.toUpperCase() === patch.color!.toUpperCase())) {
-    return failure('ACTION_INVALID', `Text color ${patch.color} is not in the document palette`);
-  }
+  // Onda 3.5 (P1.3): any #RRGGBB colour is accepted (the schema checks the format); the palette is only offered first.
   if (patch.fontWeight !== undefined) {
     const family = current.fontFamily ?? document.style.defaultText.fontFamily;
     const declared = document.style.fonts.some((font) =>
@@ -874,12 +926,10 @@ export function executeApplicationAction(
         if (selectedVisual.length !== action.objectIds.length) return failure('ACTION_INVALID', 'Selected objects must be top-level page objects');
         const firstVisualIndex = selectedVisual[0].visualIndex;
         const lastVisualIndex = selectedVisual[selectedVisual.length - 1].visualIndex;
-        if (lastVisualIndex - firstVisualIndex + 1 !== selectedVisual.length
-            || visual.slice(firstVisualIndex, lastVisualIndex + 1).some(({ object }) => !selectedIds.has(object.id))) {
-          return failure('ACTION_INVALID', 'Selected objects must form one contiguous visual block');
-        }
-
-        const ordered = visual.slice(firstVisualIndex, lastVisualIndex + 1);
+        // Objects that are not neighbours in the stack are gathered at the place of the topmost one
+        // (the lower ones go up, keeping their order); the objects in between keep their places.
+        const contiguous = lastVisualIndex - firstVisualIndex + 1 === selectedVisual.length;
+        const ordered = selectedVisual;
         const framesU = ordered.map(({ object }) => frameToCanonicalU(object.frame));
         const minXU = Math.min(...framesU.map((frame) => frame.xU));
         const minYU = Math.min(...framesU.map((frame) => frame.yU));
@@ -906,7 +956,7 @@ export function executeApplicationAction(
           };
         });
 
-        const first = ordered[0];
+        const first = contiguous ? ordered[0] : ordered[ordered.length - 1];
         const group: GroupObject = {
           id: allocateFreshCanonicalId(document, dependencies.createId),
           type: 'group',
@@ -1203,6 +1253,49 @@ export function executeApplicationAction(
         );
         break;
       }
+      case 'object.setHidden': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const liveHidden = location.object.hidden === true;
+        if (liveHidden !== action.expectedHidden) {
+          return failure('TARGET_STALE', `Object ${action.objectId} visibility changed after the command was prepared`);
+        }
+        changed = liveHidden !== action.hidden;
+        affectedIds = changed ? [action.objectId] : [];
+        if (!changed) break;
+        let next: EditorialObject;
+        if (action.hidden) {
+          next = { ...location.object, hidden: true };
+        } else {
+          const { hidden: _hidden, ...shown } = location.object;
+          next = shown as EditorialObject;
+        }
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
+      case 'objects.move': {
+        const resolved = arrangementTargets(document, action.pageId, action.targets);
+        if (!resolved.ok) return resolved;
+        changed = action.dxU !== 0 || action.dyU !== 0;
+        affectedIds = resolved.targets.map((target) => target.object.id);
+        if (!changed) break;
+        const nextPositions = new Map<string, { xU: number; yU: number }>();
+        try {
+          for (const target of resolved.targets) {
+            nextPositions.set(target.object.id, { xU: add(target.frameU.xU, action.dxU), yU: add(target.frameU.yU, action.dyU) });
+          }
+        } catch (error) {
+          return failure('INVALID_GEOMETRY', `Move arithmetic failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        candidate = candidateWithArrangedPositions(document, resolved.pageIndex, nextPositions);
+        break;
+      }
       case 'objects.align': {
         const resolved = arrangementTargets(document, action.pageId, action.targets);
         if (!resolved.ok) return resolved;
@@ -1420,8 +1513,8 @@ export function executeApplicationAction(
       case 'text.setContent': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        const childFailure = groupedChildMutation(location, action.objectId);
-        if (childFailure) return childFailure;
+        // A text inside a group is edited in place (double-click); the group keeps its frame.
+        if (location.parentGroup && objectLocked(location.parentGroup)) return failure('OBJECT_LOCKED', location.parentGroup.id);
         if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
         if (location.object.type !== 'text') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
         if (!richTextEquals(location.object.text, action.expectedText)) {
@@ -1445,10 +1538,14 @@ export function executeApplicationAction(
         if (!changed) break;
 
         const next = { ...location.object, text: reconciled.richText };
+        const group = location.parentGroup;
+        const replacement: EditorialObject = group
+          ? { ...group, objects: group.objects.map((child) => child.id === action.objectId ? next : child) }
+          : next;
         candidate = pageWithObjects(
           document,
           location.pageIndex,
-          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+          location.page.objects.map((object, index) => index === location.objectIndex ? replacement : object)
         );
         break;
       }
@@ -1465,13 +1562,15 @@ export function executeApplicationAction(
         const patchFailure = validateTextStylePatch(document, location.object.style, action.patch);
         if (patchFailure) return patchFailure;
 
-        const { fontSizePt, fontWeight, color, textAlign } = action.patch;
+        const { fontSizePt, fontWeight, color, textAlign, lineHeight, letterSpacingEm } = action.patch;
         const style: TextStyle = {
           ...location.object.style,
           ...(fontSizePt !== undefined ? { fontSizePt } : {}),
           ...(fontWeight !== undefined ? { fontWeight } : {}),
           ...(color !== undefined ? { color } : {}),
           ...(textAlign !== undefined ? { textAlign } : {}),
+          ...(lineHeight !== undefined ? { lineHeight } : {}),
+          ...(letterSpacingEm !== undefined ? { letterSpacingEm } : {}),
         };
         changed = !textStyleEquals(location.object.style, style);
         affectedIds = changed ? [action.objectId] : [];
@@ -1484,6 +1583,89 @@ export function executeApplicationAction(
           location.pageIndex,
           location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
         );
+        break;
+      }
+      case 'shape.setStyle':
+      case 'polygon.setStyle': {
+        const target = action.type === 'shape.setStyle'
+          ? styleTarget(document, action.objectId, ['shape'] as const)
+          : styleTarget(document, action.objectId, ['polygon'] as const);
+        if ('ok' in target) return target;
+        if (!sameValue(target.object.style, action.expectedStyle)) {
+          return failure('TARGET_STALE', `Style of ${action.objectId} changed after the command was prepared`);
+        }
+        const style = compact(action.style);
+        changed = !sameValue(target.object.style, style);
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (changed) candidate = replaceLeafObject(document, target.location, { ...target.object, style } as LeafEditorialObject);
+        break;
+      }
+      case 'line.setStyle': {
+        const target = styleTarget(document, action.objectId, ['line'] as const);
+        if ('ok' in target) return target;
+        const line = target.object;
+        const current = compact({ color: line.color, thicknessPt: line.thicknessPt, dash: line.dash, opacity: line.opacity });
+        if (!sameValue(current, compact(action.expectedStyle))) {
+          return failure('TARGET_STALE', `Style of ${action.objectId} changed after the command was prepared`);
+        }
+        const style = compact(action.style);
+        changed = !sameValue(current, style);
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const { thicknessPt: _thickness, dash: _dash, opacity: _opacity, ...rest } = line;
+        candidate = replaceLeafObject(document, target.location, { ...rest, ...style });
+        break;
+      }
+      case 'polygon.setPoints': {
+        const target = styleTarget(document, action.objectId, ['polygon'] as const);
+        if ('ok' in target) return target;
+        if (!sameValue(target.object.points, action.expectedPoints)) {
+          return failure('TARGET_STALE', `Points of ${action.objectId} changed after the command was prepared`);
+        }
+        changed = !sameValue(target.object.points, action.points);
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (changed) candidate = replaceLeafObject(document, target.location, { ...target.object, points: action.points.map((point) => ({ ...point })) });
+        break;
+      }
+      case 'text.setBox':
+      case 'text.setLeader': {
+        const target = styleTarget(document, action.objectId, ['text'] as const);
+        if ('ok' in target) return target;
+        const key = action.type === 'text.setBox' ? 'box' : 'leader';
+        const expected = action.type === 'text.setBox' ? action.expectedBox : action.expectedLeader;
+        const value = action.type === 'text.setBox' ? action.box : action.leader;
+        if (!sameValue(target.object[key] ?? null, expected)) {
+          return failure('TARGET_STALE', `Text ${action.objectId} changed after the command was prepared`);
+        }
+        changed = !sameValue(target.object[key] ?? null, value);
+        affectedIds = changed ? [action.objectId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const { [key]: _previous, ...rest } = target.object;
+        candidate = replaceLeafObject(document, target.location, value === null ? rest as TextObject : { ...rest, [key]: compact(value) } as TextObject);
+        break;
+      }
+      case 'page.setBackground': {
+        const pageIndex = document.pages.findIndex((entry) => entry.id === action.pageId);
+        if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
+        const page = document.pages[pageIndex];
+        if (!sameValue(page.background ?? null, action.expectedBackground)) {
+          return failure('TARGET_STALE', `Background of ${action.pageId} changed after the command was prepared`);
+        }
+        const backgroundImage = action.background?.image;
+        if (backgroundImage && !document.assets.some((asset) => asset.id === backgroundImage.assetId)) {
+          return failure('ASSET_NOT_FOUND', backgroundImage.assetId);
+        }
+        changed = !sameValue(page.background ?? null, action.background);
+        affectedIds = changed ? [action.pageId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const { background: _previous, ...rest } = page;
+        const nextPage: Page = action.background === null ? rest : { ...rest, background: compact(action.background) };
+        candidate = { ...document, pages: document.pages.map((entry, index) => index === pageIndex ? nextPage : entry) };
         break;
       }
       case 'table.cells.setContents': {

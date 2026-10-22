@@ -9,6 +9,7 @@ import { walkPageObjects } from '../domain/object-tree';
 export function referencedAssetIds(doc: CatalogDocument): Set<string> {
   const ids = new Set<string>();
   for (const page of doc.pages) {
+    if (page.background?.image) ids.add(page.background.image.assetId);
     for (const { object } of walkPageObjects(page)) {
       if (object.type === 'image' || object.type === 'icon') ids.add(object.assetId);
       else if (object.type === 'table') {

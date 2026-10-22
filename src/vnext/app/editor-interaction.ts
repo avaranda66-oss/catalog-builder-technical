@@ -36,6 +36,8 @@ export interface GesturePreview {
   frameU: FrameU;
   guides: readonly SnapGuide[];
   kind: GestureKind;
+  /** Other selected objects dragged along (same offset as the grabbed one). */
+  companions?: readonly { objectId: string; startFrameU: FrameU; frameU: FrameU }[];
 }
 
 interface ActiveGesture {
@@ -58,6 +60,7 @@ interface ActiveGesture {
   lastClientX: number;
   lastClientY: number;
   startDocument: CatalogDocument;
+  companions: readonly { objectId: string; startFrameU: FrameU }[];
 }
 
 export interface BeginGestureInput {
@@ -70,6 +73,8 @@ export interface BeginGestureInput {
   pageClientWidthPx: number;
   pageClientHeightPx: number;
   snapThresholdPx?: number;
+  /** Move only: the other selected objects, moved by the same offset in the same undo step. */
+  companionObjectIds?: readonly string[];
 }
 
 export interface EditorInteractionDependencies {
@@ -136,7 +141,7 @@ function pageSnapGeometry(page: Page, objectId: string): {
     heightU: add(add(pageHeightU, -mmToU(page.safeArea.topMm)), -mmToU(page.safeArea.bottomMm)),
   } : undefined;
   const siblingFramesU = page.objects
-    .filter((object) => object.id !== objectId)
+    .filter((object) => object.id !== objectId && !object.hidden)
     .map((object) => ({ objectId: object.id, frameU: frameToU(object.frame) }));
   return { pageBoundsU, safeAreaU, siblingFramesU };
 }
@@ -201,6 +206,18 @@ export function previewFrameFromDelta(start: FrameU, kind: GestureKind, deltaXU:
 }
 
 function actionForGesture(gesture: ActiveGesture, frameU: FrameU): ApplicationAction {
+  if (gesture.kind.type === 'move' && gesture.companions.length > 0) {
+    return {
+      type: 'objects.move',
+      pageId: gesture.pageId,
+      targets: [
+        { objectId: gesture.objectId, expectedFrame: gesture.startFrameU },
+        ...gesture.companions.map((companion) => ({ objectId: companion.objectId, expectedFrame: companion.startFrameU })),
+      ],
+      dxU: frameU.xU - gesture.startFrameU.xU,
+      dyU: frameU.yU - gesture.startFrameU.yU,
+    };
+  }
   if (gesture.kind.type === 'move') {
     return {
       type: 'object.move',
@@ -241,6 +258,16 @@ export class EditorInteractionController {
     if (!location || location.page.id !== input.pageId || objectClosureLocked(location.object)) return false;
     if (input.kind.type === 'resize' && location.object.type === 'group') return false;
 
+    const companionIds = input.kind.type === 'move'
+      ? [...new Set(input.companionObjectIds ?? [])].filter((objectId) => objectId !== input.objectId)
+      : [];
+    const companions: { objectId: string; startFrameU: FrameU }[] = [];
+    for (const objectId of companionIds) {
+      const companion = location.page.objects.find((candidate) => candidate.id === objectId);
+      if (!companion || objectClosureLocked(companion) || companion.hidden) return false;
+      companions.push({ objectId, startFrameU: frameToU(companion.frame) });
+    }
+
     const renderedPageWidthQ = pxToQ(input.pageClientWidthPx);
     const renderedPageHeightQ = pxToQ(input.pageClientHeightPx);
     if (renderedPageWidthQ <= 0 || renderedPageHeightQ <= 0) return false;
@@ -253,6 +280,8 @@ export class EditorInteractionController {
       Math.abs(pointerAxisDeltaU(snapThresholdPx, pageHeightU, renderedPageHeightQ))
     );
 
+    const snapGeometry = pageSnapGeometry(location.page, input.objectId);
+    const companionSet = new Set(companionIds);
     this.active = {
       pointerId: input.pointerId,
       objectId: input.objectId,
@@ -266,11 +295,13 @@ export class EditorInteractionController {
       renderedPageWidthQ,
       renderedPageHeightQ,
       startFrameU: frameToU(location.object.frame),
-      ...pageSnapGeometry(location.page, input.objectId),
+      ...snapGeometry,
+      siblingFramesU: snapGeometry.siblingFramesU.filter((sibling) => !companionSet.has(sibling.objectId)),
       snapThresholdU,
       lastClientX: input.clientX,
       lastClientY: input.clientY,
       startDocument: document,
+      companions,
     };
     return true;
   }
@@ -299,6 +330,8 @@ export class EditorInteractionController {
       resizeHandle: gesture.kind.type === 'resize' ? gesture.kind.handle : undefined,
       enabled: this.dependencies.isSnappingEnabled?.() ?? true,
     });
+    const dxU = snapped.frameU.xU - gesture.startFrameU.xU;
+    const dyU = snapped.frameU.yU - gesture.startFrameU.yU;
     return {
       objectId: gesture.objectId,
       pageId: gesture.pageId,
@@ -307,6 +340,13 @@ export class EditorInteractionController {
       frameU: snapped.frameU,
       guides: snapped.guides,
       kind: gesture.kind,
+      ...(gesture.companions.length > 0 ? {
+        companions: gesture.companions.map((companion) => ({
+          objectId: companion.objectId,
+          startFrameU: companion.startFrameU,
+          frameU: { ...companion.startFrameU, xU: companion.startFrameU.xU + dxU, yU: companion.startFrameU.yU + dyU },
+        })),
+      } : {}),
     };
   }
 

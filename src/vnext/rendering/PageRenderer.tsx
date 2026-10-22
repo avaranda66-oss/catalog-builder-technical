@@ -5,8 +5,11 @@ import { PrimitiveRenderer } from './PrimitiveRenderer';
 
 export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Page;document:CatalogDocument;pageNumber:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>}) {
   const px=(mm:number)=>qCss(uToQ(mmToU(mm)));
+  // A hidden object ("Camadas") keeps its box, so measurement still finds it, but it is never painted: screen and PDF agree.
+  const visibility=(object:EditorialObject)=>object.hidden?{visibility:'hidden' as const}:{};
   const leaf=(object:LeafEditorialObject,left=px(object.frame.xMm),top=px(object.frame.yMm))=><div key={object.id} data-object-id={object.id} data-object-type={object.type} className="editorial-object"
-    style={{left,top,width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex}}>
+    data-object-hidden={object.hidden?'true':undefined}
+    style={{left,top,width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex,...visibility(object)}}>
     <PrimitiveRenderer object={object} document={document} plans={plans} assetUrls={assetUrls}/>
   </div>;
   const group=(object:GroupObject)=>{
@@ -18,13 +21,20 @@ export function PageRenderer({page,document,pageNumber,plans,assetUrls}:{page:Pa
       qCss(add(uToQ(add(groupYU,mmToU(child.frame.yMm))),-groupYQ)),
     );
     return <div key={object.id} data-object-id={object.id} data-object-type="group" className="editorial-object editorial-group"
-      style={{left:qCss(groupXQ),top:qCss(groupYQ),width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex}}>
+      data-object-hidden={object.hidden?'true':undefined}
+      style={{left:qCss(groupXQ),top:qCss(groupYQ),width:px(object.frame.widthMm),height:px(object.frame.heightMm),zIndex:object.zIndex,...visibility(object)}}>
       {object.objects.map((child,index)=>({child,index})).sort((a,b)=>a.child.zIndex-b.child.zIndex||a.index-b.index).map(({child})=>groupedLeaf(child))}
     </div>;
   };
   const renderObject=(object:EditorialObject)=>object.type==='group'?group(object):leaf(object);
+  // Onda 3.5 (P1.2): the page's own background (colour and/or picture) is a page property, never a clickable object.
+  const background=page.background,backgroundUrl=background?.image?assetUrls.get(background.image.assetId):undefined;
   return <section data-page-id={page.id} className="editorial-page" aria-label={'Página '+pageNumber}
-    style={{width:px(page.widthMm),height:px(page.heightMm)}}>
+    data-page-background={background?'':undefined}
+    style={{width:px(page.widthMm),height:px(page.heightMm),
+      ...(background?.color?{backgroundColor:background.color}:{}),
+      ...(background?.image&&backgroundUrl?{backgroundImage:`url("${backgroundUrl.replace(/"/g,'%22')}")`,backgroundSize:background.image.fit,
+        backgroundPosition:'50% 50%',backgroundRepeat:'no-repeat'}:{})}}>
     {page.objects.map((object,index)=>({object,index})).sort((a,b)=>a.object.zIndex-b.object.zIndex||a.index-b.index).map(({object})=>renderObject(object))}
   </section>;
 }

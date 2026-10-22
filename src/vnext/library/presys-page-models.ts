@@ -1,5 +1,6 @@
 import type { CatalogDocument, Page } from '../domain';
 import { buildPresysArchetypePage, PRESYS_ARCHETYPES, presysDocumentStyle } from './presys-archetypes';
+import { buildPresysPconCoverPage, PRESYS_PCON_COVER } from './presys-cover-pcon';
 import {
   createPresysStarterDocument,
   PRESYS_IMAGE_MANIFEST,
@@ -10,7 +11,7 @@ import {
 /**
  * The page models offered by "Usar modelo…" (FR-80), with what the gallery
  * needs to draw each one as a thumbnail (FR-18). The archetypes P1–P9 come
- * first; the TA-25N pages follow where the official image can be prepared.
+ * first, then the native PCON cover; the TA-25N pages follow where the official image can be prepared.
  */
 export interface PresysPageModelChoice {
   readonly templateId: string;
@@ -36,10 +37,17 @@ function archetypeModels(): readonly PresysPageModelChoice[] {
     style: presysDocumentStyle(), pages, assets: [],
   };
   const noImages = new Map<string, string>();
-  archetypeChoices = Object.freeze(PRESYS_ARCHETYPES.map((archetype, index) => ({
-    templateId: archetype.templateId, label: archetype.label, description: archetype.description,
-    preview: { page: pages[index], document, assetUrls: noImages },
-  })));
+  // Onda 3.5 (S3): the native PCON cover is offered right after the archetypes (its photo slot waits for the real photo).
+  const cover = buildPresysPconCoverPage({ pageId: `preview-${PRESYS_PCON_COVER.templateId}` });
+  const withCover: CatalogDocument = { ...document, pages: [...pages, cover] };
+  archetypeChoices = Object.freeze([
+    ...PRESYS_ARCHETYPES.map((archetype, index) => ({
+      templateId: archetype.templateId, label: archetype.label, description: archetype.description,
+      preview: { page: pages[index], document: withCover, assetUrls: noImages },
+    })),
+    { templateId: PRESYS_PCON_COVER.templateId, label: PRESYS_PCON_COVER.label, description: PRESYS_PCON_COVER.description,
+      preview: { page: cover, document: withCover, assetUrls: noImages } },
+  ]);
   return archetypeChoices;
 }
 

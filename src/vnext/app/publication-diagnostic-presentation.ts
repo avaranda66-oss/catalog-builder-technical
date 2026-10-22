@@ -16,6 +16,8 @@ export function publicationDiagnosticMessage(code: string): string {
       return 'Esta imagem tem pouca resolução para o tamanho em que aparece e pode sair borrada na impressão. Use uma foto maior ou diminua a imagem na página.';
     case 'SAFE_AREA_VIOLATION':
       return 'O objeto está próximo demais da borda da página. Revise a posição e deixe espaço para a margem de impressão.';
+    case 'OBJECT_HIDDEN':
+      return 'Este objeto está escondido (olho fechado em Camadas) e não sairá no PDF. Para mostrar, abra Camadas e clique no olho.';
     case 'OBJECT_OUTSIDE_PAGE':
       return 'Parte do objeto está fora da página. Mova o objeto ou reduza seu tamanho no editor.';
     case 'TEXT_OBJECT_OVERFLOW':

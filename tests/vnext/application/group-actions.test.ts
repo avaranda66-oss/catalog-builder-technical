@@ -189,7 +189,7 @@ describe('W2.F group.create and z-order',()=>{
     expect(ApplicationActionSchema.safeParse(cases[0]).success).toBe(false);
   });
 
-  it('rejects visual non-contiguity even when selected raw array indexes are adjacent',()=>{
+  it('groups objects that are not neighbours in the stack at the place of the topmost one (Onda 3.5)',()=>{
     const source=documentWith([
       shape('a',0,0),
       shape('b',20,2),
@@ -197,10 +197,19 @@ describe('W2.F group.create and z-order',()=>{
     ]);
     expect(source.pages[0].objects.map((object)=>object.id)).toEqual(['a','b','x']);
     expect(visualPageObjects(source.pages[0]).map(({object})=>object.id)).toEqual(['a','x','b']);
-    const ids=countedIds('never');
-    const result=executeApplicationAction(source,{type:'group.create',pageId:'page',objectIds:['a','b']},{createId:ids.createId});
-    expect(result).toMatchObject({ok:false,error:{code:'ACTION_INVALID',details:'Selected objects must form one contiguous visual block'}});
-    expect(ids.count()).toBe(0);
+    const {result,group}=createGroup(source,['a','b']);
+    // 'a' goes up to join 'b'; 'x' keeps its place, now below the group.
+    expect(visualPageObjects(result.document.pages[0]).map(({object})=>object.id)).toEqual(['x',group.id]);
+    expect(group.zIndex).toBe(2);
+    expect(group.objects.map((object)=>object.id)).toEqual(['a','b']);
+    expect(result.document.pages[0].objects.find((object)=>object.id==='x')).toEqual(source.pages[0].objects[2]);
+  });
+
+  it('keeps every other object in place when grouping across a locked sibling',()=>{
+    const source=documentWith([shape('a',0,1),shape('lock',10,2,true),shape('b',20,3),shape('top',30,4)]);
+    const {result,group}=createGroup(source,['a','b']);
+    expect(visualPageObjects(result.document.pages[0]).map(({object})=>object.id)).toEqual(['lock',group.id,'top']);
+    expect(result.document.pages[0].objects.find((object)=>object.id==='lock')).toEqual(source.pages[0].objects[1]);
   });
 
   it('uses zIndex then array index ties and preserves locked external siblings without zIndex normalization',()=>{
