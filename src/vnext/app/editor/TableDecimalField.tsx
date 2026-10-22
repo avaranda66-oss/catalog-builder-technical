@@ -9,9 +9,11 @@ export interface TableDecimalFieldProps {
   readonly name: string;
   readonly value: number | 'mixed' | undefined;
   /** Shown after the number ("mm", "pt") and used in the message. */
-  readonly unit?: 'mm' | 'pt';
-  /** `positive` (default): more than zero; `zeroOrMore`: zero is accepted. */
-  readonly range?: 'positive' | 'zeroOrMore';
+  readonly unit?: 'mm' | 'pt' | '%' | '°';
+  /** `positive` (default): more than zero; `zeroOrMore`: zero is accepted; `any`: negative numbers too (positions). */
+  readonly range?: 'positive' | 'zeroOrMore' | 'any';
+  /** Largest accepted value (Onda 3.5: opacity 100%, angle 360°). */
+  readonly max?: number;
   readonly integer?: boolean;
   /** An empty field is accepted and sent as null (back to the inherited value). */
   readonly allowEmpty?: boolean;
@@ -29,7 +31,7 @@ export interface TableDecimalFieldProps {
   readonly onCommit: (value: number | null) => void;
 }
 
-const UNIT_WORDS = { mm: ' em milímetros', pt: ' em pontos' } as const;
+const UNIT_WORDS = { mm: ' em milímetros', pt: ' em pontos', '%': ' em porcentagem', '°': ' em graus' } as const;
 
 let fieldSequence = 0;
 
@@ -39,7 +41,7 @@ let fieldSequence = 0;
  * the field shows the current value again and a plain message right below it.
  */
 export function TableDecimalField({
-  name, value, unit, range = 'positive', integer = false, allowEmpty = false, example, placeholder, disabled,
+  name, value, unit, range = 'positive', max, integer = false, allowEmpty = false, example, placeholder, disabled,
   describedBy, ariaLabel, className, inputProps, live = false, onCommit,
 }: TableDecimalFieldProps) {
   const [draft, setDraft] = React.useState<string | null>(null);
@@ -54,12 +56,13 @@ export function TableDecimalField({
   }, [live, value]);
 
   const message = `${name}: digite um número${integer ? ' inteiro' : ''}${unit ? UNIT_WORDS[unit] : ''}, como ${example}`
-    + ` (${range === 'zeroOrMore' ? 'zero ou mais' : 'maior que zero'}). O valor anterior foi mantido.`;
+    + ` (${range === 'any' ? 'pode ser negativo' : range === 'zeroOrMore' ? 'zero ou mais' : 'maior que zero'}${max !== undefined ? `, até ${formatDecimalPtBr(max)}` : ''}). O valor anterior foi mantido.`;
   const check = (text: string): { ok: true; value: number | null } | { ok: false } => {
     const parsed = parseDecimalPtBr(text);
     if (!parsed.ok) return parsed.reason === 'EMPTY' && allowEmpty ? { ok: true, value: null } : { ok: false };
     if (integer && !Number.isInteger(parsed.value)) return { ok: false };
-    if (range === 'positive' ? parsed.value <= 0 : parsed.value < 0) return { ok: false };
+    if (range === 'positive' ? parsed.value <= 0 : range === 'zeroOrMore' ? parsed.value < 0 : false) return { ok: false };
+    if (max !== undefined && parsed.value > max) return { ok: false };
     return { ok: true, value: parsed.value };
   };
   const unchanged = (next: number | null) => next === null

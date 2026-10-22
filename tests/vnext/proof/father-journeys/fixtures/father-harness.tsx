@@ -228,6 +228,22 @@ class LocalCatalogRepository implements CatalogRepository {
     return { ok: true, value: metadata };
   };
 
+  unarchiveCAS = async (request: ArchiveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceMetadata>> => {
+    const current = readCatalog(request.catalogId);
+    if (!current) return { ok: false, error: { code: 'NOT_FOUND' } };
+    if (current.remoteRevision !== request.expectedRemoteRevision) return { ok: false, error: { code: 'CONFLICT' } };
+    const next: CatalogPersistenceEnvelope = {
+      ...current,
+      remoteRevision: current.remoteRevision + 1,
+      lastMutationId: request.mutationId,
+      archivedAt: null,
+      updatedAt: new Date().toISOString(),
+    };
+    writeCatalog(next);
+    const { documentSnapshot: _document, ...metadata } = next;
+    return { ok: true, value: metadata };
+  };
+
   private commitSave(request: SaveCatalogCasRequest): PersistenceResult<CatalogPersistenceEnvelope> {
     const current = readCatalog(request.catalogId);
     if (!current) return { ok: false, error: { code: 'NOT_FOUND' } };

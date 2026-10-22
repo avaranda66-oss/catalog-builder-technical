@@ -210,8 +210,15 @@ try {
   else findingStep(j, `na linha do catálogo, os botões (Abrir/Duplicar/Renomear/Mais) e a data têm menos de ${MIN_BODY_FONT_PX} px`, smallRowFonts.join(', '), { id: 'A-01', severity: 'P3', knownFR: 'FR-05' });
   texts.libraryWithRow = await visibleText(page);
   const rowJargon = scanJargon(texts.libraryWithRow, { allow: ALLOW });
-  j.step('lista com catálogo: tudo em português (data por extenso, "Atualizado em …")', rowJargon.length === 0 && /Atualizado em/.test(texts.libraryWithRow),
-    rowJargon.map((hit) => `${hit.term} («${hit.context}»)`).join(' | ') || '-');
+  // Biblioteca T1: a linha diz quando e por quem foi editado ("Editado agora por …", "Editado há 2 horas por …"); a data por
+  // extenso ("Última edição em 22 de out. de 2026, 15:30") fica na dica da linha, em português.
+  const edited = row.locator('.vnext-library-meta span[title^="Última edição em"]').first();
+  const editedText = ((await edited.textContent().catch(() => '')) ?? '').trim();
+  const editedTitle = (await edited.getAttribute('title').catch(() => '')) ?? '';
+  const editedOk = /^Editado (agora|há .+?) por \S/.test(editedText) && /^Última edição em \d{1,2} de \S+ de \d{4}, \d{2}:\d{2}$/.test(editedTitle);
+  texts.libraryRowEdited = { visible: editedText, title: editedTitle };
+  j.step('lista com catálogo: tudo em português ("Editado … por …" na linha e data por extenso na dica "Última edição em …")', rowJargon.length === 0 && editedOk,
+    rowJargon.map((hit) => `${hit.term} («${hit.context}»)`).join(' | ') || `visível: «${editedText}» · dica: «${editedTitle}»`);
   j.addEvidence(await shot(page, 'j01-04-biblioteca-com-catalogo'));
 
   // 9. Redirecionamento "/ → /v2" após login: não é testável no harness.

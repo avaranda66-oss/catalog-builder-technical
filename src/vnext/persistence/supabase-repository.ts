@@ -11,6 +11,7 @@ import type {
   PersistenceErrorCode,
   PersistenceResult,
   SaveCatalogCasRequest,
+  UnarchiveCatalogCasRequest,
 } from './contracts';
 import {
   PersistenceContractError,
@@ -45,7 +46,9 @@ const MetadataSchema = z.object({
   documentSchemaVersion: z.literal(1),
 }).strict();
 
-const ListItemSchema = MetadataSchema.omit({ lastMutationId: true });
+const ListItemSchema = MetadataSchema.omit({ lastMutationId: true }).extend({
+  updatedByName: clean.nullable().optional(),
+});
 const ListSchema = z.array(ListItemSchema);
 
 export interface VNextPersistenceRpcError {
@@ -260,6 +263,27 @@ export class SupabaseCatalogRepository implements CatalogRepository {
 
     return this.call(
       'archive_vnext_catalog_cas_v1',
+      {
+        p_catalog_id: catalog.value,
+        p_expected_remote_revision: request.expectedRemoteRevision,
+        p_mutation_id: mutation.value,
+      },
+      'mutation',
+      (data) => MetadataSchema.parse(data)
+    );
+  }
+
+  async unarchiveCAS(request: UnarchiveCatalogCasRequest): Promise<PersistenceResult<CatalogPersistenceMetadata>> {
+    const catalog = canonicalUuidOrFailure(request.catalogId, 'catalogId');
+    if (!catalog.ok) return catalog;
+    const mutation = canonicalUuidOrFailure(request.mutationId, 'mutationId');
+    if (!mutation.ok) return mutation;
+    if (!Number.isSafeInteger(request.expectedRemoteRevision) || request.expectedRemoteRevision <= 0) {
+      return failure('INVALID_DOCUMENT', 'A revisão esperada precisa ser um inteiro positivo seguro.');
+    }
+
+    return this.call(
+      'unarchive_vnext_catalog_cas_v1',
       {
         p_catalog_id: catalog.value,
         p_expected_remote_revision: request.expectedRemoteRevision,

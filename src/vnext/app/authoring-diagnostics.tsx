@@ -9,6 +9,7 @@ import { publicationDiagnosticText } from './publication-diagnostic-presentation
 
 export const W2D_DIAGNOSTIC_CODES = new Set([
   'SAFE_AREA_VIOLATION',
+  'OBJECT_HIDDEN',
   'OBJECT_OUTSIDE_PAGE',
   'TEXT_OBJECT_OVERFLOW',
   'PRINTABLE_CONTENT_OVERLAP',
@@ -116,6 +117,8 @@ export function diagnosticMessage(diagnostic: Diagnostic): string {
   switch (diagnostic.code) {
     case 'SAFE_AREA_VIOLATION':
       return 'O objeto cruza a área segura. A posição é permitida, mas revise a margem antes de publicar.';
+    case 'OBJECT_HIDDEN':
+      return publicationDiagnosticText(diagnostic);
     case 'OBJECT_OUTSIDE_PAGE':
       return isBleedWarning(diagnostic)
         ? publicationDiagnosticText(diagnostic)

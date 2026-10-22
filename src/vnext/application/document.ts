@@ -335,6 +335,8 @@ function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator
         frame: { ...seed.frame },
         style: { ...seed.style },
         text: instantiateRichTextWithFreshIds(seed.text, allocator),
+        ...(seed.box ? { box: { ...seed.box, ...(seed.box.stroke ? { stroke: { ...seed.box.stroke } } : {}) } } : {}),
+        ...(seed.leader ? { leader: { ...seed.leader } } : {}),
       };
     case 'table':
       return {
@@ -357,6 +359,18 @@ function instantiateObjectWithAllocator(seed: ObjectInstantiationSeed, allocator
         frame: { ...seed.frame },
         style: {
           ...seed.style,
+          ...(seed.style.stroke ? { stroke: { ...seed.style.stroke } } : {}),
+        },
+      };
+    case 'polygon':
+      return {
+        ...seed,
+        id,
+        frame: { ...seed.frame },
+        points: seed.points.map((point) => ({ ...point })),
+        style: {
+          ...seed.style,
+          ...(seed.style.fill ? { fill: { ...seed.style.fill } } : {}),
           ...(seed.style.stroke ? { stroke: { ...seed.style.stroke } } : {}),
         },
       };

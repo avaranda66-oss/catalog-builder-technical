@@ -54,6 +54,61 @@ function clientReturning(response: VNextPersistenceRpcResponse): VNextPersistenc
 }
 
 describe('SupabaseCatalogRepository', () => {
+  it('restaura pela RPC com revisão CAS e recebe metadados leves', async () => {
+    const { documentSnapshot: _snapshot, ...metadata } = envelope(documentFixture(), 3);
+    const client = clientReturning({ data: metadata, error: null });
+    const repository = new SupabaseCatalogRepository(client, { isOffline: () => false });
+
+    expect(await repository.unarchiveCAS({ catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: 2 }))
+      .toEqual({ ok: true, value: metadata });
+    expect(client.rpc).toHaveBeenCalledWith('unarchive_vnext_catalog_cas_v1', {
+      p_catalog_id: CATALOG_ID, p_expected_remote_revision: 2, p_mutation_id: MUTATION_ID,
+    });
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { catalogId: 'catalog-invalid', mutationId: MUTATION_ID, expectedRemoteRevision: 2 },
+    { catalogId: CATALOG_ID, mutationId: MUTATION_ID.toUpperCase(), expectedRemoteRevision: 2 },
+    { catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: 0 },
+    { catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: 2.5 },
+    { catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: Number.MAX_SAFE_INTEGER + 1 },
+  ])('recusa restauração inválida antes da RPC: %j', async (request) => {
+    const client = clientReturning({ data: null, error: null });
+    const result = await new SupabaseCatalogRepository(client, { isOffline: () => false }).unarchiveCAS(request);
+    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_DOCUMENT' } });
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ code: '40001', message: 'VNEXT_CONFLICT: stale revision' }, 'CONFLICT'],
+    [{ code: '42501', message: 'AUTH_ROLE_FORBIDDEN' }, 'UNAUTHORIZED'],
+    [{ code: 'ETIMEDOUT' }, 'AMBIGUOUS_COMMIT_OUTCOME'],
+  ] as const)('preserva o resultado sem repetir restauração: %j', async (error, code) => {
+    const client = clientReturning({ data: null, error });
+    const result = await new SupabaseCatalogRepository(client, { isOffline: () => false }).unarchiveCAS({
+      catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: 2,
+    });
+    expect(result).toMatchObject({ ok: false, error: { code } });
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('recusa snapshot e campos inesperados no retorno da restauração', async () => {
+    const client = clientReturning({ data: envelope(documentFixture(), 3), error: null });
+    const result = await new SupabaseCatalogRepository(client, { isOffline: () => false }).unarchiveCAS({
+      catalogId: CATALOG_ID, mutationId: MUTATION_ID, expectedRemoteRevision: 2,
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_DOCUMENT' } });
+  });
+
+  it.each(['João da Silva', null, undefined])('aceita nome opcional de quem editou na listagem: %s', async (updatedByName) => {
+    const { documentSnapshot: _snapshot, lastMutationId: _mutation, ...metadata } = envelope();
+    const item = { ...metadata, ...(updatedByName === undefined ? {} : { updatedByName }) };
+    const client = clientReturning({ data: [item], error: null });
+    const result = await new SupabaseCatalogRepository(client, { isOffline: () => false }).listCatalogs();
+    expect(result).toEqual({ ok: true, value: [item] });
+  });
+
   it('preflights create and sends only the VNext RPC payload with exact lowercase identities', async () => {
     const client = clientReturning({ data: envelope(), error: null });
     const repository = new SupabaseCatalogRepository(client, { isOffline: () => false });

@@ -11,7 +11,7 @@ export interface AssistantSelection {
 }
 
 const OBJECT_NAMES: Readonly<Record<EditorialObject['type'], string>> = {
-  text: 'texto', image: 'imagem', table: 'tabela', shape: 'forma', line: 'linha', icon: 'ícone', group: 'grupo',
+  text: 'texto', image: 'imagem', table: 'tabela', shape: 'forma', polygon: 'polígono', line: 'linha', icon: 'ícone', group: 'grupo',
 };
 
 /** Plain words for what the assistant works on, shown above its text box. */

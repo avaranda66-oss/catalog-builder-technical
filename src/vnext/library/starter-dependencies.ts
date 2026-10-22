@@ -117,7 +117,10 @@ export class DefaultStarterDependencyPreparer implements StarterDependencyPrepar
         if (cell.content.type === 'image') cell.content.assetId = replacements.get(cell.content.assetId) ?? cell.content.assetId;
       }
     };
-    doc.pages.forEach(page => page.objects.forEach(remap));
+    doc.pages.forEach(page => {
+      if (page.background?.image) page.background.image.assetId = replacements.get(page.background.image.assetId) ?? page.background.image.assetId;
+      page.objects.forEach(remap);
+    });
     requireCurrent(current);
     return parseCanonicalDocument(doc);
   }

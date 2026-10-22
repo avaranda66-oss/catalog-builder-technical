@@ -1,0 +1,24 @@
+/* Onda 3.5: "Forma", "Linha", "Polígono", "Selo", "Chamada", "Fundo da página" and "Elementos". Navy on white. */
+.vnext-native-style { display: grid; min-width: 0; gap: 12px; }
+.vnext-native-style h3 { margin: 0; color: #2a394d; font-size: 12px; }
+.vnext-native-group { display: grid; min-width: 0; gap: 6px; }
+.vnext-native-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; color: #31445b; font-size: 11px; font-weight: 600; }
+.vnext-native-field input[type="text"] { width: 72px; }
+.vnext-native-field select { min-height: 32px; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #31445b; font: inherit; }
+.vnext-native-choice { display: flex; flex-wrap: wrap; gap: 6px; }
+.vnext-native-style button:not(.vnext-style-palette button),
+.vnext-native-insert button {
+  min-height: 34px; min-width: 0; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #31445b;
+  cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; padding: 6px 8px;
+}
+.vnext-shell .vnext-info .vnext-native-style button[aria-pressed="true"]:not(.vnext-style-palette button) { border-color: #003f78; background: #edf5ff; color: #003f78; }
+.vnext-native-style button:disabled { cursor: not-allowed; opacity: .5; }
+.vnext-native-style .vnext-native-advanced-toggle { justify-self: start; border-style: dashed; }
+.vnext-native-points { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vnext-native-points li { display: grid; grid-template-columns: 64px repeat(2, minmax(0, 1fr)); align-items: center; gap: 6px; font-size: 11px; color: #31445b; }
+.vnext-native-points input[type="text"] { width: 100%; min-width: 0; }
+.vnext-native-insert { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vnext-native-insert-label { color: #536176; font-size: 11px; font-weight: 700; }
+@media (max-width: 900px) {
+  .vnext-native-style button:not(.vnext-style-palette button), .vnext-native-insert button { min-height: 44px; }
+}

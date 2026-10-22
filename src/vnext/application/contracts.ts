@@ -8,7 +8,14 @@ import {
   CellStyleSchema,
   DocumentStyleSchema,
   ImageFocalPointSchema,
+  PageBackgroundSchema,
+  PolygonPointSchema,
+  PolygonStyleSchema,
   RichTextSchema,
+  ShapeStyleSchema,
+  StrokeDashSchema,
+  TextBoxSchema,
+  TextLeaderSchema,
   TableAnnotationSchema,
   TableLegendEntrySchema,
   TableModelSchema,
@@ -80,6 +87,8 @@ export const TextObjectInsertSpecSchema = z.object({
   type: z.literal('text'),
   text: RichTextSchema,
   style: TextStyleSchema,
+  box: TextBoxSchema.optional(),
+  leader: TextLeaderSchema.optional(),
 }).strict();
 
 export const ImageObjectInsertSpecSchema = z.object({
@@ -101,10 +110,7 @@ export const ShapeObjectInsertSpecSchema = z.object({
   ...insertBase,
   type: z.literal('shape'),
   shape: z.enum(['rectangle', 'ellipse']),
-  style: z.object({
-    fill: color.optional(),
-    stroke: BorderSchema.optional(),
-  }).strict(),
+  style: ShapeStyleSchema,
 }).strict();
 
 export const LineObjectInsertSpecSchema = z.object({
@@ -112,6 +118,16 @@ export const LineObjectInsertSpecSchema = z.object({
   type: z.literal('line'),
   axis: z.enum(['horizontal', 'vertical']),
   color,
+  thicknessPt: z.number().finite().positive().max(72).optional(),
+  dash: StrokeDashSchema.optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+}).strict();
+
+export const PolygonObjectInsertSpecSchema = z.object({
+  ...insertBase,
+  type: z.literal('polygon'),
+  points: z.array(PolygonPointSchema).min(3).max(16),
+  style: PolygonStyleSchema,
 }).strict();
 
 export const IconObjectInsertSpecSchema = z.object({
@@ -126,6 +142,7 @@ export const ObjectInsertSpecSchema = z.discriminatedUnion('type', [
   TableObjectInsertSpecSchema,
   ShapeObjectInsertSpecSchema,
   LineObjectInsertSpecSchema,
+  PolygonObjectInsertSpecSchema,
   IconObjectInsertSpecSchema,
 ]);
 
@@ -193,6 +210,14 @@ export const ObjectSetLockedActionSchema = z.object({
   locked: z.boolean(),
 }).strict();
 
+/** "Camadas": turn an object off (not painted on screen, not printed) or back on. One undo step. */
+export const ObjectSetHiddenActionSchema = z.object({
+  type: z.literal('object.setHidden'),
+  objectId: applicationId,
+  expectedHidden: z.boolean(),
+  hidden: z.boolean(),
+}).strict();
+
 export const ObjectFrameExpectationSchema = z.object({
   objectId: applicationId,
   expectedFrame: FrameUSchema,
@@ -208,6 +233,15 @@ const uniqueObjectFrameTargets = (minimum: number) => z.array(ObjectFrameExpecta
 
 export const ObjectFrameTargetsSchema = uniqueObjectFrameTargets(2);
 export const ObjectDistributionFrameTargetsSchema = uniqueObjectFrameTargets(3);
+
+/** Moves several selected objects by the same offset as one change (drag of a multiple selection). */
+export const MoveObjectsActionSchema = z.object({
+  type: z.literal('objects.move'),
+  pageId: applicationId,
+  targets: uniqueObjectFrameTargets(1),
+  dxU: safeInteger,
+  dyU: safeInteger,
+}).strict();
 
 export const AlignObjectsActionSchema = z.object({
   type: z.literal('objects.align'),
@@ -266,6 +300,8 @@ export const TextStylePatchSchema = TextStyleSchema.pick({
   fontWeight: true,
   color: true,
   textAlign: true,
+  lineHeight: true,
+  letterSpacingEm: true,
 }).strict().refine(
   (patch) => Object.values(patch).some((value) => value !== undefined),
   'Text style patch must not be empty'
@@ -280,6 +316,69 @@ export const SetTextStyleActionSchema = z.object({
   objectId: applicationId,
   expectedStyle: TextStyleSchema,
   patch: TextStylePatchSchema,
+}).strict();
+
+/**
+ * Onda 3.5 (P1/P2): style of the native cover art. Each action carries the whole style it was prepared from and the
+ * whole new style, so a change made meanwhile is refused (TARGET_STALE) and one Desfazer brings back the old one.
+ */
+export const SetShapeStyleActionSchema = z.object({
+  type: z.literal('shape.setStyle'),
+  objectId: applicationId,
+  expectedStyle: ShapeStyleSchema,
+  style: ShapeStyleSchema,
+}).strict();
+
+export const LineStyleStateSchema = z.object({
+  color,
+  thicknessPt: z.number().finite().positive().max(72).optional(),
+  dash: StrokeDashSchema.optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+}).strict();
+
+export const SetLineStyleActionSchema = z.object({
+  type: z.literal('line.setStyle'),
+  objectId: applicationId,
+  expectedStyle: LineStyleStateSchema,
+  style: LineStyleStateSchema,
+}).strict();
+
+export const SetPolygonStyleActionSchema = z.object({
+  type: z.literal('polygon.setStyle'),
+  objectId: applicationId,
+  expectedStyle: PolygonStyleSchema,
+  style: PolygonStyleSchema,
+}).strict();
+
+export const SetPolygonPointsActionSchema = z.object({
+  type: z.literal('polygon.setPoints'),
+  objectId: applicationId,
+  expectedPoints: z.array(PolygonPointSchema).min(3).max(16),
+  points: z.array(PolygonPointSchema).min(3).max(16),
+}).strict();
+
+/** "Selo": adds, changes or removes (null) the background of a text box. */
+export const SetTextBoxActionSchema = z.object({
+  type: z.literal('text.setBox'),
+  objectId: applicationId,
+  expectedBox: TextBoxSchema.nullable(),
+  box: TextBoxSchema.nullable(),
+}).strict();
+
+/** "Chamada": adds, changes or removes (null) the pointer of a text box. */
+export const SetTextLeaderActionSchema = z.object({
+  type: z.literal('text.setLeader'),
+  objectId: applicationId,
+  expectedLeader: TextLeaderSchema.nullable(),
+  leader: TextLeaderSchema.nullable(),
+}).strict();
+
+/** "Fundo da página": colour and/or picture of one page (null = plain white). */
+export const SetPageBackgroundActionSchema = z.object({
+  type: z.literal('page.setBackground'),
+  pageId: applicationId,
+  expectedBackground: PageBackgroundSchema.nullable(),
+  background: PageBackgroundSchema.nullable(),
 }).strict();
 
 export const CreateGroupActionSchema = z.object({
@@ -909,6 +1008,8 @@ export const ApplicationActionSchema = z.union([
   TableFitHeightActionSchema,
   ReorderObjectActionSchema,
   ObjectSetLockedActionSchema,
+  ObjectSetHiddenActionSchema,
+  MoveObjectsActionSchema,
   AlignObjectsActionSchema,
   DistributeObjectsActionSchema,
   ImageSetPresentationActionSchema,
@@ -916,6 +1017,13 @@ export const ApplicationActionSchema = z.union([
   RegisterAssetActionSchema,
   SetTextContentActionSchema,
   SetTextStyleActionSchema,
+  SetShapeStyleActionSchema,
+  SetLineStyleActionSchema,
+  SetPolygonStyleActionSchema,
+  SetPolygonPointsActionSchema,
+  SetTextBoxActionSchema,
+  SetTextLeaderActionSchema,
+  SetPageBackgroundActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
   TableAxisInsertActionSchema,
@@ -961,6 +1069,7 @@ export type TableLegendCreateInput = z.infer<typeof TableLegendCreateInputSchema
 export type TableAnnotationTarget = z.infer<typeof TableAnnotationTargetSchema>;
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
 export type TextStylePatch = z.infer<typeof TextStylePatchSchema>;
+export type LineStyleState = z.infer<typeof LineStyleStateSchema>;
 export type CellStylePatch = z.infer<typeof CellStylePatchSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;

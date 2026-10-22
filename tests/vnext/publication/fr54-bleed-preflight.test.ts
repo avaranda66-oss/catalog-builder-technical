@@ -52,7 +52,7 @@ beforeEach(() => {
 describe('FR-54 faixas decorativas e sangria no preflight', () => {
   it('exports the rule constants used by the presentation and by these tests', () => {
     expect(BLEED_TOLERANCE_MM).toBe(3);
-    expect([...BLEED_OBJECT_TYPES].sort()).toEqual(['image', 'line', 'shape']);
+    expect([...BLEED_OBJECT_TYPES].sort()).toEqual(['image', 'line', 'polygon', 'shape']);
     expect(isBleedWarning({ code: 'OBJECT_OUTSIDE_PAGE', severity: 'WARNING' })).toBe(true);
     expect(isBleedWarning({ code: 'OBJECT_OUTSIDE_PAGE', severity: 'ERROR' })).toBe(false);
     expect(isBleedWarning({ code: 'SAFE_AREA_VIOLATION', severity: 'WARNING' })).toBe(false);

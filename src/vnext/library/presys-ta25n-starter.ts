@@ -3,6 +3,7 @@ import { objectInstantiationSeedFromObject } from '@/vnext/application/document'
 import { composePageTemplateRegistries } from '@/vnext/application/template-registry';
 import { plainRichText, type AssetRef, type CatalogDocument, type Page, type TableObject, type TextObject } from '@/vnext/domain';
 import { createPresysArchetypeTemplateRegistry } from './presys-archetypes';
+import { createPresysCoverTemplateRegistry } from './presys-cover-pcon';
 import type { CatalogStarterDefinition } from './starter-registry';
 
 // Frozen values are mirrored in the source artifact and checked for exact agreement by C1-03.
@@ -233,13 +234,15 @@ export function isPresysTa25nPageTemplate(templateId: string): boolean {
 
 /**
  * Session-scoped registry used by the editor. The PRESYS archetypes P1–P9 (FR-80)
- * are always available; the TA-25N pages join only after their official image
+ * and the native PCON cover are always available; the TA-25N pages join only after their official image
  * was prepared, so only prepared metadata is ever installed.
  */
 export function createPresysPageTemplateRegistry(): PageTemplateRegistry & { install(asset: AssetRef): void } {
   const archetypes = createPresysArchetypeTemplateRegistry();
+  // Onda 3.5 (S3): the native "Capa de produto — PCON" follows the archetypes (no official image needed).
+  const covers = createPresysCoverTemplateRegistry();
   let installed = createStaticPageTemplateRegistry([]);
-  const registry = composePageTemplateRegistries(() => [archetypes, installed]);
+  const registry = composePageTemplateRegistries(() => [archetypes, covers, installed]);
   return { get: id => registry.get(id), list: () => registry.list(), install: asset => {
     const doc = createPresysStarterDocument(asset);
     installed = createStaticPageTemplateRegistry(doc.pages.map(page => ({ id: page.id,

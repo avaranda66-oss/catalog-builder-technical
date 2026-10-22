@@ -9,6 +9,14 @@ export {
   ImageFocalPointSchema,
   TableModelSchema,
   TextStyleSchema,
+  PaintSchema,
+  PageBackgroundSchema,
+  PolygonPointSchema,
+  PolygonStyleSchema,
+  ShapeStyleSchema,
+  StrokeDashSchema,
+  TextBoxSchema,
+  TextLeaderSchema,
   plainRichText,
 } from './editorial-model';
 export type {
@@ -35,6 +43,15 @@ export type {
   TextObject,
   GroupObject,
   LeafEditorialObject,
+  Paint,
+  PageBackground,
+  PolygonObject,
+  PolygonPoint,
+  PolygonStyle,
+  ShapeStyle,
+  StrokeDash,
+  TextBox,
+  TextLeader,
 } from './editorial-model';
 export { walkPageObjects, findObjectInTree, frameToCanonicalU, visualPageObjects } from './object-tree';
 export type { CanonicalFrameU, ObjectTreeEntry, VisualPageObject } from './object-tree';

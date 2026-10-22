@@ -237,6 +237,18 @@ export class CatalogLibraryService {
   }
 
   async duplicate(catalogId: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+    return this.createIndependentCopy(catalogId);
+  }
+
+  async useAsModel(catalogId: string, title?: string): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
+    return this.createIndependentCopy(catalogId, normalizeCatalogTitle(title), true);
+  }
+
+  private async createIndependentCopy(
+    catalogId: string,
+    title?: string,
+    asModel = false
+  ): Promise<CatalogLibraryResult<CatalogPersistenceEnvelope>> {
     const authority = this.captureAuthority();
     const continued = await this.continuePendingCreate(authority);
     if (continued) return continued;
@@ -257,7 +269,9 @@ export class CatalogLibraryService {
     let documentSnapshot: CatalogPersistenceEnvelope['documentSnapshot'];
     try {
       documentSnapshot = this.cloneService.clone(source.documentSnapshot, {
-        title: `Cópia de ${source.documentSnapshot.title}`,
+        title: asModel
+          ? title || normalizeCatalogTitle(`Modelo de ${source.documentSnapshot.title}`)
+          : `Cópia de ${source.documentSnapshot.title}`,
       });
     } catch (error) {
       return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
@@ -411,5 +425,48 @@ export class CatalogLibraryService {
     if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
     if (!archived.ok) return failure(archived.error.code, archived.error.message);
     return { ok: true, value: archived.value };
+  }
+
+  async restore(catalogId: string): Promise<CatalogLibraryResult<CatalogPersistenceMetadata>> {
+    if (!this.options.repository.unarchiveCAS) {
+      return failure('ACTION_REJECTED', 'A restauração ainda não está disponível neste ambiente.');
+    }
+    const authority = this.captureAuthority();
+    const read = await this.options.repository.getCatalog(catalogId);
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    if (!read.ok) return failure(read.error.code, read.error.message);
+    let envelope: CatalogPersistenceEnvelope;
+    try {
+      envelope = parsePersistenceEnvelope(read.value);
+    } catch (error) {
+      return failure('INVALID_DOCUMENT', error instanceof Error ? error.message : String(error));
+    }
+    if (envelope.catalogId !== catalogId || envelope.documentSnapshot.id !== catalogId) {
+      return failure('ENVELOPE_MISMATCH', 'O catálogo recebido não corresponde ao catálogo solicitado.');
+    }
+    if (envelope.archivedAt === null) {
+      return failure('ACTION_REJECTED', 'Este catálogo já está na aba Ativos.');
+    }
+
+    const mutationId = this.options.createMutationId();
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    const restored = await this.options.repository.unarchiveCAS({
+      mutationId,
+      catalogId,
+      expectedRemoteRevision: envelope.remoteRevision,
+    });
+    if (!this.authorityIsCurrent(authority)) return this.staleAuthority();
+    if (!restored.ok) return failure(restored.error.code, restored.error.message);
+    if (
+      restored.value.catalogId !== catalogId
+      || restored.value.remoteRevision !== envelope.remoteRevision + 1
+      || restored.value.lastMutationId !== mutationId
+      || restored.value.archivedAt !== null
+      || restored.value.title !== envelope.title
+      || restored.value.locale !== envelope.locale
+    ) {
+      return failure('ENVELOPE_MISMATCH', 'Não foi possível confirmar a restauração deste catálogo. Atualize a biblioteca.');
+    }
+    return { ok: true, value: restored.value };
   }
 }
