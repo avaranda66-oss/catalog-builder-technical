@@ -81,10 +81,11 @@ describe('Onda 3.5 · layers and hit testing (pure)', () => {
   it('gives each layer a name a person recognises', () => {
     const doc = { assets: [{ id: 'asset-plate', name: 'hibrido-plate.png' }] } as never;
     const p = cover();
-    expect(layerName(p.objects[0], doc)).toBe('Imagem hibrido-plate.png');
-    expect(layerName(p.objects[0], doc, p)).toBe('Página inteira hibrido-plate.png');
-    expect(shortFileName('pcon-hibrido-PCON-HIBRIDO.overlay-300ppi.png')).toBe('…RIDO.overlay-300ppi.png');
-    expect(shortFileName('fotos/logo.png')).toBe('logo.png');
+    expect(layerName(p.objects[0], doc)).toBe('Imagem hibrido-plate');
+    expect(layerName(p.objects[0], doc, p)).toBe('Tela cheia hibrido-plate');
+    expect(shortFileName('pcon-hibrido-PCON-HIBRIDO.overlay-300ppi.png')).toBe('overlay-300ppi');
+    expect(shortFileName('hybrid-official-photograph-front-view.jpg')).toBe('…ograph-front-view');
+    expect(shortFileName('fotos/logo.png')).toBe('logo');
     expect(layerName(p.objects[1], doc)).toBe('Imagem');
     expect(layerName(p.objects[3], doc)).toBe('Texto “PRESYS DOIS MEIOS UMA PLATAFORMA…”');
     expect(layerName({ id: 'g', type: 'group', zIndex: 0, frame: { xMm: 0, yMm: 0, widthMm: 10, heightMm: 10 }, objects: [p.objects[3] as never, p.objects[4] as never] }, doc))
