@@ -22,6 +22,8 @@ export const BLEED_TOLERANCE_MM=3;
 export const BLEED_OBJECT_TYPES:ReadonlySet<EditorialObject['type']>=new Set<EditorialObject['type']>(['shape','line','image']);
 export const OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE='OBJECT_OUTSIDE_PAGE';
 export const SAFE_AREA_VIOLATION_DIAGNOSTIC_CODE='SAFE_AREA_VIOLATION';
+/** An object turned off in "Camadas" is not printed: a warning (never blocking), so nobody loses content without knowing. */
+export const OBJECT_HIDDEN_DIAGNOSTIC_CODE='OBJECT_HIDDEN';
 /** A bleed keeps the canonical code; only the severity and the `bleedMm=…; toleranceMm=…` detail differ from the blocking error. */
 export const isBleedWarning=(issue:Pick<Diagnostic,'code'|'severity'>):boolean => issue.code===OBJECT_OUTSIDE_PAGE_DIAGNOSTIC_CODE&&issue.severity==='WARNING';
 
@@ -74,6 +76,8 @@ export function authoredFrameDiagnostics(doc:CatalogDocument):Diagnostic[] {
         `bleedMm=${Math.max(...outside.map(verdict=>verdict.overflowU))/mmToU(1)}; toleranceMm=${BLEED_TOLERANCE_MM}`,{...location,severity:'WARNING'}));
       if(verdicts.some(verdict=>verdict.safeAreaWarning))
         result.push(diagnostic(SAFE_AREA_VIOLATION_DIAGNOSTIC_CODE,'Authored frame crosses configured safe area',{...location,severity:'WARNING'}));
+      if(object.hidden||children.some(child=>child.object.hidden))
+        result.push(diagnostic(OBJECT_HIDDEN_DIAGNOSTIC_CODE,'Object is hidden and will not be printed',{...location,severity:'WARNING'}));
     }
   }
   return result;
@@ -85,7 +89,7 @@ export function printableContentOverlapDiagnostics(doc:CatalogDocument,root:HTML
   for(const page of doc.pages) {
     // An infeasible table has no plan/grid and is already blocked by compilePlans.
     // Missing DOM for a table with a valid plan must still fail the publication check.
-    const printable=walkPageObjects(page).filter(({object})=>object.type==='text'||object.type==='table');
+    const printable=walkPageObjects(page).filter(({object,parentGroup})=>(object.type==='text'||object.type==='table')&&!object.hidden&&!parentGroup?.hidden);
     if(printable.length<2)continue;
     const content=printable.filter(({object})=>object.type!=='table'||!plans||plans.has(object.table.id)).map(({object})=>{
       const node=findElement(root,'data-object-id',object.id),rects:DOMRect[]=[];

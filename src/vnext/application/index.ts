@@ -19,6 +19,8 @@ export {
   MoveObjectActionSchema,
   ObjectInsertSpecSchema,
   ObjectSetLockedActionSchema,
+  ObjectSetHiddenActionSchema,
+  MoveObjectsActionSchema,
   ObjectFrameExpectationSchema,
   ObjectFrameTargetsSchema,
   ObjectDistributionFrameTargetsSchema,

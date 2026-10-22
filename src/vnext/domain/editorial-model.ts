@@ -113,7 +113,8 @@ export const DocumentStyleSchema=z.object({
   defaultText:CellStyleSchema,palette:z.array(color).min(1),
 }).strict();
 export type DocumentStyle=z.infer<typeof DocumentStyleSchema>;
-const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optional()};
+/** `hidden`: the person turned the object off in "Camadas". It stays in the document but is not painted on screen nor printed (preflight warns). */
+const objectBase={id,frame:FrameSchema,zIndex:integer,locked:z.boolean().optional(),hidden:z.boolean().optional()};
 export const ImageFocalPointSchema=z.object({x:finite.min(0).max(1),y:finite.min(0).max(1)}).strict();
 export type ImageFocalPoint=z.infer<typeof ImageFocalPointSchema>;
 export const DEFAULT_IMAGE_FOCAL_POINT:Readonly<ImageFocalPoint>=Object.freeze({x:0.5,y:0.5});

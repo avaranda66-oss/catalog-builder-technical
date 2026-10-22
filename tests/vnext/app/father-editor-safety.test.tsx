@@ -505,7 +505,7 @@ describe('FR-19 · Word-like keyboard', () => {
     expect(isSelected(container, 'shape-target')).toBe(true);
   });
 
-  it('Ctrl+D with several objects selected explains that only one can be duplicated', () => {
+  it('Ctrl+D with several objects selected duplicates all of them in one undo step (Onda 3.5)', () => {
     const { session, container } = renderFather();
     select(container, 'shape-target');
     const other = container.querySelector<HTMLElement>('[data-editor-object-id="shape-other"]')!;
@@ -514,8 +514,11 @@ describe('FR-19 · Word-like keyboard', () => {
     expect(isSelected(container, 'shape-target') && isSelected(container, 'shape-other')).toBe(true);
     const before = session.getSnapshot().document.pages[0].objects.length;
     expect(fireEvent.keyDown(other, { key: 'd', ctrlKey: true })).toBe(false);
+    expect(session.getSnapshot().document.pages[0].objects).toHaveLength(before + 2);
+    expect(screen.getByText('2 objetos duplicados. As cópias estão selecionadas: arraste para posicionar.')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-editor-object-id][data-selected="true"]')).toHaveLength(2);
+    session.undo();
     expect(session.getSnapshot().document.pages[0].objects).toHaveLength(before);
-    expect(screen.getByText('Selecione um só objeto para duplicar.')).toBeInTheDocument();
   });
 });
 

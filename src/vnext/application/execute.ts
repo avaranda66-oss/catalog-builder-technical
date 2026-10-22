@@ -874,12 +874,10 @@ export function executeApplicationAction(
         if (selectedVisual.length !== action.objectIds.length) return failure('ACTION_INVALID', 'Selected objects must be top-level page objects');
         const firstVisualIndex = selectedVisual[0].visualIndex;
         const lastVisualIndex = selectedVisual[selectedVisual.length - 1].visualIndex;
-        if (lastVisualIndex - firstVisualIndex + 1 !== selectedVisual.length
-            || visual.slice(firstVisualIndex, lastVisualIndex + 1).some(({ object }) => !selectedIds.has(object.id))) {
-          return failure('ACTION_INVALID', 'Selected objects must form one contiguous visual block');
-        }
-
-        const ordered = visual.slice(firstVisualIndex, lastVisualIndex + 1);
+        // Objects that are not neighbours in the stack are gathered at the place of the topmost one
+        // (the lower ones go up, keeping their order); the objects in between keep their places.
+        const contiguous = lastVisualIndex - firstVisualIndex + 1 === selectedVisual.length;
+        const ordered = selectedVisual;
         const framesU = ordered.map(({ object }) => frameToCanonicalU(object.frame));
         const minXU = Math.min(...framesU.map((frame) => frame.xU));
         const minYU = Math.min(...framesU.map((frame) => frame.yU));
@@ -906,7 +904,7 @@ export function executeApplicationAction(
           };
         });
 
-        const first = ordered[0];
+        const first = contiguous ? ordered[0] : ordered[ordered.length - 1];
         const group: GroupObject = {
           id: allocateFreshCanonicalId(document, dependencies.createId),
           type: 'group',
@@ -1203,6 +1201,49 @@ export function executeApplicationAction(
         );
         break;
       }
+      case 'object.setHidden': {
+        const location = findObjectLocation(document, action.objectId);
+        if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
+        const childFailure = groupedChildMutation(location, action.objectId);
+        if (childFailure) return childFailure;
+        const liveHidden = location.object.hidden === true;
+        if (liveHidden !== action.expectedHidden) {
+          return failure('TARGET_STALE', `Object ${action.objectId} visibility changed after the command was prepared`);
+        }
+        changed = liveHidden !== action.hidden;
+        affectedIds = changed ? [action.objectId] : [];
+        if (!changed) break;
+        let next: EditorialObject;
+        if (action.hidden) {
+          next = { ...location.object, hidden: true };
+        } else {
+          const { hidden: _hidden, ...shown } = location.object;
+          next = shown as EditorialObject;
+        }
+        candidate = pageWithObjects(
+          document,
+          location.pageIndex,
+          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+        );
+        break;
+      }
+      case 'objects.move': {
+        const resolved = arrangementTargets(document, action.pageId, action.targets);
+        if (!resolved.ok) return resolved;
+        changed = action.dxU !== 0 || action.dyU !== 0;
+        affectedIds = resolved.targets.map((target) => target.object.id);
+        if (!changed) break;
+        const nextPositions = new Map<string, { xU: number; yU: number }>();
+        try {
+          for (const target of resolved.targets) {
+            nextPositions.set(target.object.id, { xU: add(target.frameU.xU, action.dxU), yU: add(target.frameU.yU, action.dyU) });
+          }
+        } catch (error) {
+          return failure('INVALID_GEOMETRY', `Move arithmetic failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        candidate = candidateWithArrangedPositions(document, resolved.pageIndex, nextPositions);
+        break;
+      }
       case 'objects.align': {
         const resolved = arrangementTargets(document, action.pageId, action.targets);
         if (!resolved.ok) return resolved;
@@ -1420,8 +1461,8 @@ export function executeApplicationAction(
       case 'text.setContent': {
         const location = findObjectLocation(document, action.objectId);
         if (!location) return failure('OBJECT_NOT_FOUND', action.objectId);
-        const childFailure = groupedChildMutation(location, action.objectId);
-        if (childFailure) return childFailure;
+        // A text inside a group is edited in place (double-click); the group keeps its frame.
+        if (location.parentGroup && objectLocked(location.parentGroup)) return failure('OBJECT_LOCKED', location.parentGroup.id);
         if (objectLocked(location.object)) return failure('OBJECT_LOCKED', action.objectId);
         if (location.object.type !== 'text') return failure('OBJECT_TYPE_MISMATCH', action.objectId);
         if (!richTextEquals(location.object.text, action.expectedText)) {
@@ -1445,10 +1486,14 @@ export function executeApplicationAction(
         if (!changed) break;
 
         const next = { ...location.object, text: reconciled.richText };
+        const group = location.parentGroup;
+        const replacement: EditorialObject = group
+          ? { ...group, objects: group.objects.map((child) => child.id === action.objectId ? next : child) }
+          : next;
         candidate = pageWithObjects(
           document,
           location.pageIndex,
-          location.page.objects.map((object, index) => index === location.objectIndex ? next : object)
+          location.page.objects.map((object, index) => index === location.objectIndex ? replacement : object)
         );
         break;
       }
