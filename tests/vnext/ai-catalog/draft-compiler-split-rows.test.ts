@@ -106,7 +106,7 @@ describe('joinConditionSplitRows: only when nothing can be lost', () => {
     candidates: [{ value: text, unit: 'min', status: 'VERIFIED_TEXT', source: { sourceId: 'f', page: 1, quote: text } }] });
   const absent = (id: string, model: number): DraftPosition =>
     ({ id: `s/${id}/${model}`, kind: 'value', rowRef: `s/${id}`, modelIndex: model, status: 'MISSING', candidates: [] });
-  const set = (rows: DraftRow[], positions: DraftPosition[]): DraftFactSet =>
+  const set = (rows: readonly DraftRow[], positions: readonly DraftPosition[]): DraftFactSet =>
     ({ version: 1, title: 'T', models: MODELS, rows, positions, sourceNames: { f: 'f.pdf' }, choices: {} });
   const split = () => set([row('c1', 'x'), row('c2', 'y')],
     [verified('c1', 0, '11'), absent('c1', 1), absent('c2', 0), verified('c2', 1, '16')]);
