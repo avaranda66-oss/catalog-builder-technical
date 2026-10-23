@@ -17,7 +17,7 @@ import {
   type TableSelectionPoint,
 } from '../editor/table-selection';
 import type { CellInlineEditorCell } from './editor/CellInlineEditor';
-import { TableGridContextMenu } from './editor/TableGridContextMenu';
+import { TableGridContextMenu, type TableGridMenuExtra } from './editor/TableGridContextMenu';
 
 interface DragState {
   pointerId: number;
@@ -69,6 +69,8 @@ export interface TableGridOverlayProps {
   onCellPressWhileEditing?(point: TableSelectionPoint): void;
   /** FR-34: "+" buttons between rows/columns and the right-click menu. */
   onGridCommand?(command: TableGridCommand): void;
+  /** Onda 4.5: entries at the end of the right-click menu that act on the whole table ("Guardar tabela no arsenal…"). */
+  menuExtras?: readonly TableGridMenuExtra[];
 }
 
 function cumulative(values: readonly number[]): number[] {
@@ -100,6 +102,7 @@ export function TableGridOverlay({
   onTypeToEdit,
   onCellPressWhileEditing,
   onGridCommand,
+  menuExtras,
 }: TableGridOverlayProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const dragRef = React.useRef<DragState | null>(null);
@@ -633,6 +636,7 @@ export function TableGridOverlay({
           y={menu.y}
           model={tableGridMenuModel(table, selection)}
           onCommand={onGridCommand}
+          extras={menuExtras}
           onClose={closeMenu}
         />
       )}
