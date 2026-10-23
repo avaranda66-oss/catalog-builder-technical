@@ -109,7 +109,7 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
       : httpFailure(503, { code: 'PROVIDER_UNAVAILABLE' })));
     await send('Crie uma capa para o TA-25N.');
     await waitFor(() => expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toHaveTextContent('Capa do TA-25N'));
-    await send('Agora crie uma página de especificações.');
+    await send('Agora crie uma página de especificações do TA-25N.');
     // While the new request runs, the proposal stays on screen (and cannot be applied twice meanwhile).
     expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O serviço de IA não respondeu agora.'));
@@ -122,9 +122,9 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
   it('a new proposal replaces the earlier one', async () => {
     let turn = 0;
     make(async () => ({ data: { reply: plan(++turn === 1 ? 'Primeira capa' : 'Segunda capa') }, error: null }));
-    await send('Crie uma capa.');
+    await send('Crie uma capa para o TA-25N.');
     await waitFor(() => expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toHaveTextContent('Primeira capa'));
-    await send('Faça outra capa.');
+    await send('Faça outra capa para o TA-25N.');
     await waitFor(() => expect(screen.getByRole('group', { name: 'Proposta de páginas' })).toHaveTextContent('Segunda capa'));
     expect(screen.getAllByRole('group', { name: 'Proposta de páginas' })).toHaveLength(1);
   });
@@ -132,14 +132,14 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
   it('PROVIDER_NOT_CONFIGURED names "Usar minha própria chave" only where a personal key can be used', async () => {
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: false }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    await send('Crie uma capa.');
+    await send('Crie uma capa para o TA-25N.');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(
       'A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão. O catálogo não foi alterado.'));
     expect(screen.getByRole('alert')).not.toHaveTextContent('chave própria');
     cleanup();
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: true }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    await send('Crie uma capa.');
+    await send('Crie uma capa para o TA-25N.');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('“Usar minha própria chave”'));
     fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
     expect(screen.getByRole('menuitem', { name: 'Usar minha própria chave' })).toBeInTheDocument();

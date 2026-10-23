@@ -207,7 +207,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
   it('keeps "Enviar" on when the server is ready with budget left', async () => {
     makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Crie uma capa.' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Crie uma capa para o TA-25N.' } });
     expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeEnabled();
     expect(screen.queryByText(DAILY_LIMIT_SEND_EXPLANATION)).toBeNull();
   });

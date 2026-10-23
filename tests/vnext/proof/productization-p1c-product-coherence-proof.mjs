@@ -164,6 +164,8 @@ const server = await createServer({ root, plugins: [{ name: 'c1-controlled-infra
           const value = envelope(a.p_document_snapshot, a.p_mutation_id, previous);
           catalogs.set(value.catalogId, value); counters.saves++; json(res, ok(value)); return;
         }
+        // Onda 4.5: the editor reads the team arsenal once when it opens (migration 00031); this controlled team has none saved.
+        if (name === 'list_vnext_presets_v1') { json(res, ok({ presets: [], builtinUsage: [] })); return; }
         throw new Error('Unexpected controlled RPC: ' + name);
       }
       if (pathname === '/v2') {

@@ -9,7 +9,7 @@ export const WorkbenchEntrySchema = z.object({
   content: z.string().min(1).max(1200),
   timestamp: z.string().datetime(),
   revision: z.number().int().nonnegative(),
-  action: z.enum(['compact', 'undo', 'redo', 'publication', 'editor', 'help', 'reference', 'spec-table', 'catalog-draft']).optional(),
+  action: z.enum(['compact', 'undo', 'redo', 'publication', 'editor', 'help', 'reference', 'spec-table', 'catalog-draft', 'arsenal']).optional(),
 }).strict();
 export type WorkbenchEntry = z.infer<typeof WorkbenchEntrySchema>;
 const TranscriptSchema = z.object({

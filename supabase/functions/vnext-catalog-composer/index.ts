@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 // Bundled with the Edge Function; scripts/probe-composer.mjs and the VM tests run the same source.
 import {
-  COMPOSER_LIMITS, COMPOSER_TASKS, composerReservationMicrousd, isObj, parseComposerBudgetMode, parseComposerRequest,
+  COMPOSER_FEATURES, COMPOSER_LIMITS, COMPOSER_TASKS, composerReservationMicrousd, isObj, parseComposerBudgetMode, parseComposerRequest,
   runComposerGeneration,
   type ComposerAttempt, type ComposerBudgetMode, type ComposerLedger, type ComposerLedgerPort,
 } from '../../../src/vnext/ai-catalog/composer-contract.ts';
@@ -12,6 +12,8 @@ import type { ComposerErrorCode, ComposerErrorReason } from '../../../src/vnext/
 // Tasks (composer-contract.ts): status, compose_scaffold, revise_selected_text and
 // edit_intent (FR-72: typed intents over a bounded outline of the open document;
 // invented numbers are blocked here, before the reply leaves the server).
+// Onda 4.5: compose_scaffold and edit_intent may carry a short arsenal index and
+// answer use_preset with one of its refs (feature 'arsenal_index' in status).
 // Authentication, active editor role and a durable budget reservation are
 // mandatory before any provider call. Server key by default; a personal key
 // (BYOK) only when VNEXT_CATALOG_AGENT_BYOK_ENABLED=true.
@@ -116,7 +118,7 @@ serve(async req => {
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether the AI is ready.
     return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: !!serverKey, byok, tasks: [...COMPOSER_TASKS],
-      ...await ledger.remaining() } });
+      features: [...COMPOSER_FEATURES], ...await ledger.remaining() } });
   }
   if (request.key && !byok) return fail(c, 503, 'BYOK_DISABLED');
   const key = request.key ?? serverKey;

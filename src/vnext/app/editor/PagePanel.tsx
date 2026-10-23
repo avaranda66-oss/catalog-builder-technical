@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, Copy, FileText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookmarkPlus, Copy, FileText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import type { DocumentSession } from '../../application';
 import type { Page } from '../../domain';
 import { describePageObjects, pageHeadline, pageLabel } from '../../editor/page-summary';
@@ -28,6 +28,8 @@ export type PagePanelProps = {
     readonly document: PageThumbnailDocument;
     readonly assetUrls: ReadonlyMap<string, string>;
   };
+  /** Onda 4.5: "Guardar página no arsenal…" in the page menu; the focus goes back to that page's "⋯" afterwards. */
+  readonly onSaveToArsenal?: (pageId: string, trigger: HTMLElement | null) => void;
 };
 
 /**
@@ -36,7 +38,7 @@ export type PagePanelProps = {
  * it). Every change goes through the existing page.* actions, so Desfazer
  * (Ctrl+Z) brings it back.
  */
-export function PagePanel({ pages, currentPageId, session, prepareForChange, onSelectPage, onAddPage, onStatus, children, thumbnails }: PagePanelProps) {
+export function PagePanel({ pages, currentPageId, session, prepareForChange, onSelectPage, onAddPage, onStatus, children, thumbnails, onSaveToArsenal }: PagePanelProps) {
   const [menuPageId, setMenuPageIdState] = React.useState<string | null>(null);
   const [menuPosition, setMenuPosition] = React.useState<React.CSSProperties>({});
   const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
@@ -264,6 +266,12 @@ export function PagePanel({ pages, currentPageId, session, prepareForChange, onS
                     disabled={index === pages.length - 1} onClick={() => runAction(page.id, 'move-down')}>
                     <ArrowDown size={16} aria-hidden="true" />Mover para baixo
                   </button>
+                  {onSaveToArsenal && (
+                    <button type="button" role="menuitem" data-page-action="save-to-arsenal"
+                      onClick={() => { setMenuPageId(null); onSaveToArsenal(page.id, triggerRefs.current.get(page.id) ?? null); }}>
+                      <BookmarkPlus size={16} aria-hidden="true" />Guardar página no arsenal…
+                    </button>
+                  )}
                   <button type="button" role="menuitem" data-page-action="delete" className="is-danger"
                     aria-disabled={pages.length <= 1 ? 'true' : undefined}
                     aria-describedby={pages.length <= 1 ? `${menuId}-note` : undefined}

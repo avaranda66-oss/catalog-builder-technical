@@ -246,6 +246,36 @@
 .ai-chat-card-actions .vnext-btn-primary:hover:not(:disabled) { background: var(--vnext-primary-hover, #002f59); }
 .ai-chat-card-actions button:disabled { opacity: .45; cursor: not-allowed; }
 
+/* ------------------------------------------------------------------ arsenal (Onda 4.5) */
+.ai-chat-arsenal-choice { display: inline-flex; align-items: flex-start; gap: 10px; }
+.ai-chat-arsenal-choice small { color: #41546b; font-size: 13px; }
+.ai-chat-arsenal-thumb { display: block; flex: none; width: 56px; overflow: hidden; border: 1px solid #b9cce3; border-radius: 4px; background: #fff; }
+.ai-chat-arsenal-others { display: grid; gap: 8px; margin: 4px 0 8px; padding: 0; list-style: none; font-size: 14px; }
+.ai-chat-arsenal-others li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ai-chat-arsenal-others button {
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid #b9cce3;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--vnext-primary, #003f78);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-chat-arsenal-form { display: grid; gap: 8px; margin: 0 0 8px; }
+.ai-chat-arsenal-form label { display: grid; gap: 4px; color: #223c53; font-size: 14px; font-weight: 700; }
+.ai-chat-arsenal-form input,
+.ai-chat-arsenal-form select {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid #b9cce3;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+}
+
 /* ------------------------------------------------------------------ files in the conversation */
 .ai-chat-intake > .ai-chat-bubble { min-width: min(100%, 260px); }
 .ai-intake.ai-chat-intake-details { flex: none; max-height: none; overflow: visible; padding: 6px 0 0; border: 0; font-size: 14px; }

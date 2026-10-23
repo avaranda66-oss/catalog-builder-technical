@@ -296,6 +296,23 @@ describe('request, reply and routing', () => {
     expect(assistantLaneFor('os selos de faixa', empty, { followUp: true })).toBe('compose');
     expect(assistantLaneFor('crie uma página nova de contato', doc, { followUp: true })).toBe('compose');
   });
+  it('natural language (Onda 4.5): "põe X no rodapé" and translations edit the open catalog; "põe uma tabela…" builds', () => {
+    const doc = structuredClone(PCON);
+    // A value written INTO the catalog goes where it can be refused (edit_intent), never to the composer.
+    for (const message of ['coloca a exatidão do TA-25N no rodapé', 'poe a faixa de pressão do TA-25N na tabela',
+      'preenche a tabela com os valores do PCON', 'bota a pressão máxima de cada modelo embaixo do título',
+      'escreve a certificação ISO no rodapé', 'atualiza a exatidão pra do modelo novo']) {
+      expect(assistantLaneFor(message, doc), message).toBe('edit');
+    }
+    for (const message of ['passa o subtítulo pro espanhol', 'coloca em inglês o texto de destaque', 'duplica essa página',
+      'aplica o estilo de título nesse texto', 'pinta a faixa de vermelho']) {
+      expect(assistantLaneFor(message, doc), message).toBe('edit');
+    }
+    for (const message of ['na página de especificações põe uma tabela comparando 3 modelos', 'insere o cabeçalho padrão',
+      'insere a página de faixas de medição', 'faz uma capa pro TA-25N', 'bota uma tabla com 6 linhas']) {
+      expect(assistantLaneFor(message, doc), message).toBe('compose');
+    }
+  });
   it('routes "build from these files" to the catalog plan and drawn pages to the Modo rascunho, only with those files here', () => {
     const doc = structuredClone(PCON);
     const files = { catalogFiles: true, sketchPhotos: true };

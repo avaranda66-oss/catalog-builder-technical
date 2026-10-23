@@ -7,7 +7,9 @@ import { TABLE_TEXT_SIZES } from '../application/table-preset-registry';
 import { mmToU, type CatalogDocument, type EditorialObject, type Page, type Paint } from '../domain';
 import { planTableComposition, projectTableLook, tableLookSteps } from '../editor/table-look-authoring';
 import { boldAvailable, effectiveTextStyle } from '../editor/text-style-authoring';
-import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from './document-outline';
+import { buildDocumentOutline, OUTLINE_TARGET_CHARS, type DocumentOutline, type DocumentOutlineOptions } from './document-outline';
+import { ARSENAL_AI_REF, type ArsenalAiIndexEntry } from './arsenal-ai-contract';
+import { routeLocally, type LocalRoute, type LocalRouteContext } from '../arsenal/local-router';
 import {
   BLOCKED_CODES, checkEditIntents, EDIT_INTENT_KINDS, EDIT_INTENT_LANGUAGES, EDIT_INTENT_LIMITS, EDIT_INTENT_PALETTE,
   outlineObjects, type BlockedCode, type BlockedIntent, type EditIntent, type EditIntentKind, type EditIntentLanguage,
@@ -36,19 +38,29 @@ export interface EditIntentRequest {
   message: string;
   history: EditIntentTurn[];
   outline: EditOutline;
+  /** Onda 4.5: short index of the arsenal (refs a1…); sent only to a server that announces `arsenal_index`. */
+  arsenal?: ArsenalAiIndexEntry[];
 }
 export type EditIntentGateway = (request: EditIntentRequest) => Promise<unknown>;
 /** History kept short: the outline already takes most of the input budget. */
 export const EDIT_INTENT_HISTORY_TURNS = 6;
 
+/** The outline never gets smaller than this to make room for the arsenal index. */
+const OUTLINE_MIN_CHARS_WITH_ARSENAL = 6_000;
+
 export function prepareEditIntentRequest(document: CatalogDocument, message: string,
-  history: readonly EditIntentTurn[] = [], options: DocumentOutlineOptions = {}): { request: EditIntentRequest; outline: DocumentOutline } {
+  history: readonly EditIntentTurn[] = [], options: DocumentOutlineOptions = {},
+  arsenal: readonly ArsenalAiIndexEntry[] = []): { request: EditIntentRequest; outline: DocumentOutline } {
   const text = message.trim();
   if (!text || text.length > EDIT_INTENT_LIMITS.messageChars) throw new Error('EDIT_INTENT_MESSAGE_INVALID');
-  const outline = buildDocumentOutline(document, options);
+  // The index shares the 6 000-token input ceiling with the outline: the outline aims a bit lower when it goes along.
+  const indexChars = arsenal.length ? JSON.stringify(arsenal).length : 0;
+  const outline = buildDocumentOutline(document, indexChars && options.maxChars === undefined
+    ? { ...options, maxChars: Math.max(OUTLINE_MIN_CHARS_WITH_ARSENAL, OUTLINE_TARGET_CHARS - indexChars) } : options);
   const turns = z.array(TurnSchema).parse(history.slice(-EDIT_INTENT_HISTORY_TURNS)
     .map(turn => ({ role: turn.role, message: turn.message.slice(0, 800) })));
-  return { request: { version: 1, task: 'edit_intent', message: text, history: turns, outline: outline.outline }, outline };
+  return { request: { version: 1, task: 'edit_intent', message: text, history: turns, outline: outline.outline,
+    ...(arsenal.length ? { arsenal: [...arsenal] } : {}) }, outline };
 }
 
 /* ------------------------------------------------------------------------------------------------ */
@@ -78,6 +90,9 @@ export const EditIntentReplySchema = z.discriminatedUnion('status', [
     blocked: z.array(BlockedSchema).max(EDIT_INTENT_LIMITS.intents) }).strict(),
   z.object({ status: z.literal('clarification'), question: z.string().trim().min(8).max(EDIT_INTENT_LIMITS.questionChars) }).strict(),
   z.object({ status: z.literal('refusal'), reason: z.string().trim().min(8).max(EDIT_INTENT_LIMITS.questionChars) }).strict(),
+  // Onda 4.5: "use the saved preset" (a ref of the arsenal index sent with the request).
+  z.object({ status: z.literal('use_preset'), preset: z.string().regex(ARSENAL_AI_REF),
+    summary: z.string().trim().min(6).max(EDIT_INTENT_LIMITS.summaryChars + 40).optional() }).strict(),
 ]);
 export type EditIntentReplyParsed = z.infer<typeof EditIntentReplySchema>;
 
@@ -111,7 +126,9 @@ export interface EditPlan {
 export type EditIntentOutcome =
   | { readonly status: 'plan'; readonly plan: EditPlan }
   | { readonly status: 'clarification'; readonly question: string }
-  | { readonly status: 'refusal'; readonly reason: string };
+  | { readonly status: 'refusal'; readonly reason: string }
+  /** Onda 4.5: the AI points at a preset of the arsenal; `preset` is a ref of the index sent (a1…). */
+  | { readonly status: 'use_preset'; readonly preset: string; readonly summary?: string };
 
 const LANGUAGE_NAMES: Readonly<Record<EditIntentLanguage, string>> = {
   'pt-BR': 'português', en: 'inglês', es: 'espanhol', fr: 'francês', it: 'italiano', de: 'alemão', pl: 'polonês',
@@ -319,6 +336,7 @@ export function planEditIntents(document: CatalogDocument, revision: number, out
   reply: EditIntentReplyParsed, messages: readonly string[]): EditIntentOutcome {
   if (reply.status === 'clarification') return { status: 'clarification', question: reply.question };
   if (reply.status === 'refusal') return { status: 'refusal', reason: reply.reason };
+  if (reply.status === 'use_preset') return { status: 'use_preset', preset: reply.preset, ...(reply.summary ? { summary: reply.summary } : {}) };
   if (document.id !== outline.documentId) throw new Error('EDIT_INTENT_OTHER_DOCUMENT');
   // The browser repeats the server checks with its own outline (an older server, or a changed reply, cannot slip through).
   const local = checkEditIntents(outline.outline, messages, reply.intents);
@@ -362,10 +380,15 @@ export function planEditIntents(document: CatalogDocument, revision: number, out
 
 /** Asks the AI and returns the plan to preview. Nothing is changed in the document. */
 export async function requestEditIntents(session: DocumentSession, message: string, gateway: EditIntentGateway,
-  history: readonly EditIntentTurn[] = [], options: DocumentOutlineOptions = {}): Promise<EditIntentOutcome> {
+  history: readonly EditIntentTurn[] = [], options: DocumentOutlineOptions = {},
+  arsenal: readonly ArsenalAiIndexEntry[] = []): Promise<EditIntentOutcome> {
   const snapshot = session.getSnapshot();
-  const { request, outline } = prepareEditIntentRequest(snapshot.document, message, history, options);
+  const { request, outline } = prepareEditIntentRequest(snapshot.document, message, history, options, arsenal);
   const reply = EditIntentReplySchema.parse(await gateway(request));
+  // The browser checks the ref again: only one of the index it sent (an older or changed reply cannot slip through).
+  if (reply.status === 'use_preset' && !request.arsenal?.some(entry => entry.ref === reply.preset)) {
+    throw new Error('EDIT_INTENT_PRESET_UNKNOWN');
+  }
   const messages = [request.message, ...request.history.filter(turn => turn.role === 'user').map(turn => turn.message)];
   return planEditIntents(snapshot.document, snapshot.localSequence, outline, reply, messages);
 }
@@ -401,8 +424,20 @@ export function applyEditPlan(session: DocumentSession, plan: EditPlan): { appli
 /* Routing helper (for the single assistant, FR-73)                                                 */
 /* ------------------------------------------------------------------------------------------------ */
 
-const EDIT_VERBS = /(?:^|[^\p{L}])(troqu|troca|troque|mud[ae]|alter[ae]|substitu|apag|remov|tir[ea]|exclu|delet|aument|diminu|reduz|amplie|deix[ae]|coloqu|ponha|traduz|negrito|duplique|duplicar|corrij)/iu;
+const EDIT_VERBS = /(?:^|[^\p{L}])(troqu|troca|troque|mud[ae]|alter[ae]|substitu|apag|remov|tir[ea]|exclu|delet|aument|diminu|reduz|amplie|deix[ae]|coloqu|ponha|traduz|negrito|dupli[cq]|corrij|corrig|escrev|preench|atualiz|pint[ae])/iu;
 const NEW_PAGES = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|comece|gere|nova[s]? p[áa]gina|um cat[áa]logo novo|novo cat[áa]logo)(?:$|[^\p{L}])/iu;
+/** "passa o subtítulo pro espanhol", "coloca em inglês": a translation of the open page. */
+const LANGUAGE_WORDS = /(?:^|[^\p{L}])(ingl[êe]s|espanhol|franc[êe]s|italiano|alem[ãa]o|polon[êe]s)(?:$|[^\p{L}])/iu;
+/** "bota/põe/coloca X no rodapé": something written INTO the open catalog (a value, a text). */
+const PUT_VERBS = /(?:^|[^\p{L}])(bot[ae]r?|coloc[ao]r?|p[õo]e|met[ae]r?|inser[ei]r?|insir[ao]|acrescent[ae]r?|inclu[ia]r?)(?:$|[^\p{L}])/iu;
+/**
+ * "uma tabela", "a página de faixas", "o cabeçalho padrão", "3 páginas": a page, table, header or footer as the OBJECT
+ * of the verb is something new, which the composer (or the arsenal) builds. After a preposition ("na tabela", "no
+ * rodapé") it is a place in the open catalog instead.
+ */
+const NEW_THING = /(?:^|[^\p{L}])(uma?|as?|os?|nova|novo|outra|outro|duas|dois|tr[êe]s|\d+)\s+(?:\p{L}+\s+)?(tabe?l|p[áa]gin|capa|contracapa|se[çc][ãa]o|cat[áa]logo|folder|cabe[çc]al|cabe[çc]ari|rodap)/iu;
+/** "aplica o estilo de título nesse texto": a style goes on what is already on the page. */
+const STYLE_WORDS = /(?:^|[^\p{L}])(estilos?|formata[çc][ãa]o)(?:$|[^\p{L}])/iu;
 /**
  * Which lane of the single assistant answers a typed request: "edit" (this
  * module, on the open document) or "compose" (new pages). Edits need a
@@ -414,7 +449,10 @@ export function assistantLaneFor(message: string, document: CatalogDocument,
   options: { readonly followUp?: boolean } = {}): 'edit' | 'compose' {
   const hasContent = document.pages.some(page => page.objects.length > 0);
   if (!hasContent || NEW_PAGES.test(message)) return 'compose';
-  return options.followUp || EDIT_VERBS.test(message) ? 'edit' : 'compose';
+  if (options.followUp || EDIT_VERBS.test(message) || LANGUAGE_WORDS.test(message) || STYLE_WORDS.test(message)) return 'edit';
+  // "coloca a exatidão no rodapé" changes the open catalog (and is refused there when the value was never given);
+  // "bota uma tabela comparando…" builds something new.
+  return PUT_VERBS.test(message) && !NEW_THING.test(message) ? 'edit' : 'compose';
 }
 
 const BUILD_VERB = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|fa[çc]a|fazer|gere|gerar|prepar[ea]r?|transform[ea]r?|comece)(?:$|[^\p{L}])/iu;
@@ -422,7 +460,7 @@ const FROM_FILES = /(?:^|[^\p{L}])(arquivos?|pdfs?|anexos?|folhetos?|manua(?:l|i
 const WHOLE_CATALOG = /(?:^|[^\p{L}])(cat[áa]logo|p[áa]ginas)(?:$|[^\p{L}])/iu;
 const SKETCH_WORDS = /(?:^|[^\p{L}])(rascunhos?|esbo[çc]os?|desenhos?|desenhei|desenhad[ao]s?)(?:$|[^\p{L}])/iu;
 
-export type AssistantRoute = 'edit' | 'compose' | 'catalog-draft' | 'sketch';
+export type AssistantRoute = 'edit' | 'compose' | 'catalog-draft' | 'sketch' | 'local';
 export interface AssistantRouteContext {
   /** The last answer of this conversation came from the edit lane. */
   readonly editFollowUp?: boolean;
@@ -430,6 +468,16 @@ export interface AssistantRouteContext {
   readonly catalogFiles?: boolean;
   /** This conversation has photos that the Modo rascunho can read now. */
   readonly sketchPhotos?: boolean;
+  /**
+   * Onda 4.5: the router without AI (src/vnext/arsenal/local-router.ts) runs BEFORE edit_intent and the composer when
+   * this is given: the open page, the selection and the arsenal. Absent: the old routes only.
+   */
+  readonly local?: Omit<LocalRouteContext, 'document' | 'followUp'>;
+}
+export interface AssistantDecision {
+  readonly route: AssistantRoute;
+  /** What the router without AI found (route `local`), shown as a card; nothing was sent to the AI. */
+  readonly local?: Extract<LocalRoute, { kind: 'local' }>;
 }
 /**
  * FR-73, one assistant: where a typed request goes. "Monte o catálogo com
@@ -438,7 +486,19 @@ export interface AssistantRouteContext {
  * on the open catalog → edit_intent; anything else → new pages (composer).
  */
 export function assistantRouteFor(message: string, document: CatalogDocument, context: AssistantRouteContext = {}): AssistantRoute {
-  if (context.sketchPhotos && SKETCH_WORDS.test(message) && BUILD_VERB.test(message)) return 'sketch';
-  if (context.catalogFiles && FROM_FILES.test(message) && WHOLE_CATALOG.test(message) && BUILD_VERB.test(message)) return 'catalog-draft';
-  return assistantLaneFor(message, document, { followUp: context.editFollowUp });
+  return assistantDecisionFor(message, document, context).route;
+}
+
+/**
+ * The same decision with what the router without AI found. Order: files (catalog plan, Modo rascunho) → the router
+ * without AI (arsenal and simple actions, zero tokens) → edit_intent → composer.
+ */
+export function assistantDecisionFor(message: string, document: CatalogDocument, context: AssistantRouteContext = {}): AssistantDecision {
+  if (context.sketchPhotos && SKETCH_WORDS.test(message) && BUILD_VERB.test(message)) return { route: 'sketch' };
+  if (context.catalogFiles && FROM_FILES.test(message) && WHOLE_CATALOG.test(message) && BUILD_VERB.test(message)) return { route: 'catalog-draft' };
+  if (context.local) {
+    const local = routeLocally(message, { ...context.local, document, followUp: context.editFollowUp });
+    if (local.kind === 'local') return { route: 'local', local };
+  }
+  return { route: assistantLaneFor(message, document, { followUp: context.editFollowUp }) };
 }

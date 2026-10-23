@@ -1,0 +1,125 @@
+/* Onda 4.5 — "Arsenal": the team's saved models in the right column (navy/white baseline of styles.css).
+   The column widens to 440 px while the panel is open (like the assistant), so two cards fit side by side;
+   at 1280 px the page keeps about 660 px. FR-16b (60+): main actions 44 px with 15 px text, secondary text
+   13 px, every other target at least 36 px. */
+@media (min-width: 1101px) {
+  .vnext-shell[data-arsenal-open="true"] .vnext-workspace {
+    grid-template-columns: 196px minmax(440px, 1fr) min(440px, calc(100vw - 196px - 440px));
+  }
+  .vnext-shell[data-simple-by-default="true"][data-arsenal-open="true"] .vnext-workspace {
+    grid-template-columns: 176px minmax(440px, 1fr) min(440px, calc(100vw - 176px - 440px));
+  }
+}
+/* Narrow windows hide the right column: the arsenal opens over the page instead. */
+@media (max-width: 1100px) {
+  .vnext-shell[data-arsenal-open="true"] .vnext-side-column {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 70; display: flex; width: min(440px, 100vw);
+    box-shadow: -12px 0 32px rgb(23 32 51 / .18);
+  }
+}
+
+.vnext-arsenal { display: flex; flex: 1 1 0; min-width: 0; min-height: 0; flex-direction: column; background: #fff; color: #172033; }
+.vnext-arsenal[hidden] { display: none !important; }
+.vnext-arsenal-header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e1e7ee; padding: 14px 16px 10px; }
+.vnext-arsenal-header h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: #003f78; font-size: 18px; line-height: 1.3; }
+.vnext-arsenal-header p { margin: 4px 0 0; color: #536176; font-size: 13px; line-height: 1.45; }
+.vnext-arsenal button { font: inherit; cursor: pointer; }
+.vnext-arsenal button:focus-visible, .vnext-arsenal input:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
+.vnext-arsenal-close { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 44px; border: 1px solid #c8d2de; border-radius: 7px; background: #fff; color: #31445b; font-size: 15px; font-weight: 700; padding: 0 12px; }
+.vnext-arsenal-close:hover { background: #eef2f6; color: #003f78; }
+
+.vnext-arsenal-tools { display: grid; flex: none; gap: 10px; border-bottom: 1px solid #e1e7ee; background: #f7f9fb; padding: 10px 16px 12px; }
+.vnext-arsenal-search { display: flex; align-items: center; gap: 8px; min-height: 44px; border: 1px solid #bdc9d6; border-radius: 7px; background: #fff; color: #536176; padding: 0 10px; }
+.vnext-arsenal-search:focus-within { border-color: #0072ce; box-shadow: 0 0 0 3px rgba(0,114,206,.18); }
+.vnext-arsenal-search input { flex: 1 1 auto; min-width: 0; min-height: 36px; border: 0; background: transparent; color: #172033; font: inherit; font-size: 15px; outline: none; }
+.vnext-arsenal-search input:focus-visible { outline: none; }
+.vnext-arsenal-categories { display: flex; flex-wrap: wrap; gap: 6px; }
+.vnext-arsenal-categories button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 1px solid #c8d2de; border-radius: 999px; background: #fff; color: #31445b; font-size: 15px; font-weight: 700; padding: 0 12px; }
+.vnext-arsenal-categories button:hover { border-color: #8fb2d8; color: #003f78; }
+.vnext-arsenal-categories button[aria-pressed="true"] { border-color: #003f78; background: #003f78; color: #fff; }
+.vnext-arsenal-count { min-width: 20px; border-radius: 999px; background: #eef2f6; color: #41546b; font-size: 13px; line-height: 20px; text-align: center; padding: 0 6px; }
+.vnext-arsenal-categories button[aria-pressed="true"] .vnext-arsenal-count { background: rgb(255 255 255 / .2); color: #fff; }
+
+.vnext-arsenal-body { flex: 1 1 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 12px 16px 20px; }
+.vnext-arsenal-empty { margin: 18px 0; color: #536176; font-size: 15px; line-height: 1.5; }
+.vnext-arsenal-last { margin: 0 0 12px; border-left: 3px solid #0072ce; background: #f2f7fc; color: #24364d; font-size: 15px; line-height: 1.45; padding: 8px 10px; }
+.vnext-arsenal-problem { display: grid; gap: 8px; margin: 0 0 12px; border: 1px solid #f0c36d; border-radius: 8px; background: #fff8e8; padding: 10px 12px; }
+.vnext-arsenal-problem p { margin: 0; color: #5c4400; font-size: 15px; line-height: 1.45; }
+.vnext-arsenal-problem button { justify-self: start; min-height: 44px; border: 1px solid #c8d2de; border-radius: 7px; background: #fff; color: #003f78; font-weight: 700; padding: 0 12px; }
+.vnext-arsenal-section + .vnext-arsenal-section { margin-top: 18px; }
+.vnext-arsenal-section h3 { margin: 0 0 8px; color: #33445a; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+.vnext-arsenal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.vnext-arsenal-card { display: flex; min-width: 0; flex-direction: column; gap: 6px; border: 1px solid #d7dee8; border-radius: 9px; background: #fff; padding: 8px; }
+.vnext-arsenal-card:hover { border-color: #b9cce3; box-shadow: 0 2px 8px rgb(23 32 51 / .08); }
+.vnext-arsenal-card-picture { display: flex; min-height: 96px; align-items: center; justify-content: center; border-radius: 6px; background: #eef2f6; padding: 6px; }
+.vnext-arsenal-card-name { margin: 2px 0 0; color: #172033; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.vnext-arsenal-card-meta { display: grid; gap: 3px; }
+.vnext-arsenal-card-meta p { margin: 0; color: #536176; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.vnext-arsenal-card-description { color: #41546b !important; }
+.vnext-arsenal-card-note { color: #8a5a00 !important; font-weight: 700; }
+.vnext-arsenal-origin { display: inline-block; border-radius: 4px; background: #e8f0fa; color: #003f78; font-size: 13px; font-weight: 700; line-height: 19px; padding: 0 6px; }
+.vnext-arsenal-origin[data-origin="PRESYS"] { background: #003f78; color: #fff; }
+.vnext-arsenal-origin[data-origin="IA"] { background: #f1ecff; color: #4b2a9a; }
+.vnext-arsenal-origin[data-origin="Você"] { background: #e6f5ec; color: #1f5f3a; }
+.vnext-arsenal-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.vnext-arsenal-tags > span:not(.sr-only) { border: 1px solid #d7dee8; border-radius: 999px; color: #41546b; font-size: 13px; line-height: 19px; padding: 0 7px; }
+.vnext-arsenal-card-actions { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 4px; }
+.vnext-arsenal-use { flex: 1 1 auto; min-height: 44px; border: 1px solid #003f78; border-radius: 7px; background: #003f78; color: #fff; font-size: 15px; font-weight: 700; padding: 0 14px; }
+.vnext-arsenal-use:hover:not(:disabled) { background: #00519b; }
+.vnext-arsenal-use:disabled { border-color: #c8d2de; background: #eef2f6; color: #8593a6; cursor: not-allowed; }
+.vnext-arsenal .vnext-library-row-menu > button { display: inline-flex; align-items: center; gap: 4px; min-width: 44px; min-height: 44px; justify-content: center; border: 1px solid #c8d2de; border-radius: 7px; background: #fff; color: #31445b; font-size: 15px; font-weight: 700; padding: 0 10px; }
+.vnext-arsenal .vnext-library-row-menu > button:hover { background: #eef2f6; color: #003f78; }
+.vnext-arsenal .vnext-library-row-menu-list button { display: flex; width: 100%; align-items: center; gap: 8px; min-height: 44px; border: 0; border-radius: 6px; background: transparent; color: #24364d; font-size: 15px; text-align: left; padding: 0 10px; }
+.vnext-arsenal .vnext-library-row-menu-list button:hover, .vnext-arsenal .vnext-library-row-menu-list button:focus-visible { background: #eef2f6; outline: 0; }
+
+/* Pictures: the live page cut to the interesting part (a header shows its band, a page the whole sheet). */
+.vnext-arsenal-thumb { display: flex; width: 100%; align-items: center; justify-content: center; pointer-events: none; }
+.vnext-arsenal-thumb.is-empty { height: 120px; background: repeating-linear-gradient(#e2e8f0 0 4px, transparent 4px 12px); border-radius: 4px; opacity: .7; }
+.vnext-arsenal-thumb-crop { position: relative; display: block; width: 100%; overflow: hidden; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 1px 2px rgba(23,32,51,.08); }
+.vnext-arsenal-thumb-crop.is-tall { width: auto; height: 150px; max-width: 100%; }
+.vnext-arsenal-thumb-page { position: absolute; display: block; }
+.vnext-arsenal-thumb-page .vnext-page-thumbnail { border: 0; box-shadow: none; }
+
+/* Dialogs (Guardar, Renomear, Apagar). */
+.vnext-arsenal-dialog-backdrop { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 16px; background: rgb(23 32 51 / .5); font-family: var(--vnext-font-family, 'Noto Sans', Arial, sans-serif); }
+.vnext-arsenal-dialog { position: relative; box-sizing: border-box; width: min(680px, 100%); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid #d8e0e8; border-radius: 12px; background: #fff; box-shadow: 0 18px 48px rgb(23 32 51 / .24); color: #172033; padding: 22px 24px; }
+.vnext-arsenal-dialog.is-small { width: min(460px, 100%); }
+.vnext-arsenal-dialog:focus { outline: none; }
+.vnext-arsenal-dialog h2 { margin: 0 44px 10px 0; color: #003f78; font-size: 20px; line-height: 1.3; overflow-wrap: anywhere; }
+.vnext-arsenal-dialog p { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.vnext-arsenal-dialog button, .vnext-arsenal-dialog input, .vnext-arsenal-dialog select { font: inherit; }
+.vnext-arsenal-dialog button:focus-visible, .vnext-arsenal-dialog input:focus-visible, .vnext-arsenal-dialog select:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
+.vnext-arsenal-dialog-close { position: absolute; top: 12px; right: 12px; display: inline-grid; place-items: center; width: 44px; height: 44px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #41546b; cursor: pointer; }
+.vnext-arsenal-dialog-close:hover { background: #eef2f6; }
+.vnext-arsenal-dialog-intro { color: #536176; }
+.vnext-arsenal-dialog-problem { border-left: 3px solid #b42318; background: #fef3f2; color: #7a271a; padding: 8px 10px; }
+.vnext-arsenal-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.vnext-arsenal-dialog-actions button { min-height: 44px; border: 1px solid #c8d2de; border-radius: 7px; background: #fff; color: #31445b; cursor: pointer; font-size: 15px; font-weight: 700; padding: 0 16px; }
+.vnext-arsenal-dialog-actions .is-primary { border-color: #003f78; background: #003f78; color: #fff; }
+.vnext-arsenal-dialog-actions .is-danger { border-color: #b42318; background: #b42318; color: #fff; }
+.vnext-arsenal-dialog-actions button:disabled { opacity: .6; cursor: not-allowed; }
+.vnext-arsenal-field { display: grid; gap: 5px; margin: 0 0 12px; color: #33445a; font-size: 15px; font-weight: 700; }
+.vnext-arsenal-field input, .vnext-arsenal-field select { min-height: 44px; border: 1px solid #bdc9d6; border-radius: 7px; background: #fff; color: #172033; font-size: 15px; font-weight: 400; padding: 0 10px; }
+.vnext-arsenal-field small { color: #536176; font-size: 13px; font-weight: 400; line-height: 1.4; }
+.vnext-arsenal-save-body { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 18px; margin-top: 8px; }
+.vnext-arsenal-save-picture { display: flex; align-items: flex-start; justify-content: center; border-radius: 8px; background: #eef2f6; padding: 10px; }
+.vnext-arsenal-save-picture .vnext-arsenal-thumb-crop.is-tall { height: 200px; }
+.vnext-arsenal-choice { display: grid; gap: 6px; margin: 0 0 12px; border: 1px solid #d8e0ea; border-radius: 8px; padding: 8px 12px 10px; }
+.vnext-arsenal-choice legend { color: #33445a; font-size: 15px; font-weight: 700; padding: 0 4px; }
+.vnext-arsenal-choice label, .vnext-arsenal-values label { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 15px; cursor: pointer; }
+.vnext-arsenal-choice input, .vnext-arsenal-values input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: #003f78; }
+.vnext-arsenal-values { display: grid; gap: 6px; margin: 0 0 12px; border: 1px solid #b9cce3; border-radius: 8px; background: #f2f7fc; padding: 10px 12px; }
+.vnext-arsenal-values p { margin: 0; color: #24364d; font-size: 15px; }
+.vnext-arsenal-notes { margin: 0 0 12px; padding-left: 20px; color: #41546b; font-size: 14px; line-height: 1.5; }
+
+/* "Guardar no arsenal…" in Propriedades. */
+.vnext-arsenal-save-action { display: grid; gap: 6px; margin: 14px 0 4px; }
+.vnext-arsenal-save-action button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #b9cce3; border-radius: 7px; background: #fff; color: #003f78; cursor: pointer; font: inherit; font-size: 15px; font-weight: 700; padding: 0 12px; }
+.vnext-arsenal-save-action button:hover { background: #f2f7fc; }
+.vnext-arsenal-save-action button:focus-visible { outline: 3px solid rgba(0,114,206,.32); outline-offset: 2px; }
+
+@media (max-width: 620px) {
+  .vnext-arsenal-save-body { grid-template-columns: 1fr; }
+  .vnext-arsenal-dialog { padding: 18px 16px; }
+}

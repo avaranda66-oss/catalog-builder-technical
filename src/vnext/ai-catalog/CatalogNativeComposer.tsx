@@ -5,7 +5,11 @@ import {
   ComposerRequestError, editIntentGateway, nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
   type ComposerReadiness, type NativeComposeFunctionsClient,
 } from './native-compose-client';
-import { assistantRouteFor, type EditIntentGateway } from './edit-intents';
+import { assistantDecisionFor, assistantRouteFor, type EditIntentGateway } from './edit-intents';
+import type { LocalChoice, LocalRoute } from '../arsenal/local-router';
+import { buildAssistantArsenalAiIndex, type AssistantArsenal, type AssistantArsenalAiIndex } from '../arsenal/assistant-arsenal';
+import { applyLocalAction, planLocalStyle } from './local-assistant-actions';
+import { ArsenalChoiceCard, SaveToArsenalCard, localChoiceIntro, type SaveToArsenalPage } from './ArsenalAssistantCards';
 import { useEditIntent } from './useEditIntent';
 import { EditIntentCard } from './EditIntentCard';
 import { applyNativeTextEdit, plainSelectedEditorialText, proposeNativeTextEdit,
@@ -83,6 +87,11 @@ interface Props {
   /** What is selected on the page, in plain words ("Selecionado na página: tabela"). */
   selectionLabel?: string;
   /**
+   * Every object selected on the page (Onda 4.5: "pinta de vermelho" on a selected shape is answered without the AI,
+   * and the conversation that edits knows "this one"). Without it only the selected text and table are known.
+   */
+  selectedObjectIds?: readonly string[];
+  /**
    * J2-lite: reads a dropped PDF with the AI (server key) to build a verified specification table. Without it the
    * assistant never sends a file anywhere. Injectable so a proof harness can answer with a controlled provider.
    */
@@ -94,6 +103,20 @@ interface Props {
   sketchRequest?: { readonly at: number; readonly files: readonly File[] };
   /** The request was taken here (so a later remount does not read the same photos again). */
   onSketchRequestTaken?: () => void;
+  /**
+   * Onda 4.5: the team's arsenal. Simple requests are answered from it (and from a few actions of the editor) WITHOUT
+   * the AI; the AI gets its short index and may point at a preset; what the AI builds can be kept ("Guardar no
+   * arsenal?"). Without it the router without AI still answers new tables, model pages and simple style changes.
+   */
+  arsenal?: AssistantArsenal;
+}
+interface SendOptions {
+  /** The text to send instead of the message box ("Pedir à IA" on a card). */
+  readonly text?: string;
+  /** Straight to the AI: the router without AI already answered this request. */
+  readonly skipLocal?: boolean;
+  /** The request is already in the conversation (the card's "Pedir à IA"): not stored again. */
+  readonly alreadySaid?: boolean;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -115,6 +138,16 @@ interface InConversation { text: string; conversationId: string }
 /** FR-72: where the "Vou fazer isto" card sits (the plan itself lives in useEditIntent), or the card saying why not yet. */
 interface EditCardAt { conversationId: string; at: number; serial: number }
 interface ThreadItem { key: string; at: number; order: number; tail?: string; node: React.ReactNode }
+/** Onda 4.5: a card of the arsenal (found without the AI, or pointed at by the AI). */
+interface LocalCardAt extends EditCardAt { message: string; source: 'local' | 'ai'; route: Extract<LocalRoute, { kind: 'local' }> }
+/** Onda 4.5: "Guardar no arsenal?" after pages built by the AI were applied. */
+interface SaveOfferAt extends EditCardAt {
+  pages: readonly SaveToArsenalPage[];
+  /** The "Apliquei…" message that offers "Guardar no arsenal…" as a link (the form opens only when asked). */
+  turnId?: string;
+  /** The name and category fields are open. */
+  open?: boolean;
+}
 
 /** One free readiness check per client per minute; reopening the panel reuses it. */
 const readinessCache = new WeakMap<NativeComposeFunctionsClient, { at: number; value: Promise<ComposerReadiness> }>();
@@ -184,7 +217,7 @@ const bump = (value: number) => value + 1;
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
   canPublish, onPublication, selectionLabel, factExtraction, onShowPage, sketchRequest,
-  onSketchRequestTaken }: Props) {
+  onSketchRequestTaken, arsenal, selectedObjectIds: selectedOnPage }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -229,9 +262,17 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // Built at call time, so a bad personal key becomes a plain error in the conversation, never a broken panel.
   const editGateway = React.useMemo<EditIntentGateway | undefined>(() => client
     ? request => editIntentGateway(client, ownKey)(request) : undefined, [client, ownKey]);
-  const selectedObjectIds = React.useMemo(() => [selected?.objectId, selectedTable?.objectId]
-    .filter((id): id is string => Boolean(id)), [selected?.objectId, selectedTable?.objectId]);
+  const selectedKey = (selectedOnPage ?? []).join('|');
+  const selectedObjectIds = React.useMemo(() => [...new Set([...(selectedKey ? selectedKey.split('|') : []), selected?.objectId,
+    selectedTable?.objectId].filter((id): id is string => Boolean(id)))], [selectedKey, selected?.objectId, selectedTable?.objectId]);
   const editIntent = useEditIntent({ session, gateway: editGateway, activePageId, selectedObjectIds, onBeforeMutation });
+  // Onda 4.5: the arsenal in the conversation.
+  const [localCard, setLocalCard] = React.useState<LocalCardAt>();
+  const [localBusy, setLocalBusy] = React.useState(false);
+  const [saveOffer, setSaveOffer] = React.useState<SaveOfferAt>();
+  const [saveBusy, setSaveBusy] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string>();
+  const cardSerial = React.useRef(0);
   const proposalRef = React.useRef<HTMLDivElement>(null);
   const noticeRef = React.useRef<HTMLDivElement>(null);
   const focusNotice = React.useRef(false);
@@ -314,12 +355,12 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     if (saveTurn(conversationId, 'user', request, tool)) saveTurn(conversationId, 'assistant', response, tool);
     setFollow(bump);
   };
-  const send = async () => {
-    const text = message.trim();
+  const send = async (options: SendOptions = {}) => {
+    const text = (options.text ?? message).trim();
     if (!text || text.length > 1200 || busy || dailyLimitReached || conversationFull) return;
     const conversationId = activeIdRef.current;
     // A short request for a quick action ("Desfaça") runs here, without the AI.
-    const tool = rewriteMode ? null : quickToolForRequest(text, { onPublication, onEditor: onClose });
+    const tool = rewriteMode || options.alreadySaid ? null : quickToolForRequest(text, { onPublication, onEditor: onClose });
     if (tool) {
       setMessage(''); setUnsent(undefined);
       runTool(tool, text);
@@ -327,9 +368,14 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     }
     const isRewriting = rewriteMode && !!selected;
     const found = isRewriting ? {} : filesToRead(conversationId);
-    const route = isRewriting ? 'rewrite' : assistantRouteFor(text, session.getSnapshot().document, {
+    const routeContext = {
       editFollowUp: editFollowUp.current === conversationId, catalogFiles: Boolean(found.catalog), sketchPhotos: Boolean(found.photos),
+    };
+    // Onda 4.5: the router without AI first (arsenal, new table, model page, simple style), then the AI lanes.
+    const decision = isRewriting ? undefined : assistantDecisionFor(text, session.getSnapshot().document, {
+      ...routeContext, ...(options.skipLocal ? {} : { local: { activePageId, selectedObjectIds, presets: arsenal?.presets } }),
     });
+    let route = isRewriting ? 'rewrite' : decision!.route;
     // "Monte o catálogo com estes PDFs" / "crie a página deste rascunho": the same flows as the buttons under the files.
     if (route === 'sketch' && found.photos) {
       setMessage(''); setUnsent(undefined); setError('');
@@ -343,6 +389,11 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
       return;
     }
+    if (route === 'local' && decision?.local) {
+      if (showLocal(text, decision.local, conversationId)) return;
+      // A style change the editor could not plan here: the AI may understand it better.
+      route = assistantRouteFor(text, session.getSnapshot().document, routeContext);
+    }
     if (!client) {
       setError('A IA não está disponível nesta tela. Continue editando manualmente.');
       return;
@@ -351,7 +402,17 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     // will execute canonical document commands after a CAS revision check.
     const target = selected;
     const before = session.getSnapshot();
-    const earlier = conversationsRef.current.conversations.find((conversation) => conversation.id === conversationId)?.entries ?? [];
+    const stored = conversationsRef.current.conversations.find((conversation) => conversation.id === conversationId)?.entries ?? [];
+    // "Pedir à IA" on a card: the request is already the last one in the conversation; it goes as the message, not twice.
+    const lastUser = options.alreadySaid ? stored.map(turn => turn.role === 'user').lastIndexOf(true) : -1;
+    const earlier = lastUser >= 0 && stored[lastUser].content === redactConversationMessage(text)
+      ? stored.filter((_, index) => index !== lastUser) : stored;
+    const sayUser = (): Pick<WorkbenchEntry, 'timestamp'> | null => options.alreadySaid
+      ? { timestamp: new Date().toISOString() } : saveTurn(conversationId, 'user', text);
+    const unsentAgain = () => { if (!options.alreadySaid) restoreUnsent(text, conversationId); };
+    // The arsenal's short index goes only to a server that announces it (an older one would refuse the request).
+    const arsenalIndex = arsenal && arsenal.presets.length > 0 && readiness?.kind === 'ready' && readiness.arsenalIndex
+      ? buildAssistantArsenalAiIndex(arsenal.presets) : undefined;
     // Quick actions are local records: the AI only sees the real conversation.
     const history: NativeComposeRequest['history'] = earlier.filter(turn => !turn.action).slice(-8).map(turn => ({
       role: turn.role, message: redactConversationMessage(turn.content).slice(0, 800),
@@ -362,46 +423,48 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     // a failed or cancelled request never throws away what was already paid for.
     setBusy({ kind: route === 'edit' ? 'edit' : isRewriting ? 'rewrite' : 'compose', conversationId });
     setError(''); setUnsent(undefined);
-    setMessage('');
+    if (!options.alreadySaid) setMessage('');
     setFollow(bump);
     try {
       if (route === 'edit') {
-        await askEdit(text, conversationId, history, sequence);
+        await askEdit(text, conversationId, history, sequence, { sayUser, unsentAgain, arsenalIndex });
         return;
       }
       const reply = isRewriting && target
         ? await proposeNativeTextEdit(target, text, nativeTextEditGateway(client, ownKey), history)
-        : await requestNativeCompose(before.document, text, nativeComposeGateway(client, ownKey), history);
+        : await requestNativeCompose(before.document, text, nativeComposeGateway(client, ownKey), history, arsenalIndex?.entries ?? []);
       if (sequence !== requestSerial.current) return;
       if (session.getSnapshot().localSequence !== before.localSequence ||
           session.getSnapshot().document.id !== before.document.id) {
-        restoreUnsent(text, conversationId);
+        unsentAgain();
         setError('O catálogo mudou enquanto a IA respondia. Envie o pedido de novo para a versão atual.', conversationId);
         return;
       }
-      if (!saveTurn(conversationId, 'user', text)) return;
+      if (!sayUser()) return;
       // The conversation moved to new pages or a rewrite: an edit card from before is no longer the current answer.
       editFollowUp.current = undefined;
       if (reply.status !== 'clarification') { editIntent.discard(); setEditShown(undefined); }
-      if (reply.status === 'clarification') {
+      if (reply.status === 'use_preset') {
+        showAiChoice(reply.preset, reply.summary, arsenalIndex, text, conversationId);
+      } else if (reply.status === 'clarification') {
         saveTurn(conversationId, 'assistant', reply.question);
       } else if ('revisedText' in reply) {
         if (!isRewriting || !target) throw new Error('TEXT_EDIT_CONTEXT_LOST');
         const said = saveTurn(conversationId, 'assistant', 'Preparei uma reescrita do texto selecionado. Confira o antes e depois antes de aplicar.');
         // One proposal on screen at a time: a rewrite replaces a page proposal, and the reverse.
-        setPending(undefined);
+        setPending(undefined); setLocalCard(undefined);
         setPendingRewrite({ reply, target, revision: before.localSequence, serial: sequence, conversationId,
           at: said ? Date.parse(said.timestamp) : Date.now() });
       } else {
         const said = saveTurn(conversationId, 'assistant', reply.summary +
           ' Revise a proposta de ' + reply.pages.length + ' página(s) antes de aplicar. Nenhum valor técnico será inventado.');
-        setPendingRewrite(undefined);
+        setPendingRewrite(undefined); setLocalCard(undefined); setSaveOffer(undefined);
         setPending({ plan: reply, revision: before.localSequence, documentId: before.document.id, requestSequence: sequence,
           conversationId, at: said ? Date.parse(said.timestamp) : Date.now() });
       }
     } catch (failure) {
       if (sequence === requestSerial.current) {
-        restoreUnsent(text, conversationId);
+        unsentAgain();
         if (failure instanceof ComposerRequestError && failure.code === 'AGENT_DAILY_BUDGET_EXCEEDED' && !ownKey) setLimitAnswered(true);
         setError(failure instanceof ComposerRequestError && failure.code === 'PROVIDER_NOT_CONFIGURED' && !ownKey &&
           !ownKeyOfferedRef.current ? SERVER_AI_NOT_CONFIGURED + NOT_CHANGED
@@ -417,33 +480,147 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
    * FR-72: a change on the open catalog. A free readiness check first: a server without `edit_intent` is said in a
    * card, before anything is sent or paid. The AI only proposes; "Aplicar" on the card changes the catalog.
    */
-  const askEdit = async (text: string, conversationId: string, history: NativeComposeRequest['history'], sequence: number) => {
+  const askEdit = async (text: string, conversationId: string, history: NativeComposeRequest['history'], sequence: number,
+    turn: { sayUser: () => Pick<WorkbenchEntry, 'timestamp'> | null; unsentAgain: () => void; arsenalIndex?: AssistantArsenalAiIndex }) => {
     const ready = readiness ?? (client ? await cachedReadiness(client) : undefined);
     if (sequence !== requestSerial.current) return;
     const blocked = ready ? editIntentBlocked(ready, !!ownKey) : EDIT_NOT_DEPLOYED;
     if (blocked) {
-      const said = saveTurn(conversationId, 'user', text);
+      const said = turn.sayUser();
       if (said) setEditBlocked({ text: blocked, conversationId, at: Date.parse(said.timestamp) || Date.now(), serial: sequence });
       setFollow(bump);
       return;
     }
-    const answer = await editIntent.ask(text, history);
+    const answer = await editIntent.ask(text, history, turn.arsenalIndex?.entries ?? []);
     if (sequence !== requestSerial.current || (answer.kind === 'error' && !answer.text)) return;
     if (answer.kind === 'error') {
-      restoreUnsent(text, conversationId);
+      turn.unsentAgain();
       setError(answer.text, conversationId);
       return;
     }
-    if (!saveTurn(conversationId, 'user', text)) return;
+    if (!turn.sayUser()) return;
+    if (answer.kind === 'use_preset') {
+      editFollowUp.current = undefined;
+      setEditBlocked(undefined); setEditShown(undefined);
+      showAiChoice(answer.preset, answer.text || undefined, turn.arsenalIndex, text, conversationId);
+      return;
+    }
     const said = saveTurn(conversationId, 'assistant', answer.text);
     editFollowUp.current = answer.kind === 'refusal' ? undefined : conversationId;
     setEditBlocked(undefined);
     if (answer.kind === 'plan' && answer.plan.items.length > 0) {
       // One proposal on screen at a time.
-      setPending(undefined); setPendingRewrite(undefined);
+      setPending(undefined); setPendingRewrite(undefined); setLocalCard(undefined);
       setEditShown({ conversationId, at: said ? Date.parse(said.timestamp) : Date.now(), serial: sequence });
     } else {
       setEditShown(undefined);
+    }
+  };
+  /**
+   * Onda 4.5: what the router without AI found, as a card in the conversation (nothing was sent to the AI). A style
+   * change uses the "Vou fazer isto" card of the conversation that edits. false: nothing to show (the AI tries).
+   */
+  const showLocal = (text: string, local: Extract<LocalRoute, { kind: 'local' }>, conversationId: string): boolean => {
+    const primary = local.primary;
+    if (primary.kind === 'action' && primary.action.type === 'style') {
+      const plan = planLocalStyle(session, primary.action, text, selectedObjectIds);
+      if (!plan || plan.items.length === 0) return false;
+      setMessage(''); setUnsent(undefined); setError('');
+      if (!saveTurn(conversationId, 'user', text)) return true;
+      const said = saveTurn(conversationId, 'assistant', plan.summary + ' Confira o cartão antes de aplicar.', 'arsenal');
+      setPending(undefined); setPendingRewrite(undefined); setLocalCard(undefined); setEditBlocked(undefined);
+      editIntent.offer(plan);
+      editFollowUp.current = undefined;
+      setEditShown({ conversationId, at: said ? Date.parse(said.timestamp) : Date.now(), serial: ++cardSerial.current });
+      setFollow(bump);
+      return true;
+    }
+    setMessage(''); setUnsent(undefined); setError('');
+    if (!saveTurn(conversationId, 'user', text)) return true;
+    const said = saveTurn(conversationId, 'assistant', localChoiceIntro(primary, arsenal?.presets), 'arsenal');
+    setPending(undefined); setPendingRewrite(undefined); setSaveOffer(undefined); setEditBlocked(undefined);
+    editIntent.discard(); setEditShown(undefined);
+    editFollowUp.current = undefined;
+    setLocalCard({ conversationId, at: said ? Date.parse(said.timestamp) : Date.now(), serial: ++cardSerial.current,
+      message: text, source: 'local', route: local });
+    setFollow(bump);
+    return true;
+  };
+  /** Onda 4.5: the AI pointed at a preset of the index it received (ref a1…); the browser checks it still exists. */
+  const showAiChoice = (ref: string, summary: string | undefined, index: AssistantArsenalAiIndex | undefined, text: string,
+    conversationId: string) => {
+    const presetId = index?.presetIdOf(ref);
+    const preset = presetId ? arsenal?.presets.find(entry => entry.id === presetId) : undefined;
+    if (!preset) {
+      setError('A IA indicou um modelo do arsenal que não existe mais. Peça de novo, com outras palavras.' + NOT_CHANGED, conversationId);
+      return;
+    }
+    const said = saveTurn(conversationId, 'assistant', (summary ?? `Achei no arsenal: “${preset.name}”.`) + ' Usar não gasta IA.');
+    setPending(undefined); setPendingRewrite(undefined); setSaveOffer(undefined);
+    const primary: LocalChoice = { kind: 'preset', presetId: preset.id, name: preset.name, category: preset.category,
+      presetKind: preset.kind, scope: preset.scope, score: 1 };
+    setLocalCard({ conversationId, at: said ? Date.parse(said.timestamp) : Date.now(), serial: ++cardSerial.current,
+      message: text, source: 'ai', route: { kind: 'local', primary, others: [], confidence: 1 } });
+  };
+  /** "Usar" / "Aplicar" on an arsenal card: typed editor actions only, one Desfazer, never the AI. */
+  const applyLocalChoice = async (choice: LocalChoice) => {
+    const card = localCard;
+    if (!card || localBusy || busy) return;
+    if (onBeforeMutation && !onBeforeMutation()) {
+      setError('Conclua ou cancele a edição aberta antes de usar o modelo.', card.conversationId);
+      return;
+    }
+    if (choice.kind === 'action') {
+      if (choice.action.type === 'style') return;
+      const result = applyLocalAction(session, choice.action, { activePageId });
+      if (!result.ok) { setError(result.text, card.conversationId); return; }
+      rememberUndo(saveTurn(card.conversationId, 'assistant', result.text, 'arsenal'));
+      setLocalCard(undefined); setError('');
+      if (result.newPage) onShowPage?.(result.pageId);
+      else if (result.objectId) onShowTable?.(result.pageId, result.objectId);
+      setFollow(bump);
+      return;
+    }
+    if (!arsenal) return;
+    setLocalBusy(true);
+    try {
+      const result = await arsenal.use(choice.presetId, { session, activePageId, selectedObjectIds });
+      if (!result.ok) { setError(result.text, card.conversationId); return; }
+      const said = saveTurn(card.conversationId, 'assistant', result.text, 'arsenal');
+      // Nothing changed (a style already applied): no Desfazer here, it would undo the change before this one.
+      if (!result.unchanged) rememberUndo(said);
+      setLocalCard(undefined); setError('');
+      if (result.newPage) onShowPage?.(result.pageId);
+      else if (result.objectIds[0]) onShowTable?.(result.pageId, result.objectIds[0]);
+    } catch {
+      setError('Não deu para usar este modelo agora.' + NOT_CHANGED, card.conversationId);
+    } finally {
+      setLocalBusy(false);
+      setFollow(bump);
+    }
+  };
+  /** "Pedir à IA": the same request, straight to the AI (it is already in the conversation). */
+  const askAiFromCard = () => {
+    const card = localCard;
+    if (!card || busy) return;
+    setLocalCard(undefined);
+    void send({ text: card.message, skipLocal: true, alreadySaid: true });
+  };
+  /** "Guardar no arsenal" on the offer after pages built by the AI. */
+  const saveToArsenal = async (pageId: string, name: string, category: 'capas' | 'paginas') => {
+    const offer = saveOffer;
+    if (!offer || !arsenal?.save || saveBusy) return;
+    setSaveBusy(true); setSaveError(undefined);
+    try {
+      const result = await arsenal.save({ document: session.getSnapshot().document, pageId, name, category });
+      if (!result.ok) { setSaveError(result.text); return; }
+      saveTurn(offer.conversationId, 'assistant', result.text, 'arsenal');
+      setSaveOffer(undefined);
+    } catch {
+      setSaveError('Não deu para guardar agora. Tente de novo em instantes.');
+    } finally {
+      setSaveBusy(false);
+      setFollow(bump);
     }
   };
   const approveEdit = () => {
@@ -492,9 +669,21 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       return;
     }
     try {
+      const beforePages = new Map(session.getSnapshot().document.pages.map(page => [page.id, page.objects.length]));
       const result = applyNativeCompose(session, pending.plan, pending.revision);
-      rememberUndo(saveTurn(pending.conversationId, 'assistant', 'Apliquei ' + result.pagesAdded + ' página(s) e ' +
-        result.tablesAdded + ' tabela(s) editáveis no catálogo. Os campos técnicos ficam vazios; revise e depois salve.'));
+      const said = saveTurn(pending.conversationId, 'assistant', 'Apliquei ' + result.pagesAdded + ' página(s) e ' +
+        result.tablesAdded + ' tabela(s) editáveis no catálogo. Os campos técnicos ficam vazios; revise e depois salve.');
+      rememberUndo(said);
+      // Onda 4.5: what the AI built can be kept in the arsenal (the person names it; nothing is saved without "Guardar").
+      if (arsenal?.save) {
+        const built = session.getSnapshot().document.pages.filter(page =>
+          !beforePages.has(page.id) || (beforePages.get(page.id) === 0 && page.objects.length > 0));
+        const pages = built.slice(0, pending.plan.pages.length).map((page, index): SaveToArsenalPage => ({
+          pageId: page.id, heading: pending.plan.pages[index].heading, type: pending.plan.pages[index].type }));
+        setSaveError(undefined);
+        setSaveOffer(pages.length ? { conversationId: pending.conversationId, pages, serial: ++cardSerial.current,
+          at: said ? Date.parse(said.timestamp) : Date.now(), turnId: said?.id } : undefined);
+      }
       setPending(undefined);
       setError('');
     } catch {
@@ -615,6 +804,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // ------------------------------------------------------------------ the conversation, in order
   const inActive = (item: { conversationId?: string } | undefined): boolean =>
     Boolean(item) && (!item?.conversationId || item.conversationId === active.id);
+  const shownSaveOffer = inActive(saveOffer) && arsenal?.save ? saveOffer : undefined;
+  // Onda 4.5: after "Apliquei…" the offer is a link in that message, so the conversation keeps its messages in view.
+  const saveLinkTurn = shownSaveOffer && !shownSaveOffer.open ? shownSaveOffer.turnId : undefined;
   const items: ThreadItem[] = turns.map((turn) => ({
     key: turn.id, at: Date.parse(turn.timestamp) || 0, order: 0,
     node: <article key={turn.id} className={'ai-chat-msg ai-chat-turn ai-chat-' + turn.role} data-chat-action={turn.action}>
@@ -623,6 +815,11 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <p>{turn.content}</p>
         {undoable.get(turn.id) === snapshot.localSequence && snapshot.canUndo && (
           <button type="button" className="ai-chat-link" onClick={() => undoFromConversation(turn.id)}>Desfazer</button>
+        )}
+        {saveLinkTurn === turn.id && (
+          <button type="button" className="ai-chat-link" data-arsenal-save-offer="" aria-expanded={false}
+            title="A equipe pode usar de novo o que a IA montou, sem gastar IA"
+            onClick={() => setSaveOffer((current) => current && { ...current, open: true })}>Guardar no arsenal…</button>
         )}
       </div>
     </article>,
@@ -739,6 +936,27 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         onApply={approveEdit} onAdjust={() => adjust('Ajuste o pedido: ')} onDiscard={discardEdit} />,
     });
   }
+  const shownLocal = inActive(localCard) ? localCard : undefined;
+  if (shownLocal) {
+    items.push({
+      key: `arsenal:${shownLocal.serial}`, at: shownLocal.at, order: 2,
+      node: <ArsenalChoiceCard key={`arsenal:${shownLocal.serial}`} primary={shownLocal.route.primary} others={shownLocal.route.others}
+        source={shownLocal.source} presets={arsenal?.presets} renderThumbnail={arsenal?.renderThumbnail}
+        busy={localBusy || !!busy} cardRef={proposalRef} onUse={(choice) => { void applyLocalChoice(choice); }}
+        onAskAi={shownLocal.source === 'local' && client ? askAiFromCard : undefined}
+        onOpenGallery={arsenal?.openGallery ? () => arsenal.openGallery?.(shownLocal.message) : undefined}
+        onDiscard={() => setLocalCard(undefined)} />,
+    });
+  }
+  if (shownSaveOffer && !saveLinkTurn) {
+    items.push({
+      key: `arsenal-save:${shownSaveOffer.serial}`, at: shownSaveOffer.at, order: 2,
+      node: <SaveToArsenalCard key={`arsenal-save:${shownSaveOffer.serial}`} pages={shownSaveOffer.pages} busy={saveBusy}
+        startOpen={shownSaveOffer.open}
+        error={saveError} onSave={(pageId, name, category) => { void saveToArsenal(pageId, name, category); }}
+        onDismiss={() => { setSaveOffer(undefined); setSaveError(undefined); }} />,
+    });
+  }
   const shownEditBlocked = inActive(editBlocked) ? editBlocked : undefined;
   if (shownEditBlocked) {
     items.push({
@@ -789,7 +1007,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // The spec-table preview is not revealed from its top: the conversation follows to its end, where "Aplicar" is.
   const revealKey = shownPending ? `pages:${shownPending.requestSequence}`
     : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}`
-      : shownEdit ? `edit:${shownEdit.serial}` : '';
+      : shownEdit ? `edit:${shownEdit.serial}` : shownLocal ? `arsenal:${shownLocal.serial}` : '';
 
   // ------------------------------------------------------------------ header menus
   const history: ChatMenuSection[] = [{

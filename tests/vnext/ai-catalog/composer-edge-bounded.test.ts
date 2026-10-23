@@ -333,7 +333,8 @@ describe('server key by default, personal key only in advanced mode', () => {
     const r = await x.request({ version: 1, task: 'status' });
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true,
-      byok: true, tasks: ['compose_scaffold', 'revise_selected_text', 'edit_intent'], remainingMicrousd: null, callReserveMicrousd: 7800 } });
+      byok: true, tasks: ['compose_scaffold', 'revise_selected_text', 'edit_intent'], features: ['arsenal_index'],
+      remainingMicrousd: null, callReserveMicrousd: 7800 } });
     expect(x.fetch).not.toHaveBeenCalled();
     expect(x.rpc).not.toHaveBeenCalled();
     const missing = sandbox({ serverKey: null, byok: false });

@@ -1,0 +1,5 @@
+/* Onda 4.5: arsenal card picture. The sheet is a PageThumbnail scaled so the viewport of the preset fills the card;
+   whatever falls outside the sheet shows the neutral card background. */
+.vnext-arsenal-thumbnail { position: relative; display: block; width: 100%; overflow: hidden; background: #e9eef3; border-radius: 4px; pointer-events: none; }
+.vnext-arsenal-thumbnail-sheet { position: absolute; display: block; }
+.vnext-arsenal-thumbnail-sheet > .vnext-page-thumbnail { box-shadow: none; }
