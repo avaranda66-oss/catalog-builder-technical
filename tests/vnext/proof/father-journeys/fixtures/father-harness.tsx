@@ -74,6 +74,7 @@ import {
   createTranslationCenterFoundation,
 } from '@/vnext/translation';
 import { TranslationReviewCoordinator } from '@/vnext/translation/review-coordinator';
+import { createFatherArsenal } from './father-arsenal';
 import '@fontsource/noto-sans/400.css';
 import '@fontsource/noto-sans/700.css';
 
@@ -534,6 +535,8 @@ const repository = new LocalCatalogRepository();
 const recoveryRepository = new IndexedDbRecoveryRepository({ databaseName: recoveryDatabaseName });
 const assetRepository = new LocalAssetRepository();
 const translationProvider = new ControlledTranslationProvider();
+// Arsenal (Onda 4.5): o localStorage faz o papel do servidor; A e B veem o mesmo arsenal da equipe.
+const arsenal = createFatherArsenal({ userId: HARNESS_USER_ID, user, createId: createUuid });
 
 let activeRuntime: VNextPersistenceRuntime | undefined;
 let activeBridge: DefaultAssetPersistenceBridge | undefined;
@@ -816,8 +819,11 @@ const api = {
       draftCalls: [...draftCalls],
       draftUploads: [...draftUploads],
       translationRequests: translationProvider.requests.length,
+      arsenalTeamPresets: arsenal.storedTeamPresets(),
     };
   },
+  /** Arsenal da equipe (repositório e serviço), para as provas semearem e conferirem presets. */
+  arsenal: { repository: arsenal.repository, service: arsenal.service },
   holdSaves(value: boolean) { repository.holdSaves = value; },
   releaseHeld() { return repository.releaseHeld(); },
   flushRecovery() { return activeRuntime?.recoveryManager?.flush(); },
