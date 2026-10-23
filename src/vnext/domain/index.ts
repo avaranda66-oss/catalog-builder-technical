@@ -11,6 +11,8 @@ export {
   TextStyleSchema,
   PaintSchema,
   PageBackgroundSchema,
+  PageFooterSchema,
+  PAGE_FOOTER_LIMITS,
   PolygonPointSchema,
   PolygonStyleSchema,
   ShapeStyleSchema,
@@ -45,6 +47,7 @@ export type {
   LeafEditorialObject,
   Paint,
   PageBackground,
+  PageFooter,
   PolygonObject,
   PolygonPoint,
   PolygonStyle,
@@ -53,6 +56,21 @@ export type {
   TextBox,
   TextLeader,
 } from './editorial-model';
+export {
+  PAGE_FOOTER_GEOMETRY,
+  allPageFooterText,
+  footerDateText,
+  footerLanguageCode,
+  pageFooterBandMm,
+  pageFooterControlText,
+  pageFooterFileTitle,
+  pageFooterFont,
+  pageFooterReserveBottomMm,
+  pageFooterShows,
+  pageFooterTexts,
+  pageNumberText,
+} from './page-footer';
+export type { PageFooterBandMm, PageFooterPageBox, PageFooterTexts } from './page-footer';
 export { walkPageObjects, findObjectInTree, frameToCanonicalU, visualPageObjects } from './object-tree';
 export type { CanonicalFrameU, ObjectTreeEntry, VisualPageObject } from './object-tree';
 export { VNextError, asDiagnostic, diagnostic } from './diagnostics';

@@ -4,7 +4,7 @@ import { DocumentRenderer } from '../rendering';
 import { releasePublicationResources, reviewPublication, samePublicationSource, verifyPublicationForPrint, type PublicationReviewResult, type PublicationSource } from '../publication/review';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
 import { publicationDiagnosticDetails, publicationDiagnosticLocation, publicationDiagnosticText } from './publication-diagnostic-presentation';
-import type { Diagnostic } from '../domain';
+import { pageFooterFileTitle, type Diagnostic } from '../domain';
 
 /**
  * C-04: "Corrigir este item" closes the review, so the blocked status tells the real way back: fix in the editor and
@@ -14,7 +14,14 @@ export const PUBLICATION_BLOCKED_MESSAGE = 'Publicação bloqueada. Clique em �
   + 'Depois de corrigir, clique em Publicar / PDF de novo.';
 const PUBLICATION_BLOCKED_WITHOUT_LOCATE = 'Publicação bloqueada. Volte ao editor, corrija os itens abaixo e clique em Publicar / PDF de novo.';
 
-/** The browser uses the page title as its suggested PDF filename. */
+/**
+ * The browser uses the page title as its suggested PDF filename. FR-55: with a document code in the page footer the
+ * file is named "<código>-<rev>_<IDIOMA>" (e.g. "MAN-PCON-XV-03_PT.pdf"); otherwise the catalog title.
+ */
+export function publicationFileTitle(document: Parameters<typeof pageFooterFileTitle>[0] & { title: string }): string {
+  return pdfFileTitle(pageFooterFileTitle(document) ?? document.title);
+}
+
 function pdfFileTitle(title: string): string {
   return title.replace(/[<>:"/\\|?*]|\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim()
     .replace(/\.pdf$/i, '').replace(/[. ]+$/, '').slice(0, 120) || 'Catálogo';
@@ -94,7 +101,7 @@ export function PublicationReview({ getSource, subscribe, onClose, onLocateDiagn
       flushSync(() => setRunning(false));
       if (host.current) host.current.dataset.printApproved = 'true';
       restoreTitle();
-      const suggested = pdfFileTitle(result.document.title);
+      const suggested = publicationFileTitle(result.document);
       printTitle.current = { previous: document.title, suggested };
       document.title = suggested;
       window.print();

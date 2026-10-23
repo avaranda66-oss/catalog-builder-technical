@@ -22,7 +22,7 @@ import {
   type TableObject,
   type TextObject,
 } from '../domain';
-import { compilePlans, DocumentRenderer, type LayoutSnapshot, type TablePlan } from '../rendering';
+import { compilePlans, DocumentSliceRenderer, type LayoutSnapshot, type TablePlan } from '../rendering';
 import {
   explicitTableAxisIds,
   navigateTableSelection,
@@ -161,6 +161,7 @@ import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
 import { NativeStyleSection } from './editor/NativeStyleSection';
 import { PageBackgroundSection } from './editor/PageBackgroundSection';
+import { PageFooterSection } from './editor/PageFooterSection';
 import { ElementInsertButtons } from './editor/ElementInsertButtons';
 import { polygonHitClipPath } from '../editor/native-element-authoring';
 import { TextEditToolbar } from './editor/TextEditToolbar';
@@ -4464,7 +4465,8 @@ export function EditorWorkspace({
               beginEmptyAreaPointer(event);
             }}>
             <div ref={pageStageRef} className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
-              <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
+              <DocumentSliceRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS}
+                numbering={{ firstPageNumber: Math.max(1, selectedPageIndex + 1), pageCount: document.pages.length }} />
               <div ref={editorOverlayRef} className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor"
                 onPointerDown={(event) => {
                   const target = event.target as HTMLElement;
@@ -5092,6 +5094,11 @@ export function EditorWorkspace({
               : 'Clique em um objeto da página para mover, redimensionar ou ajustar sua geometria.'}</p>
             {editorState.activePageId && selectedObjects.length === 0 && (
               <PageBackgroundSection pageId={editorState.activePageId} session={session}
+                prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                onMessage={setStatusMessage} />
+            )}
+            {editorState.activePageId && selectedObjects.length === 0 && (
+              <PageFooterSection pageId={editorState.activePageId} session={session}
                 prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
                 onMessage={setStatusMessage} />
             )}

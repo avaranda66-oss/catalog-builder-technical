@@ -1,0 +1,10 @@
+/* Onda 4 (FR-55): "Rodapé de todas as páginas". Label above a full-width field: codes are long. */
+.vnext-page-footer-field { display: grid; gap: 4px; min-width: 0; color: #31445b; font-size: 11px; font-weight: 600; }
+.vnext-page-footer-field input { min-height: 32px; width: 100%; min-width: 0; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff;
+  color: #1f2d3d; font: inherit; font-size: 12px; font-weight: 500; padding: 4px 8px; }
+.vnext-page-footer-preview { margin: 0; color: #31445b; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.vnext-page-footer-review { display: grid; gap: 6px; border: 1px solid #c7d1dd; border-radius: 6px; padding: 8px; background: #f7f9fb;
+  color: #31445b; font-size: 11px; }
+.vnext-page-footer-review p { margin: 0; font-weight: 600; }
+.vnext-page-footer-review ul { margin: 0; padding-left: 16px; max-height: 160px; overflow: auto; }
+@media (max-width: 900px) { .vnext-page-footer-field input { min-height: 44px; } }
