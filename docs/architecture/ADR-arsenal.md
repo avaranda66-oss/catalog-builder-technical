@@ -87,3 +87,10 @@ Usar um modelo **não chama a IA** (zero tokens): vira ações tipadas com um s�
 - Payload v2 pede migração que amplie o CHECK de `payload_schema_version` e um leitor que converta v1.
 - Fontes: um estilo com `fontFamily` que o catálogo de destino não tem cai na fonte padrão do documento.
 - Pendente: ensaio em Postgres real da migração 00031 (o teste da fatia é estático, como o de 00030).
+- Fatia arsenal-motor (captura/inserção/miniatura, `src/vnext/arsenal/arsenal-*.ts`): uma ação nova, `page.setSafeArea`
+  (CAS por `expectedSafeArea` → `TARGET_STALE`, um Desfazer), para a página do arsenal voltar com a área segura com que
+  foi desenhada (`page.add` cria 12 mm; os arquétipos PRESYS usam 10 mm). Todo o resto reusa ações existentes; modelos
+  embutidos `builtin:<templateId>` entram por `page.template.insert` quando o editor conhece o modelo. Posição sem
+  ponto: cabeçalho/rodapé no lugar de origem; o resto no meio da maior área livre (tabela: no topo), sempre dentro da
+  área segura e acima do rodapé de controle (FR-55). Estilo de texto não troca a família (fica a do documento, como no
+  inspetor). Um embutido com tabelas "A COMPLETAR" precisa de `tableValues: 'generic-values'` (senão é inválido).

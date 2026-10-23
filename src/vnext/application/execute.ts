@@ -1680,6 +1680,22 @@ export function executeApplicationAction(
         candidate = { ...document, pages: document.pages.map((entry, index) => index === pageIndex ? nextPage : entry) };
         break;
       }
+      case 'page.setSafeArea': {
+        const pageIndex = document.pages.findIndex((entry) => entry.id === action.pageId);
+        if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
+        const page = document.pages[pageIndex];
+        if (!sameValue(page.safeArea ?? null, action.expectedSafeArea)) {
+          return failure('TARGET_STALE', `Safe area of ${action.pageId} changed after the command was prepared`);
+        }
+        changed = !sameValue(page.safeArea ?? null, action.safeArea);
+        affectedIds = changed ? [action.pageId] : [];
+        createdIds = [];
+        if (!changed) break;
+        const { safeArea: _previousSafeArea, ...pageRest } = page;
+        const nextPage: Page = action.safeArea === null ? pageRest : { ...pageRest, safeArea: { ...action.safeArea } };
+        candidate = { ...document, pages: document.pages.map((entry, index) => index === pageIndex ? nextPage : entry) };
+        break;
+      }
       case 'table.cells.setContents': {
         const target = tableCellTarget(document, action);
         if (!target.ok) return target;
