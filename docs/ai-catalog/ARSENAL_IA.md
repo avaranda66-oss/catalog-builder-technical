@@ -33,7 +33,9 @@ Vai para a IA, como antes: escrever ou trocar texto, traduzir, apagar, mover; ar
 
 ## Para a integração
 
-- `CatalogNativeComposer` ganhou `arsenal?: AssistantArsenal` e `selectedObjectIds?` (o editor já passa a seleção). Falta montar `arsenal={createAssistantArsenal({ repository, insertion, capture, presets, isAssetAvailable, openGallery, renderThumbnail })}` no `EditorWorkspace` com as fatias de persistência, captura/inserção e galeria.
+- `CatalogNativeComposer` ganhou `arsenal?: AssistantArsenal` e `selectedObjectIds?` (o editor já passa a seleção).
+- **Montado (integração `claude/onda-45`):** `mountVNextApp` cria o arsenal com `createArsenalEditorRuntime` (`SupabaseArsenalRepository` + `createPresysArsenalBuiltinSource()` + `browserIsOffline`, `ArsenalService`, inserção e captura do motor, `viewer` do login, `isAssetAvailable` pelo resolvedor de fotos do app, que já instala a foto no catálogo aberto) e passa ao `VNextApp`. O `EditorWorkspace` usa `useAssistantArsenal` (uma lista só, lida ao abrir, depois de guardar e ao fechar o painel; miniatura do painel nos cartões; "Abrir o arsenal" abre o painel com as palavras do pedido na busca). O harness das provas monta igual.
+- Estilo que o objeto já tinha: a inserção devolve `unchanged: true`; painel e chat dizem "Nada mudou", não contam uso e não oferecem Desfazer.
 - **Deploy:** muda o `vnext-catalog-composer` (contrato no pacote; `maxBodyChars` 27 000). Sem migração. Servidor antigo: o navegador não manda o índice e tudo segue como antes.
 
 ## Testes
@@ -41,5 +43,5 @@ Vai para a IA, como antes: escrever ou trocar texto, traduzir, apagar, mover; ar
 ```bash
 npx vitest run tests/vnext/arsenal/local-router.test.ts tests/vnext/arsenal/assistant-arsenal.test.ts \
   tests/vnext/ai-catalog/arsenal-ai-contract.test.ts tests/vnext/ai-catalog/local-assistant-actions.test.ts \
-  tests/vnext/ai-catalog/catalog-native-composer-arsenal.test.tsx
+  tests/vnext/ai-catalog/catalog-native-composer-arsenal.test.tsx   tests/vnext/app/arsenal/arsenal-integration.test.tsx tests/vnext/app/arsenal/arsenal-assistant-editor.test.tsx
 ```
