@@ -10,6 +10,7 @@ import {
   ImageFocalPointSchema,
   PageBackgroundSchema,
   PageFooterSchema,
+  PageSchema,
   PolygonPointSchema,
   PolygonStyleSchema,
   RichTextSchema,
@@ -381,6 +382,25 @@ export const SetPageBackgroundActionSchema = z.object({
   expectedBackground: PageBackgroundSchema.nullable(),
   background: PageBackgroundSchema.nullable(),
 }).strict();
+
+/**
+ * Onda 4.5 (Arsenal): the printer-safe frame of one page (null = the page declares none). Used when a saved page
+ * comes back from the arsenal, so its safe area is the one it was designed with. `expectedSafeArea` is what the
+ * command was prepared from: a change made meanwhile is refused (TARGET_STALE); one command = one undo step.
+ */
+export const PageSafeAreaStateSchema = PageSchema.shape.safeArea.unwrap();
+
+export const SetPageSafeAreaActionSchema = z.object({
+  type: z.literal('page.setSafeArea'),
+  pageId: applicationId,
+  expectedSafeArea: PageSafeAreaStateSchema.nullable(),
+  safeArea: PageSafeAreaStateSchema.nullable(),
+}).strict().superRefine((action, context) => {
+  const area = action.safeArea;
+  if (area && (area.leftMm + area.rightMm >= 210 || area.topMm + area.bottomMm >= 297)) {
+    context.addIssue({ code: 'custom', path: ['safeArea'], message: 'Safe area must leave room inside the A4 page' });
+  }
+});
 
 /**
  * Onda 4 (FR-55): "Rodapé de todas as páginas" — code, revision, date and cover choice of the control footer, one
@@ -1035,6 +1055,7 @@ export const ApplicationActionSchema = z.union([
   SetTextBoxActionSchema,
   SetTextLeaderActionSchema,
   SetPageBackgroundActionSchema,
+  SetPageSafeAreaActionSchema,
   SetPageFooterActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
@@ -1082,6 +1103,7 @@ export type TableAnnotationTarget = z.infer<typeof TableAnnotationTargetSchema>;
 export type TableFitHeightTypography = z.infer<typeof TableFitHeightTypographySchema>;
 export type TextStylePatch = z.infer<typeof TextStylePatchSchema>;
 export type LineStyleState = z.infer<typeof LineStyleStateSchema>;
+export type PageSafeAreaState = z.infer<typeof PageSafeAreaStateSchema>;
 export type CellStylePatch = z.infer<typeof CellStylePatchSchema>;
 export type CellPropertyPatch = z.infer<typeof CellPropertyPatchSchema>;
 export type TableCellPropertyTarget = z.infer<typeof TableCellPropertyTargetSchema>;
