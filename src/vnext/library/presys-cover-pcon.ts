@@ -197,6 +197,12 @@ class CoverBuilder {
 }
 
 const pill = (fill: string): TextBox => ({ fill, paddingMm: 1.1, fitText: true });
+/**
+ * Onda 4 (P): what an empty selo says. Each piece names itself ("Faixa azul 1", "Modelo 6"), so "Camadas" lists
+ * 12 different selos instead of 12 × "A COMPLETAR"; the marker goes on a second line, so the name stays readable
+ * in the narrow selo, and the publication review still finds "A COMPLETAR".
+ */
+const pillPlaceholder = (name: string) => `${name}\n(${TO_FILL})`;
 const callout = (anchorXMm: number, anchorYMm: number): TextLeader =>
   ({ anchorXMm, anchorYMm, head: 'dot', elbow: false, color: K.white, thicknessPt: 0.6 });
 
@@ -222,10 +228,12 @@ export function buildPresysPconCoverPage(options: BuildPresysPconCoverOptions): 
   // Top of the coloured area.
   b.text('marca', 'PRESYS', [14, 14, 70, 10.859], { size: 19, bold: true, color: K.white });
   b.text('frase-topo', toFill('Frase do topo'), [120, 18, 76, 4.448], { size: 7.2, bold: true, color: K.cream, align: 'right' });
-  b.text('lado-a-titulo', TO_FILL, [14, 34, 70, 8.573], { size: 15, bold: true, color: K.white });
-  b.text('lado-b-titulo', TO_FILL, [126, 34, 70, 8.573], { size: 15, bold: true, color: K.white, align: 'right' });
-  b.text('lado-a-legenda', toFill('Legenda'), [14, 42.5, 64, 4.448], { size: 7.2, color: K.sky });
-  b.text('lado-b-legenda', toFill('Legenda'), [136, 42.5, 60, 7.496], { size: 7.2, color: K.cream, align: 'right' });
+  // Empty pieces name themselves (Onda 4, P) in words that still fit their box: "Título dourado (A COMPLETAR)" would
+  // not fit 70 mm at 15 pt, so the two side titles are just the colour of their half.
+  b.text('lado-a-titulo', toFill('Azul'), [14, 34, 70, 8.573], { size: 15, bold: true, color: K.white });
+  b.text('lado-b-titulo', toFill('Dourado'), [126, 34, 70, 8.573], { size: 15, bold: true, color: K.white, align: 'right' });
+  b.text('lado-a-legenda', toFill('Legenda azul'), [14, 42.5, 64, 4.448], { size: 7.2, color: K.sky });
+  b.text('lado-b-legenda', toFill('Legenda dourada'), [136, 42.5, 60, 7.496], { size: 7.2, color: K.cream, align: 'right' });
   // Callouts: the pointer is measured from the label's top-left corner and ends on the product photo.
   b.text('chamada-1', toFill('Detalhe 1'), [14, 158, 36, 7.496], { size: 7.2, bold: true, color: K.white, align: 'right' }, { leader: callout(57.4, -22.6) });
   b.text('chamada-2', toFill('Detalhe 2'), [14, 172, 36, 7.496], { size: 7.2, bold: true, color: K.white, align: 'right' }, { leader: callout(70.6, -37.1) });
@@ -233,18 +241,18 @@ export function buildPresysPconCoverPage(options: BuildPresysPconCoverOptions): 
   b.text('titulo', toFill('Nome do produto'), [14, 202, 182, 16.003], { size: 28, bold: true, color: K.ink });
   b.text('subtitulo', toFill('Descrição do produto'), [14, 215.5, 182, 6.001], { size: 10.5, color: K.text });
   b.text('destaque', toFill('Frase de destaque'), [14, 221.5, 182, 5.21], { size: 9, bold: true, color: K.gold });
-  b.text('pilulas-a-titulo', TO_FILL, [14, 230, 70, 4.194], { size: 6.6, bold: true, color: K.muted });
-  PILLS_A.forEach((key, index) => b.text(`pilula-${key}`, TO_FILL, [14 + index * 18.65, 235.2, 16.85, 6.6],
+  b.text('pilulas-a-titulo', toFill('Faixas azuis'), [14, 230, 70, 4.194], { size: 6.6, bold: true, color: K.muted });
+  PILLS_A.forEach((key, index) => b.text(`pilula-${key}`, pillPlaceholder(`Faixa azul ${index + 1}`), [14 + index * 18.65, 235.2, 16.85, 6.6],
     { size: 6.4, bold: true, color: K.white, align: 'center' }, { box: pill(K.pillNavy) }));
-  b.text('pilulas-b-titulo', TO_FILL, [84, 230, 112, 4.194], { size: 6.6, bold: true, color: K.muted });
-  PILLS_B.forEach((key, index) => b.text(`pilula-${key}`, TO_FILL, [84 + index * 23.3, 235.2, index === 3 ? 23.05 : 21.5, 6.6],
+  b.text('pilulas-b-titulo', toFill('Faixas douradas'), [84, 230, 112, 4.194], { size: 6.6, bold: true, color: K.muted });
+  PILLS_B.forEach((key, index) => b.text(`pilula-${key}`, pillPlaceholder(`Faixa dourada ${index + 1}`), [84 + index * 23.3, 235.2, index === 3 ? 23.05 : 21.5, 6.6],
     { size: 6.4, bold: true, color: K.white, align: 'center' }, { box: pill(K.gold) }));
   b.text('nota', toFill('Nota técnica'), [14, 245, 182, 7.158], { size: 6.8, color: K.muted });
   b.text('barra-modelos-titulo', toFill('Família'), [14, 259.4, 60, 4.11], { size: 6.4, bold: true, color: K.muted });
   const bar = G.familyBar;
   for (const index of MODELS) {
     const highlighted = index === current;
-    b.text(`modelo-${index}`, TO_FILL, [round4(bar.xMm + (index - 1) * bar.pitchMm), bar.yMm, bar.widthMm, bar.heightMm],
+    b.text(`modelo-${index}`, pillPlaceholder(`Modelo ${index}`), [round4(bar.xMm + (index - 1) * bar.pitchMm), bar.yMm, bar.widthMm, bar.heightMm],
       { size: 6.6, bold: true, color: highlighted ? K.white : K.muted, align: 'center' },
       { box: { fill: highlighted ? K.gold : K.white, stroke: { pattern: 'solid', thicknessPt: 0.75, color: highlighted ? K.gold : K.rule },
         cornerRadiusMm: 1.2, paddingMm: 2.2, fitText: true } });
@@ -252,8 +260,8 @@ export function buildPresysPconCoverPage(options: BuildPresysPconCoverOptions): 
   const pointerX = round4(bar.xMm + (current - 1) * bar.pitchMm + bar.widthMm / 2 - 1.5);
   b.polygon('modelo-atual-seta', [pointerX, 264.2, 3, 1.8], [[0, 0], [1, 0], [0.5, 1]], { kind: 'solid', color: K.ink });
   b.line('regua', [14, 278, 182, 0.3], K.rule);
-  b.text('rodape-1', TO_FILL, [14, 280.4, 182, 4.279], { size: 6.8, color: K.muted });
-  b.text('rodape-2', TO_FILL, [14, 284.4, 182, 4.279], { size: 6.8, color: K.muted });
+  b.text('rodape-1', toFill('Rodapé, linha 1'), [14, 280.4, 182, 4.279], { size: 6.8, color: K.muted });
+  b.text('rodape-2', toFill('Rodapé, linha 2'), [14, 284.4, 182, 4.279], { size: 6.8, color: K.muted });
   return {
     id: options.pageId, widthMm: 210, heightMm: 297,
     safeArea: { ...COVER_SAFE_AREA }, objects: b.objects,

@@ -187,7 +187,11 @@ export function useTextFitScale(flowRef: React.RefObject<HTMLElement>, enabled: 
     const range = globalThis.document.createRange();
     range.selectNodeContents(flow);
     const natural = typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect().width : 0;
-    const available = flow.parentElement?.clientWidth ?? 0;
+    // Onda 4 (P): the selo's side padding stays free of text (clientWidth includes it), as the publication review
+    // measures it: a text that only fitted over the padding was shown whole but reported as "não cabe".
+    const box = flow.parentElement;
+    const padding = box ? globalThis.getComputedStyle?.(box) : undefined;
+    const available = (box?.clientWidth ?? 0) - (Number.parseFloat(padding?.paddingLeft ?? '') || 0) - (Number.parseFloat(padding?.paddingRight ?? '') || 0);
     if (!(natural > 0) || !(available > 0) || natural <= available + 0.5 || scale <= 0.4) return;
     const next = Math.max(0.4, Math.floor(scale * (available / natural) * 100) / 100);
     if (next < scale) setState((current) => ({ ...current, scale: next }));
