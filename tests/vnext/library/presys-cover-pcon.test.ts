@@ -131,4 +131,33 @@ describe('Onda 3.5 S3 — "Capa de produto — PCON" made only of native element
     expect(name('titulo')).toBe('Texto “PCON HÍBRIDO”');
     expect(name('foto')).toBe('Imagem …rid-official-trim');
   });
+
+  it('names every empty piece of the template differently in "Camadas", and each one still asks to be filled (Onda 4, P)', () => {
+    const page = buildPresysPconCoverPage({ pageId: 'vazia' });
+    const document: CatalogDocument = { ...example, pages: [page], assets: [] };
+    const pieces = texts(page).filter((object) => plain(object).includes('A COMPLETAR'));
+    const names = pieces.map((object) => layerName(object, document, page));
+    // Before: 6 × Texto “A COMPLETAR” and 12 × Selo “A COMPLETAR”. Now every name is different and short enough to be
+    // shown whole (Camadas shows the first 5 words).
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.filter((value) => value.endsWith('…'))).toEqual([]);
+    expect(names).not.toContain('Texto “A COMPLETAR”');
+    expect(names).not.toContain('Selo “A COMPLETAR”');
+    expect(names).toEqual(expect.arrayContaining([
+      'Texto “Azul (A COMPLETAR)”', 'Texto “Dourado (A COMPLETAR)”',
+      'Texto “Legenda azul (A COMPLETAR)”', 'Texto “Legenda dourada (A COMPLETAR)”',
+      'Texto “Faixas azuis (A COMPLETAR)”', 'Selo “Faixa azul 1 (A COMPLETAR)”', 'Selo “Faixa azul 2 (A COMPLETAR)”',
+      'Texto “Faixas douradas (A COMPLETAR)”', 'Selo “Faixa dourada 4 (A COMPLETAR)”',
+      'Selo “Modelo 1 (A COMPLETAR)”', 'Selo “Modelo 6 (A COMPLETAR)”',
+      'Texto “Rodapé, linha 1 (A COMPLETAR)”', 'Texto “Rodapé, linha 2 (A COMPLETAR)”',
+      'Chamada “Detalhe 1 (A COMPLETAR)”', 'Texto “Nome do produto (A COMPLETAR)”',
+    ]));
+    // Only the brand comes written; every other text (and the photo box) is reported by the publication review.
+    expect(texts(page).filter((object) => !plain(object).includes('A COMPLETAR')).map((object) => object.id)).toEqual(['vazia-marca']);
+    const reported = new Set(placeholderDiagnostics(document).map((item) => item.objectId));
+    for (const object of pieces) expect(reported.has(object.id), object.id).toBe(true);
+    // The narrow selos keep the marker on its own line, so the name stays readable inside them.
+    expect(plain(byId(page, 'vazia-pilula-a1'))).toBe('Faixa azul 1\n(A COMPLETAR)');
+    expect(plain(byId(page, 'vazia-modelo-6'))).toBe('Modelo 6\n(A COMPLETAR)');
+  });
 });

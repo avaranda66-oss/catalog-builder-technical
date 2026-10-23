@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { plainRichText, type CatalogDocument, type EditorialObject } from '@/vnext/domain';
 import { createCatalogDocument } from '@/vnext/application';
 import { compilePlans, DocumentRenderer } from '@/vnext/rendering';
@@ -25,6 +25,8 @@ function html(document: CatalogDocument, assetUrls = new Map<string, string>()):
 }
 
 const frame = { xMm: 10, yMm: 10, widthMm: 40, heightMm: 20 };
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('Onda 3.5 native paint (screen and PDF share this DOM)', () => {
   it('renders a plain shape, line and text exactly as before (no new attributes)', () => {
@@ -101,6 +103,29 @@ describe('Onda 3.5 native paint (screen and PDF share this DOM)', () => {
     expect(markup).toContain('data-callout-leader=""');
     expect(markup).toContain('<polyline');
     expect(markup).toContain('white-space:pre');
+  });
+
+  it('shrinks the words of a selo to the room inside its side padding (the same room the publication review measures)', () => {
+    // Onda 4 (P): the words are 95 px wide at 10 pt; the selo is 100 px wide with 5 px of padding on each side, so only
+    // 90 px are free. Before, the padding counted as room: nothing shrank and the review said "não cabe".
+    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-text-box') ? 100 : 0;
+    });
+    const realStyle = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((element: Element) =>
+      (element.hasAttribute('data-text-box') ? { paddingLeft: '5px', paddingRight: '5px' } as CSSStyleDeclaration : realStyle(element)));
+    let flow: HTMLElement | undefined;
+    vi.spyOn(document, 'createRange').mockImplementation(() => ({
+      selectNodeContents: (node: Node) => { flow = node as HTMLElement; },
+      getBoundingClientRect: () => ({ width: 95 * Number.parseFloat(flow!.parentElement!.style.fontSize) / 10 }),
+    }) as unknown as Range);
+    const catalog = documentWith([{ id: 'selo', type: 'text', frame: { xMm: 14, yMm: 150, widthMm: 30, heightMm: 7 },
+      zIndex: 0, text: plainRichText('selo', 'Faixa azul 1'), style: { fontSizePt: 10 }, box: { fill: '#173F66', paddingMm: 1.1, fitText: true } }]);
+    const view = render(<DocumentRenderer document={catalog} plans={compilePlans(catalog).plans} assetUrls={new Map()} />);
+    const selo = view.container.querySelector<HTMLElement>('[data-text-box]')!;
+    expect(clientWidth).toHaveBeenCalled();
+    expect(selo.getAttribute('data-text-fit-scale')).toBe('0.94');
+    expect(selo.style.fontSize).toBe('9.4pt');
   });
 
   it('paints the page background colour and picture on the page itself, not as an object', () => {
