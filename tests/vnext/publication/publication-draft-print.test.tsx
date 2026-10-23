@@ -6,6 +6,7 @@ import { DRAFT_ACKNOWLEDGE_MESSAGE, PublicationReview } from '@/vnext/app/Public
 import { draftFileTitle, draftPrintHeadline, draftPrintSummary } from '@/vnext/app/publication-draft';
 import { createCatalogDocument } from '@/vnext/application/document';
 import { draftMarkText, plainRichText, type CatalogDocument, type Diagnostic } from '@/vnext/domain';
+import { PCON_COVER_COLORS } from '@/vnext/library/presys-cover-pcon';
 import type { PublicationReviewResult, PublicationSource } from '@/vnext/publication/review';
 
 const checks = vi.hoisted(() => ({ review: vi.fn(), verify: vi.fn(), release: vi.fn() }));
@@ -289,6 +290,34 @@ describe('draft wording', () => {
     expect(summary.groups.map(group => group.text)).toEqual(['1 texto ainda com “XXX”', '2 textos que não cabem no quadro']);
     expect(summary.technical.map(group => group.text)).toEqual(['As medidas das páginas não puderam ser confirmadas: textos e tabelas podem sair fora do lugar.']);
     expect(draftPrintHeadline(1)).toBe('Este PDF ainda tem 1 item a corrigir:');
+  });
+
+  it('the watermark stands out on the dark PCON cover as much as on a white page', () => {
+    // Review finding: a 16 % grey word alone vanishes on the navy and gold cover (about 1.1:1), so the first page of a
+    // draft could pass for the final catalog. Every background needs one paint at least as visible as the grey on white.
+    const css = readFileSync(resolve(__dirname, '../../../src/vnext/rendering/styles.css'), 'utf8');
+    const rule = /\.editorial-draft-watermark > span \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    const paint = (property: string) => {
+      const found = new RegExp(`(?:^|;)\\s*${property}:\\s*(?:[\\d.]+mm\\s+)?rgb\\((\\d+) (\\d+) (\\d+) / ([\\d.]+)\\)`).exec(rule);
+      return found ? { rgb: [found[1], found[2], found[3]].map(Number), alpha: Number(found[4]) } : undefined;
+    };
+    expect(paint('color')).toEqual({ rgb: [110, 110, 110], alpha: 0.16 });
+    const paints = [paint('color'), paint('-webkit-text-stroke')].filter(value => value !== undefined);
+    const hex = (value: string) => [1, 3, 5].map(index => parseInt(value.slice(index, index + 2), 16));
+    const luminance = (rgb: number[]) => rgb.map(channel => channel / 255)
+      .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+      .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const contrast = (a: number[], b: number[]) => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (high + 0.05) / (low + 0.05);
+    };
+    const backgrounds = { white: '#FFFFFF', navyTop: PCON_COVER_COLORS.navyTop, navyBottom: PCON_COVER_COLORS.navyBottom,
+      goldTop: PCON_COVER_COLORS.goldTop, goldBottom: PCON_COVER_COLORS.goldBottom };
+    for (const [name, value] of Object.entries(backgrounds)) {
+      const background = hex(value);
+      const ratio = Math.max(...paints.map(({ rgb, alpha }) => contrast(background, background.map((channel, index) => channel * (1 - alpha) + rgb[index] * alpha))));
+      expect(ratio, `${name}: ${ratio.toFixed(3)}:1`).toBeGreaterThanOrEqual(1.2);
+    }
   });
 
   it('the print rules show a blocked catalog only for a confirmed draft, and the boxes are at least 24 px', () => {

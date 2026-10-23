@@ -1,4 +1,4 @@
-/* global window, document, getComputedStyle, matchMedia */
+/* global window, document, getComputedStyle, matchMedia, Image, Event */
 // "Imprimir rascunho mesmo assim" — a blocked catalog (texts still "A COMPLETAR") can be printed as a draft PDF with
 // "RASCUNHO" on every page, while the normal "Imprimir / salvar PDF" stays locked.
 //
@@ -10,9 +10,11 @@
 //      a forged print approval) contains only the "Use Publicar / PDF…" notice: the normal print stays locked.
 //   3. "Imprimir rascunho mesmo assim" → confirmation (3 items, grouped), the "Entendi" box (≥ 24 px) is required.
 //   4. "Imprimir rascunho": title "… — RASCUNHO"; in print media every A4 page holds one diagonal watermark inside its
-//      box; page.pdf(): 3 sheets, each with "RASCUNHO" once and its "A COMPLETAR" text still readable.
+//      box; page.pdf(): 3 sheets, each with one "RASCUNHO" (fill + outline) and its "A COMPLETAR" text readable.
 //   5. afterprint: the watermark is gone and printing is locked again; with "Marcar todas as páginas" off the draft
 //      prints without the word.
+//   6. Page 2 has the navy of the PCON cover as its background: the word must still stand out there (pixels compared
+//      with and without the watermark, in print media), not only on white pages.
 //
 // Run: node tests/vnext/proof/draft-print-proof.mjs   (DRAFT_PROOF_PORT overrides the port)
 import assert from 'node:assert/strict';
@@ -47,7 +49,8 @@ import { createCatalogDocument } from '/src/vnext/application/document.ts';
 import { plainRichText } from '/src/vnext/domain/editorial-model.ts';
 let n = 0;
 const base = createCatalogDocument(() => 'draft-' + (++n), 'Prova rascunho');
-const pages = [1, 2, 3].map(number => ({ ...base.pages[0], id: 'draft-page-' + number, objects: [
+// Page 2 is navy like the PCON cover (PCON_COVER_COLORS.navyTop): the watermark must not vanish on dark pages.
+const pages = [1, 2, 3].map(number => ({ ...base.pages[0], id: 'draft-page-' + number, ...(number === 2 ? { background: { color: '#173F65' } } : {}), objects: [
   { id: 'draft-text-' + number, type: 'text', frame: { xMm: 20, yMm: 20, widthMm: 150, heightMm: 10 }, zIndex: 0,
     text: plainRichText('draft-run-' + number, 'Faixa da página ' + number + ': A COMPLETAR'), style: {} },
 ] }));
@@ -194,16 +197,22 @@ try {
   });
   evidence.printMedia = printed;
   await page.locator('.vnext-publication-pages .editorial-page').first().screenshot({ path: resolve(output, 'draft-page-1.png') });
+  const navyMarked = await page.locator('.vnext-publication-pages .editorial-page').nth(1).screenshot({ path: resolve(output, 'draft-page-2-navy.png') });
   const draftBytes = await page.pdf(pdfOptions);
   await writeFile(resolve(output, 'draft.pdf'), draftBytes);
   const draft = await readPdf(draftBytes);
   assert.equal(draft.pageCount, 3, 'three pages print as three sheets');
   draft.sheets.forEach((sheet, index) => {
     assert(Math.abs(sheet.widthMm - 210) < 0.3 && Math.abs(sheet.heightMm - 297) < 0.3, 'A4 sheet');
-    assert.equal(count(sheet.text, 'RASCUNHO'), 1, `sheet ${index + 1} has "RASCUNHO" once (got "${sheet.text}")`);
+    // One watermark per sheet: Chromium writes its grey fill and its white outline as two draws of the same word, at
+    // the same place, so the text layer may hold "RASCUNHO" twice, never at two different positions.
+    const words = sheet.items.filter(item => item.str.includes('RASCUNHO'));
+    assert(words.length >= 1 && words.length <= 2 && count(sheet.text, 'RASCUNHO') === words.length, `sheet ${index + 1} has one "RASCUNHO" (got "${sheet.text}")`);
+    assert(words.every(word => Math.abs(word.xMm - words[0].xMm) < 0.5 && Math.abs(word.yMm - words[0].yMm) < 0.5),
+      `sheet ${index + 1}: the fill and outline draws are the same word in the same place (${JSON.stringify(words)})`);
     assert(sheet.text.includes(`Faixa da página ${index + 1}: A COMPLETAR`), `sheet ${index + 1} still shows its content (got "${sheet.text}")`);
     assert(!sheet.text.includes(NOTICE), 'no policy notice in the draft');
-    const word = sheet.items.find(item => item.str.includes('RASCUNHO'));
+    const [word] = words;
     assert(word.xMm >= 0 && word.xMm <= 210 && word.yMm >= 0 && word.yMm <= 297, `sheet ${index + 1} watermark inside the sheet (${word.xMm}, ${word.yMm})`);
   });
   evidence.draftPdf = { pageCount: draft.pageCount, sheets: draft.sheets.map(sheet => ({ sheet: sheet.sheet, text: sheet.text })) };
@@ -221,9 +230,31 @@ try {
   assert.equal(await normalPrint.isDisabled(), true, '"Imprimir / salvar PDF" still disabled');
   await markOption.uncheck();
   await page.getByRole('button', { name: 'Imprimir rascunho', exact: true }).click();
+  // The navy page in print media, now without the word (taken before page.pdf(), whose afterprint ends the draft).
+  await page.emulateMedia({ media: 'print' });
+  const navyPlain = await page.locator('.vnext-publication-pages .editorial-page').nth(1).screenshot();
+  await page.emulateMedia({ media: null });
   const plain = await readPdf(await page.pdf(pdfOptions));
   assert.equal(plain.pageCount, 3);
   assert(plain.sheets.every((sheet, index) => !sheet.text.includes('RASCUNHO') && sheet.text.includes(`Faixa da página ${index + 1}: A COMPLETAR`)), 'without the option: no word, same pages');
+  // 6. The watermark must have changed a visible share of the navy page's pixels (same print media, same page).
+  const navy = await page.evaluate(async ({ marked, plain }) => {
+    const pixels = async base64 => {
+      const image = new Image(); image.src = 'data:image/png;base64,' + base64; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, image.width, image.height).data;
+    };
+    const [a, b] = await Promise.all([pixels(marked), pixels(plain)]);
+    let max = 0, visible = 0;
+    for (let index = 0; index < a.length; index += 4) {
+      const difference = Math.max(Math.abs(a[index] - b[index]), Math.abs(a[index + 1] - b[index + 1]), Math.abs(a[index + 2] - b[index + 2]));
+      max = Math.max(max, difference); if (difference >= 40) visible++;
+    }
+    return { max, visiblePixels: visible, totalPixels: a.length / 4 };
+  }, { marked: navyMarked.toString('base64'), plain: navyPlain.toString('base64') });
+  assert(navy.visiblePixels >= 2000, `the watermark stands out on the navy page (${JSON.stringify(navy)})`);
+  evidence.navyPage = navy;
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   evidence.after = after;
   evidence.unmarkedDraft = plain.sheets.map(sheet => sheet.text);
