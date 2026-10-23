@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createCatalogDocument, createDocumentSession, type DocumentSession } from '@/vnext/application';
@@ -100,5 +102,17 @@ describe('FR-55 "Rodapé de todas as páginas"', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(session.getSnapshot().document).toBe(before);
     expect(document.querySelector('[data-page-footer-replace-review]')).toBeNull();
+  });
+
+  it('its check boxes are targets of at least 24 px (the native 13 px box was too small for the father)', () => {
+    // jsdom does not lay out; j04 measures the real box in Chromium. The rule is shared by every native-style section.
+    const css = readFileSync(resolve(process.cwd(), 'src/vnext/app/editor/NativeStyleSection.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = css.match(/\.vnext-native-field input\[type="checkbox"\]\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/(?:^|;)\s*width:\s*24px/);
+    expect(rule).toMatch(/(?:^|;)\s*height:\s*24px/);
+    setup(folder(3));
+    expect(field('enabled').closest('.vnext-native-field')).not.toBeNull();
+    fireEvent.click(field('enabled'));
+    expect(field('first-page').closest('.vnext-native-field')).not.toBeNull();
   });
 });

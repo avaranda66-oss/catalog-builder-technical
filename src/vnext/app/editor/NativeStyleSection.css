@@ -4,6 +4,8 @@
 .vnext-native-group { display: grid; min-width: 0; gap: 6px; }
 .vnext-native-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; color: #31445b; font-size: 11px; font-weight: 600; }
 .vnext-native-field input[type="text"] { width: 72px; }
+/* Onda 4 (provas, j04): a caixa de marcar nativa tinha 13 px; o pai precisa de alvos de pelo menos 24 px. */
+.vnext-native-field input[type="checkbox"] { width: 24px; height: 24px; margin: 0; accent-color: #003f78; cursor: pointer; }
 .vnext-native-field select { min-height: 32px; border: 1px solid #c7d1dd; border-radius: 6px; background: #fff; color: #31445b; font: inherit; }
 .vnext-native-choice { display: flex; flex-wrap: wrap; gap: 6px; }
 .vnext-native-style button:not(.vnext-style-palette button),
