@@ -168,4 +168,15 @@ describe('FR-80 PRESYS archetypes P1–P9', () => {
     expect(session.undo().ok).toBe(true);
     expect(session.getSnapshot().document.pages).toHaveLength(9);
   });
+
+  it('FR-55: starters turn the automatic footer on (not on the cover) and centre the site address so both fit one line', () => {
+    const folder = createPresysArchetypeDocument({ documentId: 'folder-footer', title: 'Folder', sequence: PRESYS_FOLDER_SEQUENCE });
+    expect(folder.style.pageFooter).toEqual({ showOnFirstPage: false });
+    const sites = folder.pages.flatMap((page) => page.objects).filter((object) => object.id.endsWith('-footer'));
+    expect(sites.length).toBe(8);
+    for (const site of sites) {
+      expect(site.type === 'text' && site.style.textAlign).toBe('center');
+      expect(site.frame.yMm).toBe(PRESYS_PAGE_TOKENS.footerYMm);
+    }
+  });
 });

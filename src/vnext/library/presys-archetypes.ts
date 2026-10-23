@@ -243,10 +243,14 @@ class PageBuilder {
     this.rule('title-rule', LEFT, 27, 120);
   }
 
+  /**
+   * The rule and the site address. Onda 4 (FR-55): the address is centred, because the automatic control footer
+   * (code · revision · date · language on the left, "Página x de y" on the right) prints in this same line.
+   */
   footer(): void {
     this.rule('footer-rule', LEFT, PRESYS_PAGE_TOKENS.footerRuleYMm, WIDTH, C.rule);
     this.textSlot('footer', 'www.presys.com.br', [LEFT, PRESYS_PAGE_TOKENS.footerYMm, WIDTH, 5],
-      { size: T.note, color: C.muted, align: 'right' });
+      { size: T.note, color: C.muted, align: 'center' });
   }
 }
 
@@ -594,7 +598,10 @@ export function presysDocumentStyle(): DocumentStyle {
 export const PRESYS_DATASHEET_SEQUENCE: readonly PresysArchetypeId[] = Object.freeze(['P1', 'P2', 'P4', 'P5', 'P6', 'P7']);
 export const PRESYS_FOLDER_SEQUENCE: readonly PresysArchetypeId[] = Object.freeze(['P1', 'P2', 'P3', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']);
 
-/** A whole product-agnostic document made of archetype pages, for the "Novo catálogo" starters. */
+/**
+ * A whole product-agnostic document made of archetype pages, for the "Novo catálogo" starters. Onda 4 (FR-55): the
+ * automatic control footer is on (not on the cover); code, revision and date stay empty until the person types them.
+ */
 export function createPresysArchetypeDocument(input: {
   readonly documentId: string;
   readonly title: string;
@@ -603,7 +610,7 @@ export function createPresysArchetypeDocument(input: {
 }): CatalogDocument {
   return {
     schemaVersion: 1, id: input.documentId, title: input.title, locale: 'pt-BR',
-    style: presysDocumentStyle(),
+    style: { ...presysDocumentStyle(), pageFooter: { showOnFirstPage: false } },
     pages: input.sequence.map((id, index) => buildPresysArchetypePage(id, {
       pageId: `${input.documentId}-${index + 1}-${id.toLowerCase()}`, variant: input.variant,
     })),

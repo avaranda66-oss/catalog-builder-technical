@@ -152,7 +152,8 @@ export const PRESYS_FOLDER_STARTER_ID = 'presys-folder-a4';
 /** FR-80: product-agnostic PRESYS starters built from the archetypes P1–P9 (blueprint §0). */
 export const PRESYS_DATASHEET_STARTER: CatalogStarterDefinition = {
   starterId: PRESYS_DATASHEET_STARTER_ID,
-  revision: 1,
+  // 2: Onda 4 — automatic control footer on every page except the cover (FR-55).
+  revision: 2,
   label: 'Ficha técnica (4 a 6 páginas)',
   description: 'Seis páginas A4 no padrão PRESYS: capa, visão geral, especificações, faixas, código de pedido e fornecimento. Apague as que não usar. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.',
   category: 'PRESYS',
@@ -164,7 +165,8 @@ export const PRESYS_DATASHEET_STARTER: CatalogStarterDefinition = {
 
 export const PRESYS_FOLDER_STARTER: CatalogStarterDefinition = {
   starterId: PRESYS_FOLDER_STARTER_ID,
-  revision: 1,
+  // 2: Onda 4 — automatic control footer on every page except the cover (FR-55).
+  revision: 2,
   label: 'Folder (8 a 12 páginas)',
   description: 'Dez páginas A4 no padrão PRESYS, da capa à contracapa, com espaços para fotos, tabelas, código de pedido e acessórios. Os campos “A COMPLETAR” impedem a publicação até serem preenchidos.',
   category: 'PRESYS',
