@@ -10,6 +10,9 @@
    behind everything) is painted above the page colour and below the content, never hidden behind the page. */
 [data-editorial-root] .editorial-page { position:relative; isolation:isolate; background:white; padding:0; border:0; overflow:visible; }
 [data-editorial-root] .editorial-object { position:absolute; padding:0; margin:0; border:0; overflow:visible; }
+/* Onda 4 (FR-55): the control footer of every page (code · revision · date · language, then "Página x de y"). Above all
+   objects, never clickable; one line, so a long code never wraps over the page edge. */
+[data-editorial-root] .editorial-page-footer { position:absolute; z-index:2147483647; display:flex; justify-content:space-between; align-items:flex-start; gap:4mm; margin:0; padding:0; border:0; white-space:pre; pointer-events:none; overflow:visible; }
 [data-editorial-root] .table-intrinsic { margin:0; padding:0; border:0; }
 [data-editorial-root] .editorial-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }
 [data-editorial-root] .logical-row { display:contents; }

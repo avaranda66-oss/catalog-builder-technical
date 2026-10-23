@@ -2,6 +2,7 @@ import type { AssetRef, CatalogDocument } from '../domain/editorial-model';
 import { VNextError } from '../domain/diagnostics';
 import { sha256 } from '../asset/integrity';
 import { referencedAssets } from '../asset/referenced-assets';
+import { allPageFooterText } from '../domain/page-footer';
 
 export { sha256 };
 
@@ -29,11 +30,36 @@ export function verifyFontManifest(doc:CatalogDocument,root:HTMLElement):void {
   }
 }
 
+/**
+ * FR-82: the only faces a catalog may print with. Each one is bundled with the app (rendering/styles.css imports the
+ * pinned @fontsource 5.3.0 files, SIL Open Font License), so the browser embeds the very same font in every PDF and
+ * never falls back to a system font. A new brand face (e.g. a condensed one) needs its files imported there and a
+ * line here; until then a document that asks for it is blocked instead of printed with a stand-in.
+ */
+export const BUNDLED_FONT_FACES:readonly Readonly<{family:string;revision:string;weight:400|700;style:'normal'|'italic'}>[]=Object.freeze([
+  {family:'Noto Sans',revision:'5.3.0',weight:400,style:'normal'},
+  {family:'Noto Sans',revision:'5.3.0',weight:700,style:'normal'},
+  {family:'Noto Sans',revision:'5.3.0',weight:400,style:'italic'},
+  {family:'Noto Sans',revision:'5.3.0',weight:700,style:'italic'},
+  {family:'Noto Sans JP',revision:'5.3.0',weight:400,style:'normal'},
+]);
+export function isBundledFontFace(font:{family:string;revision:string;weight:number;style:string}):boolean {
+  return BUNDLED_FONT_FACES.some(face=>face.family===font.family&&face.revision===font.revision&&face.weight===font.weight&&face.style===font.style);
+}
+
+/**
+ * The text whose glyphs must be loaded before printing: the document itself plus what the page footer computes
+ * ("Página 2 de 11", the formatted date), which is not stored in the document (FR-55).
+ */
+export function fontSampleText(doc:CatalogDocument):string {
+  return JSON.stringify(doc)+' '+allPageFooterText(doc);
+}
+
 export async function loadFonts(doc:CatalogDocument,root:HTMLElement):Promise<ResourceManifest['fonts']> {
   verifyFontManifest(doc,root);
-  const sample=JSON.stringify(doc);
+  const sample=fontSampleText(doc);
   const loaded=await Promise.all(doc.style.fonts.map(async font=>{
-    if(!['Noto Sans','Noto Sans JP'].includes(font.family)||font.revision!=='5.3.0')throw new VNextError('REQUIRED_FONT_MISSING',font.family+'@'+font.revision);
+    if(!isBundledFontFace(font))throw new VNextError('REQUIRED_FONT_MISSING',font.family+'@'+font.revision+' '+font.weight+' '+font.style);
     const descriptor=`${font.style} ${font.weight} 12pt "${font.family}"`;
     let faces:FontFace[];
     try{faces=await watchdog(document.fonts.load(descriptor,sample),'FONT_READINESS_TIMEOUT');}
