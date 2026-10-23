@@ -89,4 +89,36 @@ describe('selected-object editorial rewrite via guarded canonical action', () =>
     expect(seen).toMatchObject({ task: 'revise_selected_text',
       target: { objectId: f.selected.objectId, text: 'Novo texto' } });
   });
+  it('FR-72: rewrites a text with numbers through markers; the AI never sees or changes the digits', async () => {
+    const f = fixture();
+    const revision = f.session.getSnapshot().localSequence;
+    const current = f.session.getSnapshot().document.pages[0].objects[0];
+    if (current.type !== 'text') throw new Error('NOT_TEXT');
+    expect(f.session.execute({ type: 'text.setContent', objectId: current.id, expectedText: current.text,
+      plainText: 'Calibra de 0 a 250 psi com exatidão de 0,025%' }).ok).toBe(true);
+    const updated = f.session.getSnapshot().document.pages[0].objects[0];
+    if (updated.type !== 'text') throw new Error('NOT_TEXT');
+    const selected = { objectId: updated.id, text: structuredClone(updated.text) };
+    expect(plainSelectedEditorialText(selected)).toBe('Calibra de 0 a 250 psi com exatidão de 0,025%');
+    expect(prepareNativeTextEditRequest(selected, 'Deixe mais profissional.').target.text)
+      .toBe('Calibra de {{A}} a {{B}} psi com exatidão de {{C}}%');
+    const reply = await proposeNativeTextEdit(selected, 'Deixe mais profissional.', async request => {
+      expect(JSON.stringify(request)).not.toMatch(/250|0,025/);
+      return { status: 'proposal', revisedText: 'Calibração de {{A}} a {{B}} psi, exatidão de {{C}}%' };
+    });
+    expect(reply).toEqual({ status: 'proposal', revisedText: 'Calibração de 0 a 250 psi, exatidão de 0,025%' });
+    for (const bad of ['Calibração de {{A}} a {{B}} psi', 'Calibração de {{A}} a {{A}} psi, {{C}}%', 'De {{A}} a {{D}} psi {{B}} {{C}}']) {
+      await expect(proposeNativeTextEdit(selected, 'Deixe mais profissional.', async () =>
+        ({ status: 'proposal', revisedText: bad }))).rejects.toThrow();
+    }
+    const revisionNow = f.session.getSnapshot().localSequence;
+    expect(revisionNow).toBe(revision + 1);
+    expect(() => applyNativeTextEdit(f.session, selected,
+      { status: 'proposal', revisedText: 'Calibração de 0 a 300 psi, exatidão de 0,025%' }, revisionNow)).toThrow('TEXT_EDIT_NUMBERS_CHANGED');
+    const applied = applyNativeTextEdit(f.session, selected, reply, revisionNow);
+    expect(applied.after).toBe('Calibração de 0 a 250 psi, exatidão de 0,025%');
+    expect(f.session.undo().ok).toBe(true);
+    expect(plainSelectedEditorialText({ ...selected, text: (f.session.getSnapshot().document.pages[0].objects[0] as { text: RichText }).text }))
+      .toBe('Calibra de 0 a 250 psi com exatidão de 0,025%');
+  });
 });

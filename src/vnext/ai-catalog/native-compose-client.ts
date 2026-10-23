@@ -1,10 +1,11 @@
 import type { NativeComposeGateway, NativeComposeRequest } from './native-compose';
 import type { NativeTextEditGateway, NativeTextEditRequest } from './native-text-edit';
+import type { EditIntentGateway, EditIntentRequest } from './edit-intents';
 import {
   isComposerErrorCode, isComposerErrorReason, type ComposerErrorCode, type ComposerErrorReason,
 } from './composer-codes';
 
-type ComposerBody = (NativeComposeRequest | NativeTextEditRequest | { version: 1; task: 'status' }) & {
+type ComposerBody = (NativeComposeRequest | NativeTextEditRequest | EditIntentRequest | { version: 1; task: 'status' }) & {
   credential?: { provider: 'gemini'; apiKey: string };
 };
 export interface NativeComposeFunctionsClient {
@@ -85,6 +86,14 @@ export function nativeComposeGateway(client: NativeComposeFunctionsClient, crede
 
 /** Same bounded backend, different strict task contract. */
 export function nativeTextEditGateway(client: NativeComposeFunctionsClient, credential?: string): NativeTextEditGateway {
+  const apiKey = checkedCredential(credential);
+  return request => invokeComposer(client, {
+    ...request, ...(apiKey ? { credential: { provider: 'gemini', apiKey } } : {}),
+  });
+}
+
+/** FR-72: the conversation that edits the open document (typed intents, never mutations). */
+export function editIntentGateway(client: NativeComposeFunctionsClient, credential?: string): EditIntentGateway {
   const apiKey = checkedCredential(credential);
   return request => invokeComposer(client, {
     ...request, ...(apiKey ? { credential: { provider: 'gemini', apiKey } } : {}),
