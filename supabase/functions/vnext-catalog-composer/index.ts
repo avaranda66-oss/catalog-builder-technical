@@ -9,6 +9,9 @@ import {
 import type { ComposerErrorCode, ComposerErrorReason } from '../../../src/vnext/ai-catalog/composer-codes.ts';
 
 // Gemini editorial scaffold. Never authoritative for engineering facts.
+// Tasks (composer-contract.ts): status, compose_scaffold, revise_selected_text and
+// edit_intent (FR-72: typed intents over a bounded outline of the open document;
+// invented numbers are blocked here, before the reply leaves the server).
 // Authentication, active editor role and a durable budget reservation are
 // mandatory before any provider call. Server key by default; a personal key
 // (BYOK) only when VNEXT_CATALOG_AGENT_BYOK_ENABLED=true.
