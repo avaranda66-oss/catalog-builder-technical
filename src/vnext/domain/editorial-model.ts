@@ -110,9 +110,30 @@ export type Frame=z.infer<typeof FrameSchema>;
 export const AssetRefSchema=z.object({id,version:clean,sha256:z.string().regex(/^[a-f0-9]{64}$/),
   mime:z.enum(['image/png','image/jpeg','image/webp']),widthPx:integer.positive(),heightPx:integer.positive(),name:clean,alt:clean}).strict();
 export type AssetRef=z.infer<typeof AssetRefSchema>;
+/**
+ * Onda 4 (FR-55): the control footer printed on every page ("rodapé de controle"), edited in one place.
+ * Code, revision and date are typed by the person (never filled by the AI); the language comes from `locale` and
+ * the page number ("2 de 11") is computed when the page is drawn, so it is never stored. It lives in `style`
+ * because the database accepts no new top-level key without a migration (ADR-rodape-marca).
+ */
+const footerField=(max:number)=>clean.refine(s=>s.trim()===s,'FOOTER_FIELD_UNTRIMMED').refine(s=>s.length<=max,'FOOTER_FIELD_TOO_LONG');
+const isoDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>{
+  const [y,m,d]=s.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d));
+  return y>=1900&&y<=2999&&date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d;
+},'FOOTER_DATE_INVALID');
+export const PAGE_FOOTER_LIMITS=Object.freeze({documentCode:40,revision:12});
+export const PageFooterSchema=z.object({
+  documentCode:footerField(PAGE_FOOTER_LIMITS.documentCode).optional(),
+  revision:footerField(PAGE_FOOTER_LIMITS.revision).optional(),
+  issuedOn:isoDate.optional(),
+  /** The cover usually has no footer; it still counts as page 1. */
+  showOnFirstPage:z.boolean(),
+}).strict();
+export type PageFooter=z.infer<typeof PageFooterSchema>;
 export const DocumentStyleSchema=z.object({
   fonts:z.array(z.object({family:clean,revision:clean,weight:z.union([z.literal(400),z.literal(700)]),style:z.enum(['normal','italic'])}).strict()).min(1),
   defaultText:CellStyleSchema,palette:z.array(color).min(1),
+  pageFooter:PageFooterSchema.optional(),
 }).strict();
 export type DocumentStyle=z.infer<typeof DocumentStyleSchema>;
 /**

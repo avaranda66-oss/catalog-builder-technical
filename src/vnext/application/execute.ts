@@ -1648,6 +1648,18 @@ export function executeApplicationAction(
         candidate = replaceLeafObject(document, target.location, value === null ? rest as TextObject : { ...rest, [key]: compact(value) } as TextObject);
         break;
       }
+      case 'document.setPageFooter': {
+        if (!sameValue(document.style.pageFooter ?? null, action.expectedFooter)) {
+          return failure('TARGET_STALE', 'Page footer changed after the command was prepared');
+        }
+        changed = !sameValue(document.style.pageFooter ?? null, action.footer);
+        affectedIds = changed ? [document.id] : [];
+        createdIds = [];
+        if (!changed) break;
+        const { pageFooter: _previousFooter, ...style } = document.style;
+        candidate = { ...document, style: action.footer === null ? style : { ...style, pageFooter: compact(action.footer) } };
+        break;
+      }
       case 'page.setBackground': {
         const pageIndex = document.pages.findIndex((entry) => entry.id === action.pageId);
         if (pageIndex < 0) return failure('PAGE_NOT_FOUND', action.pageId);
