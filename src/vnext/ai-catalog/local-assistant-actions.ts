@@ -12,6 +12,7 @@ import { describeLocalAction, type LocalAction } from '../arsenal/local-router';
  * Onda 4.5 — what the router without AI found, done with the editor's EXISTING actions (zero tokens, one Desfazer):
  * - a new table: `object.insert` + the house look of a new table (the same as the toolbar button), one transaction;
  * - a PRESYS model page: `page.template.insert` (the same templates as "Usar modelo…"), after the open page;
+ * - a blank page: `page.add`, after the open page;
  * - a style change: the same plan, card and "Aplicar" of the conversation that edits (edit-intents.ts), built here.
  */
 
@@ -48,20 +49,29 @@ export function applyLocalAction(session: DocumentSession, action: Exclude<Local
       text: `${describeLocalAction(action)}, na página ${pageNumber(document, page.id)}. Fiz sem usar IA. `
         + 'As células ficam vazias: os valores vêm do PDF ou da planilha.' + UNDO_HINT };
   }
-  const inserted = session.execute({ type: 'page.template.insert', templateId: action.templateId, afterPageId: page.id }, { transactionId });
+  // "no final": after the last page.
+  const after = action.atEnd ? document.pages.at(-1)! : page;
+  if (action.type === 'page.blank') {
+    const added = session.execute({ type: 'page.add', afterPageId: after.id }, { transactionId });
+    const pageId = added.ok ? added.metadata.createdIds[0] : undefined;
+    if (!added.ok || !pageId) return { ok: false, text: 'Não consegui pôr a página em branco. Nada foi mudado.' };
+    return { ok: true, pageId, newPage: true,
+      text: `Pus uma página em branco depois da página ${pageNumber(document, after.id)}, sem usar IA.` + UNDO_HINT };
+  }
+  const inserted = session.execute({ type: 'page.template.insert', templateId: action.templateId, afterPageId: after.id }, { transactionId });
   const pageId = inserted.ok ? inserted.metadata.createdIds[0] : undefined;
   if (!inserted.ok || !pageId) {
     return { ok: false, text: !inserted.ok && inserted.error.code === 'TEMPLATE_NOT_FOUND'
       ? `Este editor não tem a página-modelo ${action.archetypeId}. Use “Usar modelo…” ou peça à IA. Nada foi mudado.`
       : 'Não consegui pôr a página-modelo. Nada foi mudado.' };
   }
-  const name = describeLocalAction(action).replace(/^Página/, 'página');
+  const name = `página-modelo ${action.archetypeId}: ${action.label}`;
   const filled = 'sem usar IA. Os campos “A COMPLETAR” você preenche a partir das fontes.' + UNDO_HINT;
   // An empty open page (a catalog just started) is replaced, as the composer does: no blank page is left behind.
-  if (page.objects.length === 0 && session.execute({ type: 'page.delete', pageId: page.id }, { transactionId }).ok) {
+  if (after.objects.length === 0 && session.execute({ type: 'page.delete', pageId: after.id }, { transactionId }).ok) {
     return { ok: true, pageId, newPage: true, text: `Pus a ${name} no lugar da página em branco, ${filled}` };
   }
-  return { ok: true, pageId, newPage: true, text: `Pus a ${name} depois da página ${pageNumber(document, page.id)}, ${filled}` };
+  return { ok: true, pageId, newPage: true, text: `Pus a ${name} depois da página ${pageNumber(document, after.id)}, ${filled}` };
 }
 
 function pageOf(document: CatalogDocument, objectId: string): string | undefined {

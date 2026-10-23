@@ -83,8 +83,11 @@ export const ARSENAL_AI_RULE =
   'arsenal lists presets the team saved (ref a1..., name, category, kind, tags): covers, tables, headers, footers, pages ' +
   'and styles. When the user asks to insert, put or use something that ONE preset clearly matches by name, category or tags ' +
   '(for example "the standard header", "that specifications table"), answer use_preset {status, preset, summary} with its ref ' +
-  'instead of building it: a preset brings its own layout and needs no values. Use only refs listed in arsenal, never invent ' +
-  'one. If no preset clearly matches, ignore arsenal and answer as usual. summary is ONE short sentence in the language of ' +
+  'instead of building it: a preset brings its own layout and needs no values. A request for ONE page, table, header, footer ' +
+  'or style of a kind a preset provides is a clear match even in other words ("página de acessórios" -> a page preset about ' +
+  'acessórios); a request for several pages or with text to write is not. Use only refs listed in arsenal, never invent ' +
+  'one. If no preset clearly matches, ignore arsenal and answer as usual (never refuse because of it). ' +
+  'summary is ONE short sentence in the language of ' +
   'the user request, naming the preset by its name (never by ref).';
 
 /* ------------------------------------------------------------------------------------------------ */
@@ -100,10 +103,13 @@ export interface ArsenalPresetChoice {
 type Schema = { type: string; properties: Record<string, unknown>; propertyOrdering?: string[]; required?: string[] } & Obj;
 
 /**
- * The response schema of a task, plus the `use_preset` branch: one more status and one short `preset` field
- * (bounded, so the decoding grammar stays small — Gemini refuses large schemas, see EDIT_INTENT_LIMITS.intents).
+ * The response schema of a task, plus the `use_preset` branch: one more status and one `preset` field.
+ * `preset` is an ENUM of the refs actually sent (a1…aN): the model cannot write any other ref, and the decoding grammar
+ * stays small. A free STRING (maxLength 5) made Gemini refuse the edit_intent schema with a bare HTTP 400 "Request
+ * contains an invalid argument" (real probe 2026-10-23: too many states next to the 40 intents); the enum of 30 refs is
+ * accepted. Without refs (older callers) the bounded STRING stays, which the compose schema accepts.
  */
-export function withArsenalChoice<T extends Schema>(schema: T): T {
+export function withArsenalChoice<T extends Schema>(schema: T, refs: readonly string[] = []): T {
   const properties = schema.properties as Record<string, Obj>;
   const status = properties.status as { type: string; enum: string[] };
   const ordering = schema.propertyOrdering ?? Object.keys(properties);
@@ -113,14 +119,22 @@ export function withArsenalChoice<T extends Schema>(schema: T): T {
     properties: {
       ...properties,
       status: { ...status, enum: [...status.enum, 'use_preset'] },
-      preset: { type: 'STRING', maxLength: 5 },
+      preset: refs.length ? { type: 'STRING', enum: [...refs] } : { type: 'STRING', maxLength: 5 },
       ...(properties.summary ? {} : { summary: { type: 'STRING', maxLength: ARSENAL_AI_LIMITS.summaryChars } }),
     },
   };
 }
 
-/** Lenient-before-strict for the `use_preset` branch: drops the keys of the other branches and blank text. */
+/**
+ * Lenient-before-strict for the `use_preset` branch: drops the keys of the other branches and blank text. On the
+ * OTHER branches a leftover `preset` is dropped: with the enum of refs the model sometimes fills it next to a
+ * proposal (real probe 2026-10-23: {"status":"proposal","preset":"a5",…}), and it carries no action there.
+ */
 export function normalizeArsenalChoice(raw: unknown): unknown {
+  if (isObj(raw) && raw.status !== 'use_preset' && 'preset' in raw) {
+    const { preset: _leftover, ...rest } = raw;
+    return rest;
+  }
   if (!isObj(raw) || raw.status !== 'use_preset') return raw;
   const next: Obj = { ...raw };
   // Keys of the other branches carry no action here; a non-empty list of intents or pages stays and is rejected.

@@ -5,7 +5,7 @@ import { webcrypto } from 'node:crypto';
 import { createDocumentSession } from '../../../src/vnext/application';
 import type { CatalogDocument } from '../../../src/vnext/domain';
 import {
-  ARSENAL_AI_CATEGORIES, ARSENAL_AI_KINDS, ARSENAL_AI_LIMITS, ARSENAL_AI_RULE, parseArsenalAiIndex, verifyArsenalChoice,
+  ARSENAL_AI_CATEGORIES, ARSENAL_AI_KINDS, ARSENAL_AI_LIMITS, ARSENAL_AI_RULE, parseArsenalAiIndex, verifyArsenalChoice, withArsenalChoice,
   type ArsenalAiIndexEntry,
 } from '../../../src/vnext/ai-catalog/arsenal-ai-contract';
 import {
@@ -84,6 +84,21 @@ describe('the short index of the arsenal (what the AI reads)', () => {
     expect(parseArsenalAiIndex(built.entries)).not.toBeNull();
   });
 
+  it('every category takes turns before the cut, and tags shrink before entries go (34 presets of the natural-language test)', () => {
+    // Team presets plus the 28 PRESYS built-ins: "most used, then by name" used to drop all footers and the PRESYS header.
+    const presets = [...routerPresets(), ...Array.from({ length: 26 }, (_, position) => presetSummary({
+      name: `Página PRESYS ${String.fromCharCode(65 + position)} com nome de modelo`, category: 'paginas', kind: 'page',
+      tags: ['etiqueta um', 'etiqueta dois', 'etiqueta três'] }))];
+    const built = buildAssistantArsenalAiIndex(presets);
+    expect(new Set(built.entries.map(entry => entry.category))).toEqual(new Set(['cabecalhos', 'rodapes', 'tabelas', 'capas', 'estilos', 'paginas']));
+    expect(built.entries.filter(entry => entry.category === 'paginas').length).toBeLessThan(built.entries.length - 6);
+    expect(built.entries.every(entry => entry.tags.length <= 1)).toBe(true);
+    expect(JSON.stringify(built.entries).length).toBeLessThanOrEqual(ARSENAL_AI_LIMITS.indexChars);
+    // The most used of each category keeps its place; refs still map back to the right preset.
+    expect(built.entries[0].name).toBe('Cabeçalho padrão');
+    for (const entry of built.entries) expect(presets.find(preset => preset.id === built.presetIdOf(entry.ref))?.name).toBe(entry.name);
+  });
+
   it('the server parser refuses anything else', () => {
     const good = index();
     expect(parseArsenalAiIndex([{ ...good[0], id: 'x' }])).toBeNull();
@@ -139,7 +154,9 @@ describe('requests with the index (server parser, prompt, bounded schema)', () =
     const edit = buildGeneration(editRequest(index()), 1000).generationConfig.responseSchema as Record<string, unknown>;
     const properties = edit.properties as Record<string, Record<string, unknown>>;
     expect(properties.status.enum).toContain('use_preset');
-    expect(properties.preset).toEqual({ type: 'STRING', maxLength: 5 });
+    // An enum of the refs sent (a free string made Gemini refuse the whole edit_intent schema with HTTP 400).
+    expect(properties.preset).toEqual({ type: 'STRING', enum: index().map(entry => entry.ref) });
+    expect((withArsenalChoice(EDIT_INTENT_RESPONSE_SCHEMA as never) as { properties: Record<string, unknown> }).properties.preset).toEqual({ type: 'STRING', maxLength: 5 });
     walkBounded(edit);
     walkBounded(buildGeneration(composeRequest(index()), 1000).generationConfig.responseSchema as Record<string, unknown>);
     expect(buildGeneration(editRequest(), 1000).generationConfig.responseSchema).toBe(EDIT_INTENT_RESPONSE_SCHEMA);
@@ -155,6 +172,20 @@ describe('"usar preset <ref>": checked on the server and again in the browser', 
     // Leftovers of the other branches (empty) are tolerated; upper case and spaces in the ref are tidied.
     expect(interpretProviderReply(composeRequest(index()), envelope({ status: 'use_preset', preset: ' A3 ', question: '', pages: [] })))
       .toEqual({ ok: true, reply: { status: 'use_preset', preset: 'a3' } });
+  });
+
+  it('a ref left next to another answer is dropped (the enum makes the model fill it; real probe 2026-10-23)', () => {
+    const proposal = { status: 'proposal', summary: 'Duplicando esta página.', intents: [{ kind: 'duplicate_page', ref: 'p1' }] };
+    const edit = interpretProviderReply(editRequest(index(), 'duplica essa página'), envelope({ ...proposal, preset: 'a5' }));
+    expect(edit.ok).toBe(true);
+    expect(edit.ok && 'preset' in edit.reply).toBe(false);
+    const compose = interpretProviderReply(composeRequest(index()), envelope({ status: 'proposal', preset: 'a2', summary: 'Uma capa nova.',
+      pages: [{ type: 'cover', heading: 'Capa nova' }] }));
+    expect(compose.ok).toBe(true);
+    expect(compose.ok && 'preset' in compose.reply).toBe(false);
+    // Without an index the leftover is still an unknown key: refused, as before.
+    expect(interpretProviderReply(editRequest(undefined, 'duplica essa página'), envelope({ ...proposal, preset: 'a5' })))
+      .toEqual({ ok: false, reason: 'CONTRACT', retryable: false });
   });
 
   it('an unknown ref, a request without index, extra content or a page id is refused', () => {

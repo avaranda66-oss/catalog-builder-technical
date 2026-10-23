@@ -37,8 +37,11 @@ export type LocalStyleChange =
 export type LocalAction =
   /** A new empty table on the open page (the first row is the header when there are two or more rows). */
   | { readonly type: 'table.new'; readonly rows: number; readonly columns: number; readonly models?: number }
-  /** A PRESYS model page (FR-80), right after the open page. */
-  | { readonly type: 'page.template'; readonly archetypeId: PresysArchetypeId; readonly templateId: string; readonly label: string }
+  /** A PRESYS model page (FR-80), right after the open page, or at the end ("no final"). */
+  | { readonly type: 'page.template'; readonly archetypeId: PresysArchetypeId; readonly templateId: string; readonly label: string;
+    readonly atEnd?: true }
+  /** A blank page right after the open page ("põe uma página em branco", "bota uma página nova"), or at the end. */
+  | { readonly type: 'page.blank'; readonly atEnd?: true }
   /** A style change of one object, shown as the "Vou fazer isto" card of the conversation that edits. */
   | { readonly type: 'style'; readonly objectId: string; readonly change: LocalStyleChange };
 
@@ -147,7 +150,36 @@ const STOPWORDS = words(`a o as os um uma uns umas de do da dos das d com para p
   que por favor pf pfv aqui ai ali la isso isto esse essa esses essas este esta estes estas eu me mim voce vc voces tu te meu
   minha meus minhas seu sua so tambem mais bem pouco pouquinho ja agora logo entao oi ola obrigado obrigada valeu pode poderia
   consegue conseguiria da possivel tipo beleza vamos vai ir ele ela dele dela nele nela sobre la tudo bom bem ver favor
-  dentro atual aberta aberto selecionado selecionada selecionados marcado marcada assim jeito embaixo abaixo acima cima baixo`);
+  dentro atual aberta aberto selecionado selecionada selecionados marcado marcada assim jeito embaixo abaixo acima cima baixo
+  disso desse dessa deste desta nisso nesse nessa neste nesta daquele daquela igual mesmo mesma parecido parecida como`);
+/** "esse texto", "nesse título": the noun after them points at the selection; it says nothing about which preset. */
+const DEMONSTRATIVES = words('esse essa este esta nesse nessa neste nesta desse dessa deste desta');
+/** "no final", "no fim (do catálogo)": where a new page goes. */
+const END_WORDS = words('final fim');
+/** Words that never lose a final "s" (brand names, adverbs). */
+const NO_SINGULAR = words('presys mais menos pois depois');
+/**
+ * Common typing slips and diminutives the father types, to one word ("tabla", "tabelinha", "cabeçario"). An explicit
+ * list on purpose: a fuzzy match could turn a word into another meaning.
+ */
+const WORD_FIXES: Readonly<Record<string, string>> = Object.freeze({
+  tabla: 'tabela', tablas: 'tabela', tabelinha: 'tabela', tabelinhas: 'tabela', tabelona: 'tabela', tablea: 'tabela', tabea: 'tabela',
+  cabecario: 'cabecalho', cabecarios: 'cabecalho', cabecalio: 'cabecalho', cabecalinho: 'cabecalho',
+  rodapezinho: 'rodape', rodpe: 'rodape',
+  pagna: 'pagina', pagian: 'pagina', pagiana: 'pagina', paginazinha: 'pagina', paginha: 'pagina',
+  titlo: 'titulo', tiulo: 'titulo', titulozinho: 'titulo', titulao: 'titulo',
+  fotinho: 'foto', fotinha: 'foto', fotozinha: 'foto', letrinha: 'letra', letrona: 'letra',
+  comparar: 'comparacao', comparando: 'comparacao', compara: 'comparacao',
+  vermelha: 'vermelho', amarela: 'amarelo', branca: 'branco', preta: 'preto', dourada: 'dourado', clara: 'claro', escura: 'escuro',
+});
+/** Phrases that are one word for the router ("pé de página" is the footer, "mais grande" is "maior"). */
+const PHRASE_FIXES: readonly (readonly [RegExp, string])[] = Object.freeze([
+  [/\bpe d[ae] pagina\b/g, 'rodape'],
+  [/\bcontra capa\b/g, 'contracapa'],
+  [/\bmais grande\b/g, 'maior'],
+  [/\bmais pequen[ao]\b/g, 'menor'],
+] as const);
+const fixPhrases = (normalized: string) => PHRASE_FIXES.reduce((text, [pattern, value]) => text.replace(pattern, value), normalized);
 /** Words that only point at the selection ("este texto", "o selecionado"). */
 const NUMBER_WORDS: Readonly<Record<string, number>> = Object.freeze({
   dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
@@ -189,7 +221,7 @@ const ARCHETYPE_KEYWORDS: Readonly<Record<PresysArchetypeId, readonly string[]>>
   P2: ['visao', 'apresentacao', 'destaque', 'introducao'],
   P3: ['recurso', 'aplicacao', 'funcionalidade', 'vantagem', 'beneficio'],
   P4: ['especificacao', 'comparacao', 'comparativo', 'comparativa', 'ficha', 'tecnica'],
-  P5: ['faixa', 'exatidao', 'precisao', 'entrada', 'dado'],
+  P5: ['faixa', 'exatidao', 'precisao', 'entrada', 'dado', 'medicao'],
   P6: ['codigo', 'pedido', 'encomenda', 'pedir'],
   P7: ['fornecimento', 'acessorio', 'kit', 'acompanha', 'incluso'],
   P8: ['inserto', 'furo'],
@@ -197,6 +229,8 @@ const ARCHETYPE_KEYWORDS: Readonly<Record<PresysArchetypeId, readonly string[]>>
 });
 /** Words that may sit next to a model page without changing it. */
 const PAGE_NEUTRAL = words('pagina nova novo modelo presys padrao vazia vazio simples geral');
+/** "página em branco", "página vazia", "página limpa": a blank page. */
+const BLANK_WORDS = words('branco vazia vazio limpa limpo');
 /** Words of the size of a new table. */
 const TABLE_STRUCTURE = words('tabela linha coluna modelo nova novo simples vazia vazio pequena x');
 /**
@@ -223,7 +257,7 @@ export function normalizeRequestText(text: string): string {
 
 /** Plural to singular for the words of this lexicon ("especificacoes" → "especificacao", "imagens" → "imagem"). */
 export function singularize(word: string): string {
-  if (word.length <= 3 || /\d/.test(word)) return word;
+  if (word.length <= 3 || /\d/.test(word) || NO_SINGULAR.has(word)) return word;
   if (word.endsWith('oes') || word.endsWith('aes')) return word.slice(0, -3) + 'ao';
   if (word.endsWith('eis')) return word.slice(0, -3) + 'el';
   if (word.endsWith('ais')) return word.slice(0, -3) + 'al';
@@ -241,6 +275,8 @@ interface Token {
   readonly number?: number;
   /** A word of a colour ("azul", "claro" in "azul claro"). */
   readonly color?: true;
+  /** A noun after "esse/nesse…" ("nesse texto"): it points at the selection, not at a preset. */
+  readonly pointer?: true;
   /** Position in `LocalRequestAnalysis.words`. */
   readonly index: number;
 }
@@ -265,8 +301,15 @@ export interface LocalRequestAnalysis {
   readonly otherFlow: boolean;
   readonly question: boolean;
   readonly savedHint: boolean;
+  /** "no final", "no fim": a new page goes after the last page. */
+  readonly atEnd: boolean;
   /** "P4", "modelo P7". */
   readonly archetypeCode?: PresysArchetypeId;
+  /**
+   * Model codes and other words with digits ("TA-25N" → "25n", "Y18"): like a number, a preset must have them, and
+   * no deterministic action writes them.
+   */
+  readonly codes: readonly Token[];
 }
 
 const PALETTE_KEYS = Object.keys(EDIT_INTENT_PALETTE) as EditIntentColor[];
@@ -287,12 +330,16 @@ function colorAt(raw: readonly string[], index: number): { color: EditIntentColo
 /** Reads a request once: words, numbers, verbs and hints. */
 export function analyzeLocalRequest(message: string): LocalRequestAnalysis {
   const normalized = normalizeRequestText(message);
-  const raw = normalized ? normalized.split(' ') : [];
+  // Typing slips and phrases first ("tabla", "cabeçario", "pé de página", "mais grande"): every rule below sees one word.
+  const fixed = fixPhrases(normalized);
+  const raw = fixed ? fixed.split(' ').map(word => WORD_FIXES[word] ?? word) : [];
   const all: string[] = [];
   const content: Token[] = [];
   const numbers: Token[] = [];
+  const codes: Token[] = [];
+  let pointerNext = false;
   let insert = false, isNew = false, larger = false, smaller = false, bold = false, unbold = false, colorVerb = false;
-  let make = false, editVerb = false, otherFlow = false, savedHint = false;
+  let make = false, editVerb = false, otherFlow = false, savedHint = false, atEnd = false;
   let color: EditIntentColor | undefined;
   let archetypeCode: PresysArchetypeId | undefined;
   const question = QUESTION_STARTS.has(raw[0] ?? '') || /^o que\b/.test(normalized);
@@ -332,6 +379,13 @@ export function analyzeLocalRequest(message: string): LocalRequestAnalysis {
     }
     const code = /^p([1-9])$/.exec(word);
     if (code) { archetypeCode = `P${code[1]}` as PresysArchetypeId; all.push(word); continue; }
+    if (/\d/.test(word)) {
+      const token = { word, index: all.length };
+      codes.push(token); content.push(token); all.push(word);
+      continue;
+    }
+    const pointer = pointerNext;
+    pointerNext = DEMONSTRATIVES.has(word);
     const single = singularize(word);
     const canonical = NOUN_SYNONYMS[single] ?? single;
     const position = all.length;
@@ -346,13 +400,14 @@ export function analyzeLocalRequest(message: string): LocalRequestAnalysis {
     if (BOLD_WORDS.has(word)) { bold = true; continue; }
     if (COLOR_VERBS.has(word) || COLOR_VERBS.has(single)) { colorVerb = true; continue; }
     if (SAVED_HINTS.has(word)) { savedHint = true; continue; }
+    if (END_WORDS.has(word)) { atEnd = true; continue; }
     if (OTHER_FLOW_WORDS.has(canonical)) otherFlow = true;
     if (EDIT_VERBS.has(word) || UNBOLD_WORDS.has(word) || STOPWORDS.has(word)) continue;
-    content.push({ word: canonical, index: position });
+    content.push({ word: canonical, index: position, ...(pointer && TARGET_NOUNS.has(canonical) ? { pointer: true as const } : {}) });
   }
   return {
     normalized, words: all, content, numbers, insert, isNew, larger, smaller, bold, unbold, color, colorVerb, make,
-    editVerb, otherFlow, question, savedHint, archetypeCode,
+    editVerb, otherFlow, question, savedHint, atEnd, archetypeCode, codes,
   };
 }
 
@@ -423,6 +478,16 @@ function matchModelPage(analysis: LocalRequestAnalysis): Attempt {
     }
   }
   let archetype: PresysArchetypeId | undefined = code;
+  const verb = analysis.insert || analysis.isNew;
+  if (!archetype && hits.size === 0 && page && !coverWord) {
+    // "põe uma página em branco", "bota uma página nova": nothing but a page. Any other word is content: the AI.
+    const rest = contentWords(analysis);
+    const blank = rest.some(token => BLANK_WORDS.has(token.word));
+    if (rest.every(token => PAGE_NEUTRAL.has(token.word) || BLANK_WORDS.has(token.word)) && (blank || verb)) {
+      return { choice: { kind: 'action', score: blank ? (verb ? 0.9 : 0.75) : 0.8,
+        action: { type: 'page.blank', ...(analysis.atEnd ? { atEnd: true as const } : {}) } }, consumed: new Set() };
+    }
+  }
   if (!archetype) {
     const ranked = [...hits].sort((a, b) => b[1] - a[1]);
     if (ranked.length === 0) return page ? { decline: 'NOT_UNDERSTOOD' } : undefined;
@@ -435,10 +500,10 @@ function matchModelPage(analysis: LocalRequestAnalysis): Attempt {
   const unknown = contentWords(analysis).filter(token => !keywords.includes(token.word) && !PAGE_NEUTRAL.has(token.word));
   if (unknown.length > 0) return { decline: 'NOT_UNDERSTOOD' };
   const definition = PRESYS_ARCHETYPES.find(entry => entry.id === archetype)!;
-  const verb = analysis.insert || analysis.isNew;
   const score = (verb ? 0.85 : 0.7) + (code ? 0.08 : 0);
   return {
-    choice: { kind: 'action', score, action: { type: 'page.template', archetypeId: archetype, templateId: definition.templateId, label: definition.label } },
+    choice: { kind: 'action', score, action: { type: 'page.template', archetypeId: archetype, templateId: definition.templateId,
+      label: definition.label, ...(analysis.atEnd ? { atEnd: true as const } : {}) } },
     consumed: new Set(),
   };
 }
@@ -488,6 +553,8 @@ function matchStyle(analysis: LocalRequestAnalysis, context: LocalRouteContext):
   const sizeChange = analysis.larger !== analysis.smaller ? (analysis.larger ? 'larger' : 'smaller') : undefined;
   const wantsBold = analysis.bold;
   const wantsColor = analysis.color !== undefined && (analysis.colorVerb || analysis.make);
+  // "a foto maior e o título menor": two changes, the conversation that edits does both.
+  if (analysis.larger && analysis.smaller) return { decline: 'NOT_UNDERSTOOD' };
   if (!sizeChange && !wantsBold && !wantsColor) return undefined;
   if ([sizeChange, wantsBold, wantsColor].filter(Boolean).length > 1) return { decline: 'NOT_UNDERSTOOD' };
   // "aumenta o título para 24 pt", "a foto da página 2": a number is never decided here.
@@ -535,7 +602,7 @@ function matchStyle(analysis: LocalRequestAnalysis, context: LocalRouteContext):
 
 /** Words of a text as the router compares them (normalized, singular, canonical, no stopwords). */
 export function routerTerms(text: string): string[] {
-  return normalizeRequestText(text).split(' ').filter(Boolean)
+  return fixPhrases(normalizeRequestText(text)).split(' ').filter(Boolean).map(word => WORD_FIXES[word] ?? word)
     .map(word => NUMBER_TOKEN.test(word) ? word : (NOUN_SYNONYMS[singularize(word)] ?? singularize(word)))
     .filter(word => word && !STOPWORDS.has(word));
 }
@@ -546,7 +613,8 @@ const termsMatch = (a: string, b: string) => a === b
 interface ScoredPreset { readonly choice: LocalChoice & { kind: 'preset' }; readonly specific: boolean }
 
 function scorePreset(preset: LocalRoutablePreset, analysis: LocalRequestAnalysis): ScoredPreset | undefined {
-  const message = analysis.content;
+  // "nesse texto" says where, not which preset.
+  const message = analysis.content.filter(token => !token.pointer);
   if (message.length === 0) return undefined;
   const nameTerms = [...new Set(routerTerms(preset.name))];
   const terms = [...new Set([...nameTerms, ...preset.tags.flatMap(routerTerms), ...preset.synonyms.flatMap(routerTerms)])];
@@ -559,14 +627,18 @@ function scorePreset(preset: LocalRoutablePreset, analysis: LocalRequestAnalysis
     if (terms.some(term => termsMatch(term, token.word))) { matched.add(token.index); specific += 1; }
   }
   if (matched.size === 0) return undefined;
-  // A number in the request must be part of the preset ("3 modelos"); otherwise it may be a technical value.
-  if (analysis.numbers.some(token => !matched.has(token.index))) return undefined;
+  // A number or a model code in the request must be part of the preset ("3 modelos"); otherwise it may be a technical
+  // value ("a faixa de pressão do TA-25N na tabela").
+  if ([...analysis.numbers, ...analysis.codes].some(token => !matched.has(token.index))) return undefined;
   const nameHits = nameTerms.filter(term => message.some(token => termsMatch(term, token.word))).length;
   const nameCoverage = nameTerms.length ? nameHits / nameTerms.length : 0;
   const messageCoverage = matched.size / message.length;
   let score = 0.45 * messageCoverage + 0.35 * nameCoverage + (categoryHit ? 0.2 : 0) + (analysis.savedHint ? 0.05 : 0);
   // A word of the name, a tag or a synonym that is not the category: without one, this preset is only "one of them".
   if (!categoryHit && nameCoverage < 0.5) score = Math.min(score, 0.5);
+  // The request says much more than the preset ("…comparando 3 modelos com pressão, exatidão e alimentação nas
+  // linhas"): it is a composition, the AI does it (the preset may still be offered under "Ver outros").
+  if (messageCoverage < 0.5) score = Math.min(score, 0.5);
   return {
     choice: {
       kind: 'preset', presetId: preset.id, name: preset.name, category: preset.category, presetKind: preset.kind,
@@ -619,7 +691,10 @@ export function routeLocally(message: string, context: LocalRouteContext): Local
   const page = table ? undefined : matchModelPage(analysis);
   const attempt = table ?? page;
   const action = attempt && 'choice' in attempt ? attempt : undefined;
-  const ranked = rankPresets(context.presets ?? [], analysis);
+  // "no final" and the open page is not the last: a saved page would go after the open page, so only the model page
+  // (which knows "at the end") is offered.
+  const lastPageOpen = !context.activePageId || context.document.pages.at(-1)?.id === context.activePageId;
+  const ranked = rankPresets((context.presets ?? []).filter(preset => !analysis.atEnd || lastPageOpen || preset.kind !== 'page'), analysis);
   const best = ranked[0];
   const others = (primary: LocalChoice): LocalChoice[] => [
     ...ranked.map(entry => entry.choice).filter(choice => choice !== primary && choice.score >= LOCAL_ROUTER_THRESHOLDS.alternative),
@@ -663,7 +738,9 @@ export function describeLocalAction(action: LocalAction): string {
         + (action.rows > 1 ? ', com a primeira linha como cabeçalho' : '');
     }
     case 'page.template':
-      return `Página-modelo ${action.archetypeId}: ${action.label}`;
+      return `Página-modelo ${action.archetypeId}: ${action.label}` + (action.atEnd ? ', no fim do catálogo' : '');
+    case 'page.blank':
+      return 'Página em branco' + (action.atEnd ? ', no fim do catálogo' : '');
     case 'style': {
       const change = action.change;
       switch (change.kind) {

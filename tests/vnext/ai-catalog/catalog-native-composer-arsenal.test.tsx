@@ -6,7 +6,7 @@ import { createPresysArchetypeTemplateRegistry } from '../../../src/vnext/librar
 import { CatalogNativeComposer } from '../../../src/vnext/ai-catalog/CatalogNativeComposer';
 import type { NativeComposeFunctionsClient } from '../../../src/vnext/ai-catalog/native-compose-client';
 import { clearByokCredential } from '../../../src/vnext/ai-catalog/byok-session';
-import type { AssistantArsenal } from '../../../src/vnext/arsenal/assistant-arsenal';
+import { buildAssistantArsenalAiIndex, type AssistantArsenal } from '../../../src/vnext/arsenal/assistant-arsenal';
 import { routerDocument, routerPresets } from '../arsenal/arsenal-ia-fixtures';
 
 /**
@@ -171,7 +171,9 @@ describe('the AI and the arsenal', () => {
   });
 
   it('the conversation that edits gets the index too and may point at a preset', async () => {
-    const f = make({ features: ['arsenal_index'], replies: [{ status: 'use_preset', preset: 'a2' }] });
+    // The ref the screen gives "Cabeçalho azul" in its index (categories take turns in the index).
+    const blueHeader = buildAssistantArsenalAiIndex(routerPresets()).entries.find(entry => entry.name === 'Cabeçalho azul')!.ref;
+    const f = make({ features: ['arsenal_index'], replies: [{ status: 'use_preset', preset: blueHeader }] });
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     send('troque o cabeçalho pelo azul que guardamos');
     await screen.findByRole('heading', { name: 'A IA achou no arsenal' });

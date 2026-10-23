@@ -88,6 +88,36 @@ describe('a PRESYS model page, without the AI', () => {
       text: 'Este editor não tem a página-modelo P7. Use “Usar modelo…” ou peça à IA. Nada foi mudado.' });
     expect(target.getSnapshot().document).toEqual(before);
   });
+
+  it('"no final": the model page goes after the LAST page, even with another page open', () => {
+    const target = session();
+    const before = target.getSnapshot().document;
+    const action = found(target, 'poe a contra capa no final');
+    if (action.type === 'style') throw new Error('STYLE');
+    expect(action).toMatchObject({ type: 'page.template', archetypeId: 'P9', atEnd: true });
+    // The last page is blank: it is replaced, as for any model page.
+    const result = applyLocalAction(target, action, { activePageId: before.pages[0].id });
+    expect(result.ok && result.text).toMatch(/^Pus a página-modelo P9: Contracapa no lugar da página em branco, sem usar IA\./);
+    expect(target.getSnapshot().document.pages.at(-1)?.id).toBe(result.ok && result.pageId);
+    target.undo();
+    expect(target.getSnapshot().document).toEqual(before);
+  });
+});
+
+describe('a blank page, without the AI', () => {
+  it('"poe uma pagina em branco" adds an empty page after the open page, as one Desfazer', () => {
+    const target = session();
+    const before = target.getSnapshot().document;
+    const action = found(target, 'poe uma pagina em branco');
+    if (action.type === 'style') throw new Error('STYLE');
+    const result = applyLocalAction(target, action, { activePageId: before.pages[0].id });
+    expect(result).toMatchObject({ ok: true, newPage: true, text: 'Pus uma página em branco depois da página 1, sem usar IA. Um Desfazer volta tudo.' });
+    const pages = target.getSnapshot().document.pages;
+    expect(pages).toHaveLength(3);
+    expect(pages[1]).toMatchObject({ id: result.ok && result.pageId, objects: [] });
+    target.undo();
+    expect(target.getSnapshot().document).toEqual(before);
+  });
 });
 
 describe('a style change, on the card of the conversation that edits', () => {

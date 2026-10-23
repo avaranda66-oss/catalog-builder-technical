@@ -69,17 +69,37 @@ export interface AssistantArsenalAiIndex {
 }
 
 /**
- * The short index of the arsenal sent with an AI request: the most used presets first (buildArsenalCompactIndex),
- * with local refs a1, a2… instead of ids, cut to ARSENAL_AI_LIMITS. Never payloads.
+ * The short index of the arsenal sent with an AI request, with local refs a1, a2… instead of ids, cut to
+ * ARSENAL_AI_LIMITS. Never payloads.
+ *
+ * Order: every category takes turns, each with its most used presets first (buildArsenalCompactIndex). With 34
+ * presets and the 2 400-character cap, a plain "most used, then by name" list dropped whole categories (all the
+ * footers and the PRESYS header began with late letters — real probe 2026-10-23: the AI could not offer "Rodapé com
+ * site"). When it is still too long, tags go first (3 → 1), then the last entries.
  */
 export function buildAssistantArsenalAiIndex(presets: readonly ArsenalPresetSummary[]): AssistantArsenalAiIndex {
-  const compact = buildArsenalCompactIndex(presets, {
-    maxEntries: ARSENAL_AI_LIMITS.entries, maxTagsPerEntry: ARSENAL_AI_LIMITS.tags, maxChars: Number.MAX_SAFE_INTEGER,
+  const sorted = buildArsenalCompactIndex(presets, {
+    maxEntries: Number.MAX_SAFE_INTEGER, maxTagsPerEntry: ARSENAL_AI_LIMITS.tags, maxChars: Number.MAX_SAFE_INTEGER,
   });
-  const entries: ArsenalAiIndexEntry[] = compact.map((entry, index) => ({
+  const byCategory = new Map<string, typeof sorted>();
+  for (const entry of sorted) byCategory.set(entry.category, [...(byCategory.get(entry.category) ?? []), entry]);
+  const queues = [...byCategory.values()];
+  const compact: typeof sorted = [];
+  while (compact.length < ARSENAL_AI_LIMITS.entries && queues.some(queue => queue.length > 0)) {
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (next && compact.length < ARSENAL_AI_LIMITS.entries) compact.push(next);
+    }
+  }
+  const entriesWith = (tags: number): ArsenalAiIndexEntry[] => compact.map((entry, index) => ({
     ref: `a${index + 1}`, name: entry.name, category: entry.category, kind: entry.kind,
-    tags: entry.tags.filter(tag => tag.length <= ARSENAL_AI_LIMITS.tagChars),
+    tags: entry.tags.filter(tag => tag.length <= ARSENAL_AI_LIMITS.tagChars).slice(0, tags),
   }));
+  // Tags help the AI (“padrão”, “site”) but cost more than a name: down to one tag, then the last entries go (every
+  // category keeps its most used ones, thanks to the turns above).
+  let tags = ARSENAL_AI_LIMITS.tags;
+  let entries = entriesWith(tags);
+  while (tags > 1 && JSON.stringify(entries).length > ARSENAL_AI_LIMITS.indexChars) entries = entriesWith(--tags);
   while (entries.length > 0 && JSON.stringify(entries).length > ARSENAL_AI_LIMITS.indexChars) entries.pop();
   const ids = new Map(entries.map((entry, index) => [entry.ref, compact[index].id]));
   return { entries, presetIdOf: ref => ids.get(ref) };

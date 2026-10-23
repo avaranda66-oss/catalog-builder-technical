@@ -221,3 +221,47 @@ describe('ambiguous: a card with the options, or the AI', () => {
     expect(presetName(route('insere o cabeçalho padrão', { presets: newer }))).toBe('Cabeçalho azul');
   });
 });
+
+describe('natural language test (Onda 4.5): typing slips, diminutives, phrases, blank page, "no final"', () => {
+  it('typing slips and diminutives become one word; "presys" keeps its "s"', () => {
+    expect(action(route('faz uma tabelinha com 4 linhas'))).toEqual({ type: 'table.new', rows: 4, columns: 3 });
+    expect(action(route('bota uma tabla com 6 linhas e 2 colunas'))).toEqual({ type: 'table.new', rows: 6, columns: 2 });
+    expect(analyzeLocalRequest('coloca aquele cabeçario').content.map(token => token.word)).toEqual(['cabecalho']);
+    expect(analyzeLocalRequest('bota o pé de página padrão').content.map(token => token.word)).toEqual(['rodape', 'padrao']);
+    expect(singularize('presys')).toBe('presys');
+    expect(action(route('coloca a capa padrão da presys'))).toMatchObject({ type: 'page.template', archetypeId: 'P1' });
+  });
+
+  it('"mais grande", "disso aí" and feminine colours are understood', () => {
+    expect(action(route('deixa o título mais grande'))).toEqual({ type: 'style', objectId: 'title', change: { kind: 'text_size', size: 'larger' } });
+    expect(action(route('aumenta a letra disso aí', { selectedObjectIds: ['body'] })))
+      .toEqual({ type: 'style', objectId: 'body', change: { kind: 'text_size', size: 'larger' } });
+    expect(action(route('deixa a faixa vermelha', { selectedObjectIds: ['band'] })))
+      .toEqual({ type: 'style', objectId: 'band', change: { kind: 'set_color', color: 'vermelho' } });
+  });
+
+  it('a blank page, after the open page or at the end', () => {
+    expect(action(route('poe uma pagina em branco'))).toEqual({ type: 'page.blank' });
+    expect(action(route('bota uma página nova'))).toEqual({ type: 'page.blank' });
+    expect(action(route('página vazia no final'))).toEqual({ type: 'page.blank', atEnd: true });
+    expect(action(route('poe a contra capa no final'))).toMatchObject({ type: 'page.template', archetypeId: 'P9', atEnd: true });
+    // Any other word is content: the AI writes it.
+    expect(route('Crie uma página de contato')).toEqual({ kind: 'none', reason: 'NOT_UNDERSTOOD' });
+    expect(route('página')).toEqual({ kind: 'none', reason: 'NOT_UNDERSTOOD' });
+  });
+
+  it('"nesse texto" points at the selection, not at a preset', () => {
+    expect(presetName(withArsenal('aplica o estilo título grande branco nesse texto', { selectedObjectIds: ['body'] }))).toBe('Título grande branco');
+  });
+
+  it('a model code is like a number: a preset must have it, or the AI decides', () => {
+    expect(withArsenal('poe a tabela de especificações do TA-25N').kind).toBe('none');
+    expect(withArsenal('poe a faixa de pressão do TA-25N na tabela').kind).toBe('none');
+    expect(analyzeLocalRequest('capa pro TA-25N').codes.map(token => token.word)).toEqual(['25n']);
+  });
+
+  it('a request that says much more than the preset, or two changes at once, goes to the AI', () => {
+    expect(withArsenal('na página nova põe a ficha técnica de 3 modelos com pressão, exatidão e alimentação nas linhas').kind).toBe('none');
+    expect(route('deixa a foto maior e o título menor')).toEqual({ kind: 'none', reason: 'NOT_UNDERSTOOD' });
+  });
+});

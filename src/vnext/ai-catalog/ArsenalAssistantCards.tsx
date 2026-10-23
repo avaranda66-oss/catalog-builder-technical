@@ -23,6 +23,7 @@ export function localChoiceTitle(choice: LocalChoice, presets: readonly ArsenalP
 function choiceDetail(choice: LocalChoice, presets: readonly ArsenalPresetSummary[]): string {
   if (choice.kind === 'action') {
     return choice.action.type === 'page.template' ? 'Modelo PRESYS, página nova depois da página aberta'
+      : choice.action.type === 'page.blank' ? 'Página nova depois da página aberta'
       : choice.action.type === 'table.new' ? 'Tabela vazia na página aberta' : 'Na página aberta';
   }
   const preset = presets.find(entry => entry.id === choice.presetId);

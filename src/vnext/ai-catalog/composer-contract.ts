@@ -215,7 +215,9 @@ export const COMPOSE_SYSTEM_PROMPT =
   'Each page: type, heading, optional subtitle; comparison: table with columns (2-6) and rowLabels (1-12). ' +
   'For tables, optionally choose design: comparison (strong navy header), datasheet (spacious pale blue) or matrix (dense compact gray). ' +
   'Vary designs according to document purpose, without inventing technical data. ' +
-  'Data cells will remain empty. NEVER invent technical specifications, numerical values, products, source citations, ' +
+  'Data cells will remain empty. Placeholder labels you make up use letters, never numbers (Modelo A, Modelo B; Item A); ' +
+  'model codes the user typed (TA-25N) are kept exactly. ' +
+  'NEVER invent technical specifications, numerical values, products, source citations, ' +
   'image contents, or URLs. No rich HTML, no code or executable actions. ' +
   LAYOUT_DEFAULTS_POLICY +
   'Do not ask about layout, style, page count or table design: choose them. Ask clarification ONLY when the request gives ' +
@@ -293,7 +295,7 @@ export function responseSchemaFor(request: ComposerGenerationRequest): Obj {
   if (request.task === 'revise_selected_text') return TEXT_EDIT_RESPONSE_SCHEMA;
   const base = (request.task === 'edit_intent' ? EDIT_INTENT_RESPONSE_SCHEMA : COMPOSE_RESPONSE_SCHEMA) as unknown as
     Parameters<typeof withArsenalChoice>[0];
-  return request.arsenal?.length ? withArsenalChoice(base) : base;
+  return request.arsenal?.length ? withArsenalChoice(base, request.arsenal.map(entry => entry.ref)) : base;
 }
 
 export function buildGeneration(request: ComposerGenerationRequest, maxOutputTokens: number, retry = false) {
@@ -454,9 +456,11 @@ export function interpretProviderReply(request: ComposerGenerationRequest, envel
     .map(part => (part as Obj).text as string).join('');
   let output: unknown;
   try { output = JSON.parse(text); } catch { return { ok: false, reason: 'INVALID_JSON', retryable: true }; }
-  // Onda 4.5: "use the saved preset". Only a ref of the index this request carried is accepted.
+  // Onda 4.5: "use the saved preset". Only a ref of the index this request carried is accepted; a ref left next to
+  // another answer is dropped first.
+  if (request.task !== 'revise_selected_text' && request.arsenal?.length) output = normalizeArsenalChoice(output);
   const reply = request.task !== 'revise_selected_text' && isObj(output) && output.status === 'use_preset'
-    ? verifyArsenalChoice(normalizeArsenalChoice(output), request.arsenal) as Obj | null
+    ? verifyArsenalChoice(output, request.arsenal) as Obj | null
     : request.task === 'revise_selected_text'
       ? verifyTextEditReply(normalizeTextEditReply(output))
       : request.task === 'edit_intent'

@@ -424,8 +424,20 @@ export function applyEditPlan(session: DocumentSession, plan: EditPlan): { appli
 /* Routing helper (for the single assistant, FR-73)                                                 */
 /* ------------------------------------------------------------------------------------------------ */
 
-const EDIT_VERBS = /(?:^|[^\p{L}])(troqu|troca|troque|mud[ae]|alter[ae]|substitu|apag|remov|tir[ea]|exclu|delet|aument|diminu|reduz|amplie|deix[ae]|coloqu|ponha|traduz|negrito|duplique|duplicar|corrij)/iu;
+const EDIT_VERBS = /(?:^|[^\p{L}])(troqu|troca|troque|mud[ae]|alter[ae]|substitu|apag|remov|tir[ea]|exclu|delet|aument|diminu|reduz|amplie|deix[ae]|coloqu|ponha|traduz|negrito|dupli[cq]|corrij|corrig|escrev|preench|atualiz|pint[ae])/iu;
 const NEW_PAGES = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|comece|gere|nova[s]? p[áa]gina|um cat[áa]logo novo|novo cat[áa]logo)(?:$|[^\p{L}])/iu;
+/** "passa o subtítulo pro espanhol", "coloca em inglês": a translation of the open page. */
+const LANGUAGE_WORDS = /(?:^|[^\p{L}])(ingl[êe]s|espanhol|franc[êe]s|italiano|alem[ãa]o|polon[êe]s)(?:$|[^\p{L}])/iu;
+/** "bota/põe/coloca X no rodapé": something written INTO the open catalog (a value, a text). */
+const PUT_VERBS = /(?:^|[^\p{L}])(bot[ae]r?|coloc[ao]r?|p[õo]e|met[ae]r?|inser[ei]r?|insir[ao]|acrescent[ae]r?|inclu[ia]r?)(?:$|[^\p{L}])/iu;
+/**
+ * "uma tabela", "a página de faixas", "o cabeçalho padrão", "3 páginas": a page, table, header or footer as the OBJECT
+ * of the verb is something new, which the composer (or the arsenal) builds. After a preposition ("na tabela", "no
+ * rodapé") it is a place in the open catalog instead.
+ */
+const NEW_THING = /(?:^|[^\p{L}])(uma?|as?|os?|nova|novo|outra|outro|duas|dois|tr[êe]s|\d+)\s+(?:\p{L}+\s+)?(tabe?l|p[áa]gin|capa|contracapa|se[çc][ãa]o|cat[áa]logo|folder|cabe[çc]al|cabe[çc]ari|rodap)/iu;
+/** "aplica o estilo de título nesse texto": a style goes on what is already on the page. */
+const STYLE_WORDS = /(?:^|[^\p{L}])(estilos?|formata[çc][ãa]o)(?:$|[^\p{L}])/iu;
 /**
  * Which lane of the single assistant answers a typed request: "edit" (this
  * module, on the open document) or "compose" (new pages). Edits need a
@@ -437,7 +449,10 @@ export function assistantLaneFor(message: string, document: CatalogDocument,
   options: { readonly followUp?: boolean } = {}): 'edit' | 'compose' {
   const hasContent = document.pages.some(page => page.objects.length > 0);
   if (!hasContent || NEW_PAGES.test(message)) return 'compose';
-  return options.followUp || EDIT_VERBS.test(message) ? 'edit' : 'compose';
+  if (options.followUp || EDIT_VERBS.test(message) || LANGUAGE_WORDS.test(message) || STYLE_WORDS.test(message)) return 'edit';
+  // "coloca a exatidão no rodapé" changes the open catalog (and is refused there when the value was never given);
+  // "bota uma tabela comparando…" builds something new.
+  return PUT_VERBS.test(message) && !NEW_THING.test(message) ? 'edit' : 'compose';
 }
 
 const BUILD_VERB = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|fa[çc]a|fazer|gere|gerar|prepar[ea]r?|transform[ea]r?|comece)(?:$|[^\p{L}])/iu;
