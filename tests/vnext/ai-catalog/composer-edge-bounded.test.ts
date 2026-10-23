@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
+import { buildDocumentOutline } from '../../../src/vnext/ai-catalog/document-outline';
+import type { CatalogDocument } from '../../../src/vnext/domain';
 
 // Provider, authentication, RPC, network and keys are FULLY simulated.
 // The handler and its shared contract module are executed as real source.
@@ -413,5 +415,73 @@ describe('settled budget mode (migration 00028) with fallback to 00027', () => {
     const x = sandbox({ budgetMode: 'settled', settled: 'present' });
     const r = await x.request({ version: 1, task: 'status' });
     expect(r.body.status).toMatchObject({ mode: 'settled', remainingMicrousd: 2_500_000, callReserveMicrousd: 12040 });
+  });
+});
+
+describe('edit_intent (FR-72): the conversation that edits, same guards and bounded reply', () => {
+  const pcon = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/examples/presys-capa-pcon-hibrido.catalog.json'), 'utf8')) as CatalogDocument;
+  const built = buildDocumentOutline(pcon);
+  const refOf = (suffix: string) => [...built.objects].find(([, value]) => value.objectId === 'capa-pcon-hibrido-' + suffix)![0];
+  const titleRef = refOf('titulo'), subtitleRef = refOf('subtitulo');
+  const editRequest = (message = 'Troque o título da capa para PCON-Y18.') => ({
+    version: 1, task: 'edit_intent', message, history: [], outline: built.outline,
+  });
+  it('checks origin, login and active editor role before any budget or provider call', async () => {
+    for (const [options, status] of [[{ role: 'viewer' }, 403], [{ active: false }, 403], [{ validUser: false }, 401]] as const) {
+      const x = sandbox(options);
+      const r = await x.request(editRequest());
+      expect(r.status).toBe(status);
+      expect(x.events).toEqual([]);
+    }
+    const foreign = sandbox();
+    expect((await foreign.request(editRequest(), 'https://evil.example.invalid')).status).toBe(403);
+    expect(foreign.events).toEqual([]);
+  });
+  it('sends the outline with the bounded intent schema and blocks invented numbers on the server', async () => {
+    const x = sandbox({ reply: { status: 'proposal', summary: 'Vou trocar o título da capa.', intents: [
+      { kind: 'set_text', target: titleRef, text: 'PCON-Y18' },
+      { kind: 'set_text', target: subtitleRef, text: 'Exatidão 0,01% FS' },
+      { kind: 'delete_page', page: 'p1', target: '' },
+    ] } });
+    const r = await x.request(editRequest());
+    expect(r.status).toBe(200);
+    expect(x.events).toEqual(['quota-reserved', 'countTokens', 'generateContent']);
+    expect(r.body.reply.intents).toEqual([{ kind: 'set_text', target: titleRef, text: 'PCON-Y18' }]);
+    expect(r.body.reply.blocked).toEqual([{ kind: 'set_text', target: subtitleRef, code: 'INVENTED_NUMBER' },
+      { kind: 'delete_page', page: 'p1', code: 'LAST_PAGE' }]);
+    const [body] = x.generationBodies();
+    const schema = body.generationConfig.responseSchema;
+    expect(schema.properties.intents.maxItems).toBe(40);
+    expect(schema.properties.intents.items.properties.text).toEqual({ type: 'STRING', maxLength: 400 });
+    const prompt = JSON.parse(body.contents[0].parts[0].text);
+    expect(prompt.documentOutline.pages[0].detail.length).toBeGreaterThan(30);
+    expect(prompt.system).toMatch(/NEVER invent technical values/);
+  });
+  it('passes clarification and refusal through; rejects unknown intent kinds and extra keys', async () => {
+    const question = { status: 'clarification', question: 'Qual faixa: o fundo azul ou as pílulas de faixa?' };
+    expect((await sandbox({ reply: question }).request(editRequest('mude a cor da faixa'))).body.reply).toEqual(question);
+    const refusal = { status: 'refusal', reason: 'Não posso inventar a exatidão: digite o valor ou use o PDF.' };
+    expect((await sandbox({ reply: refusal }).request(editRequest('coloque a exatidão do Y18'))).body.reply).toEqual(refusal);
+    for (const reply of [
+      { status: 'proposal', summary: 'Vou apagar tudo.', intents: [{ kind: 'run_script', target: 'o1' }] },
+      { status: 'proposal', summary: 'Vou trocar o título.', intents: [{ kind: 'set_text', target: titleRef, text: 'X', css: 'red' }] },
+      { status: 'proposal', summary: 'Vou trocar o título.', intents: [] },
+    ]) {
+      const r = await sandbox({ reply }).request(editRequest());
+      expect(r.status).toBe(502);
+      expect(r.body).toEqual({ code: 'INVALID_PROVIDER_RESPONSE', reason: 'CONTRACT' });
+    }
+  });
+  it('rejects malformed or oversized outlines before reserving budget', async () => {
+    const tampered = structuredClone(built.outline);
+    tampered.pages[0].detail![0].text = 'Faixa 0 a 250 psi';
+    const bigger = { ...built.outline, title: 'x'.repeat(151) };
+    for (const body of [{ ...editRequest(), outline: tampered }, { ...editRequest(), outline: bigger },
+      { ...editRequest(), extra: true }, { ...editRequest(), message: 'x'.repeat(1201) }]) {
+      const x = sandbox();
+      const r = await x.request(body);
+      expect(r.status).toBe(400);
+      expect(x.events).toEqual([]);
+    }
   });
 });
