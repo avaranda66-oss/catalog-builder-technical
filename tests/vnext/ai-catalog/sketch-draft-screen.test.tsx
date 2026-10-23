@@ -176,4 +176,23 @@ describe('Modo rascunho na conversa do assistente', () => {
     expect(tasks(draft.invoke).filter(task => task === 'interpret_sketch')).toEqual([]);
     expect(within(screen.getByRole('group', { name: 'Prévia das páginas do rascunho' })).getByRole('button', { name: 'Aplicar' })).toBeDisabled();
   }, 30000);
+  it('starts from photos chosen under “Adicionar página” (the editor hands them to the assistant once)', async () => {
+    const createId = () => crypto.randomUUID();
+    const doc = createCatalogDocument(createId, 'PCON');
+    const session = createDocumentSession(doc, { createId, templateRegistry: createPresysPageTemplateRegistry() });
+    const draft = draftClient();
+    const taken = vi.fn();
+    const request = { at: 1, files: [photo('especificacoes.png')] };
+    const view = render(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01" client={composerClient}
+      activePageId={doc.pages[0].id} factExtraction={serverSpecTableGateway(draft.client, USER)} sketchRequest={request}
+      onSketchRequestTaken={taken} />);
+    const setup = await screen.findByRole('group', { name: 'Criar páginas a partir do rascunho' }, { timeout: 10000 });
+    expect(within(setup).getByText('especificacoes.png')).toBeInTheDocument();
+    expect(taken).toHaveBeenCalledTimes(1);
+    view.rerender(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01" client={composerClient}
+      activePageId={doc.pages[0].id} factExtraction={serverSpecTableGateway(draft.client, USER)} sketchRequest={request}
+      onSketchRequestTaken={taken} />);
+    expect(taken).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText(/^Criar páginas a partir do rascunho \(1 foto: especificacoes\.png\)$/)).toHaveLength(1);
+  }, 30000);
 });

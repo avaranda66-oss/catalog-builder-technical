@@ -88,6 +88,8 @@ interface Props {
    * person chose there; each new `at` starts reading them here.
    */
   sketchRequest?: { readonly at: number; readonly files: readonly File[] };
+  /** The request was taken here (so a later remount does not read the same photos again). */
+  onSketchRequestTaken?: () => void;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -162,7 +164,8 @@ const bump = (value: number) => value + 1;
  */
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
-  canPublish, onPublication, selectionLabel, factExtraction, onShowPage, sketchRequest }: Props) {
+  canPublish, onPublication, selectionLabel, factExtraction, onShowPage, sketchRequest,
+  onSketchRequestTaken }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -433,11 +436,12 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
     },
   });
-  const sketchRequestAt = React.useRef(sketchRequest?.at);
+  const sketchRequestAt = React.useRef<number>();
   React.useEffect(() => {
     if (!sketchRequest || sketchRequest.at === sketchRequestAt.current) return;
     sketchRequestAt.current = sketchRequest.at;
     sketch.start(sketchRequest.files, activeIdRef.current);
+    onSketchRequestTaken?.();
     setFollow(bump);
     // Only a new request starts reading; the controller itself changes on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
