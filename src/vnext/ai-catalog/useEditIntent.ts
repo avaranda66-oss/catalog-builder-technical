@@ -3,6 +3,7 @@ import type { DocumentSession } from '../application';
 import {
   applyEditPlan, requestEditIntents, type EditIntentGateway, type EditIntentOutcome, type EditIntentTurn, type EditPlan,
 } from './edit-intents';
+import type { ArsenalAiIndexEntry } from './arsenal-ai-contract';
 
 /**
  * FR-72: the conversation that edits, as a hook for the single assistant
@@ -20,7 +21,9 @@ export interface UseEditIntentOptions {
 }
 export type EditIntentAnswer =
   | { readonly kind: 'plan'; readonly text: string; readonly plan: EditPlan }
-  | { readonly kind: 'clarification' | 'refusal' | 'error'; readonly text: string };
+  | { readonly kind: 'clarification' | 'refusal' | 'error'; readonly text: string }
+  /** Onda 4.5: the AI points at a preset of the arsenal (`preset` = ref of the index sent); `text` may be empty. */
+  | { readonly kind: 'use_preset'; readonly text: string; readonly preset: string };
 
 export const EDIT_INTENT_STALE = 'O catálogo mudou enquanto a IA respondia. Peça de novo para a versão atual.';
 export const EDIT_PLAN_STALE = 'A proposta ficou desatualizada porque o catálogo mudou. Peça de novo à IA.';
@@ -29,6 +32,7 @@ export const EDIT_PLAN_STALE = 'A proposta ficou desatualizada porque o catálog
 export function editOutcomeMessage(outcome: EditIntentOutcome): string {
   if (outcome.status === 'clarification') return outcome.question;
   if (outcome.status === 'refusal') return outcome.reason;
+  if (outcome.status === 'use_preset') return outcome.summary ?? '';
   const { items, blocked, summary } = outcome.plan;
   if (items.length === 0) {
     return 'Não vou mudar nada. ' + (blocked[0] ? blocked[0].reason : 'Não encontrei o que mudar na página aberta.');
@@ -45,18 +49,20 @@ export function useEditIntent({ session, gateway, activePageId, selectedObjectId
   const snapshot = React.useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const current = plan && plan.revision === snapshot.localSequence && plan.documentId === snapshot.document.id ? plan : undefined;
 
-  const ask = React.useCallback(async (message: string, history: readonly EditIntentTurn[] = []): Promise<EditIntentAnswer> => {
+  const ask = React.useCallback(async (message: string, history: readonly EditIntentTurn[] = [],
+    arsenal: readonly ArsenalAiIndexEntry[] = []): Promise<EditIntentAnswer> => {
     if (!gateway) return { kind: 'error', text: 'A IA não está disponível nesta tela.' };
     const sequence = ++serial.current;
     const before = session.getSnapshot();
     setBusy(true);
     try {
-      const outcome = await requestEditIntents(session, message, gateway, history, { activePageId, selectedObjectIds });
+      const outcome = await requestEditIntents(session, message, gateway, history, { activePageId, selectedObjectIds }, arsenal);
       if (sequence !== serial.current) return { kind: 'error', text: '' };
       const now = session.getSnapshot();
       if (now.localSequence !== before.localSequence || now.document.id !== before.document.id) {
         return { kind: 'error', text: EDIT_INTENT_STALE };
       }
+      if (outcome.status === 'use_preset') { setPlan(undefined); return { kind: 'use_preset', text: editOutcomeMessage(outcome), preset: outcome.preset }; }
       if (outcome.status !== 'plan') { setPlan(undefined); return { kind: outcome.status, text: editOutcomeMessage(outcome) }; }
       setPlan(outcome.plan.items.length ? outcome.plan : undefined);
       return { kind: 'plan', text: editOutcomeMessage(outcome), plan: outcome.plan };
@@ -81,7 +87,12 @@ export function useEditIntent({ session, gateway, activePageId, selectedObjectId
   }, [current, session, onBeforeMutation]);
 
   const discard = React.useCallback(() => { serial.current += 1; setPlan(undefined); setBusy(false); }, []);
+  /**
+   * Onda 4.5: a plan made HERE, without the AI (router without AI: "aumenta o título"), shown on the same card and
+   * applied by the same `apply` (one Desfazer). A request in flight is dropped.
+   */
+  const offer = React.useCallback((local: EditPlan) => { serial.current += 1; setBusy(false); setPlan(local); }, []);
   /** Stops waiting for the answer in flight (its late answer is ignored); a plan already on screen stays. */
   const cancel = React.useCallback(() => { serial.current += 1; setBusy(false); }, []);
-  return { plan: current, busy, ask, apply, discard, cancel };
+  return { plan: current, busy, ask, apply, discard, cancel, offer };
 }

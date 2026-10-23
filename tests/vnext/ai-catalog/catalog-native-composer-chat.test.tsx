@@ -91,7 +91,7 @@ describe('the assistant reads like a chat app', () => {
       scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 300 },
       scrollTo: { configurable: true, value: scrollTo },
     });
-    send('Crie uma capa');
+    send('Crie uma capa para o TA-25N');
     expect(scrollTo).toHaveBeenLastCalledWith({ top: 1000 });
     scrollTo.mockClear();
     element.scrollTop = 100;
@@ -155,7 +155,7 @@ describe('the assistant reads like a chat app', () => {
     const f = make(async () => (++turn === 1
       ? { data: null, error: Object.assign(new Error('x'), { name: 'FunctionsHttpError', context: failure }), response: failure }
       : { data: { reply: { status: 'clarification', question: 'Pode repetir os modelos?' } }, error: null }));
-    send('Crie uma capa');
+    send('Crie uma capa para o TA-25N');
     const alert = await screen.findByRole('alert');
     expect(log()).toContainElement(alert);
     expect(alert).toHaveTextContent('O serviço de IA não respondeu agora.');

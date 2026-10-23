@@ -4,6 +4,9 @@ import { mmToU, plainRichText, type CatalogDocument, type TableModel } from '../
 import { createSizedEmptyTable } from '../app/editor-defaults';
 import { applyNativeTableDesign, NativeTableDesignSchema } from './native-table-design';
 import { frameShortComposerMessage } from './composer-framing';
+import {
+  ARSENAL_AI_CATEGORIES, ARSENAL_AI_KINDS, ARSENAL_AI_LIMITS, ARSENAL_AI_REF, type ArsenalAiIndexEntry,
+} from './arsenal-ai-contract';
 
 /**
  * A creative, bounded editorial draft, not an AI-authored engineering record.
@@ -33,6 +36,13 @@ export const NativeComposePlanSchema = z.object({
 }).strict();
 export type NativeComposePlan = z.infer<typeof NativeComposePlanSchema>;
 
+const ArsenalAiIndexEntrySchema = z.object({
+  ref: z.string().regex(ARSENAL_AI_REF),
+  name: z.string().min(1).max(ARSENAL_AI_LIMITS.nameChars),
+  category: z.enum(ARSENAL_AI_CATEGORIES),
+  kind: z.enum(ARSENAL_AI_KINDS),
+  tags: z.array(z.string().min(1).max(ARSENAL_AI_LIMITS.tagChars)).max(ARSENAL_AI_LIMITS.tags),
+}).strict();
 export const NativeComposeRequestSchema = z.object({
   version: z.literal(1), task: z.literal('compose_scaffold'),
   message: z.string().trim().min(8).max(1800),
@@ -40,12 +50,17 @@ export const NativeComposeRequestSchema = z.object({
     message: z.string().trim().min(1).max(800) }).strict()).max(8),
   document: z.object({ title: prose, pages: z.number().int().min(1).max(250),
     currentPageHeadings: z.array(prose).max(12) }).strict(),
+  /** Onda 4.5: short index of the arsenal; sent only to a server that announces `arsenal_index`. */
+  arsenal: z.array(ArsenalAiIndexEntrySchema).min(1).max(ARSENAL_AI_LIMITS.entries).optional(),
 }).strict();
 export type NativeComposeRequest = z.infer<typeof NativeComposeRequestSchema>;
 export const NativeComposeReplySchema = z.discriminatedUnion('status', [
   NativeComposePlanSchema,
   z.object({ status: z.literal('clarification'),
     question: z.string().trim().min(8).max(250) }).strict(),
+  // Onda 4.5: "use the saved preset" (a ref of the arsenal index sent with the request).
+  z.object({ status: z.literal('use_preset'), preset: z.string().regex(ARSENAL_AI_REF),
+    summary: z.string().trim().min(6).max(260).optional() }).strict(),
 ]);
 export type NativeComposeReply = z.infer<typeof NativeComposeReplySchema>;
 export type NativeComposeGateway = (request: NativeComposeRequest) => Promise<unknown>;
@@ -53,6 +68,7 @@ export type NativeComposeGateway = (request: NativeComposeRequest) => Promise<un
 export function prepareNativeComposeRequest(
   document: CatalogDocument, message: string,
   history: NativeComposeRequest['history'] = [],
+  arsenal: readonly ArsenalAiIndexEntry[] = [],
 ): NativeComposeRequest {
   // A text object may itself contain confidential engineering facts. Never
   // harvest existing page contents into provider context by default.
@@ -68,11 +84,14 @@ export function prepareNativeComposeRequest(
       title: document.title.slice(0, 150), pages: document.pages.length,
       currentPageHeadings: headings,
     },
+    ...(arsenal.length ? { arsenal: arsenal.map(entry => ({ ...entry, tags: [...entry.tags] })) } : {}),
   });
 }
 
-export function verifyNativeComposeReply(untrusted: unknown): NativeComposeReply {
+export function verifyNativeComposeReply(untrusted: unknown, arsenal: readonly ArsenalAiIndexEntry[] = []): NativeComposeReply {
   const reply = NativeComposeReplySchema.parse(untrusted);
+  // Only a ref of the index this request carried (the server checked it too).
+  if (reply.status === 'use_preset' && !arsenal.some(entry => entry.ref === reply.preset)) throw new Error('AI_PRESET_UNKNOWN');
   if (reply.status === 'proposal') {
     const cells = reply.pages.reduce((total, page) =>
       total + (page.table?.columns.length ?? 0) * ((page.table?.rowLabels.length ?? 0) + 1), 0);
@@ -84,8 +103,9 @@ export function verifyNativeComposeReply(untrusted: unknown): NativeComposeReply
 export async function requestNativeCompose(
   document: CatalogDocument, message: string,
   gateway: NativeComposeGateway, history: NativeComposeRequest['history'] = [],
+  arsenal: readonly ArsenalAiIndexEntry[] = [],
 ): Promise<NativeComposeReply> {
-  return verifyNativeComposeReply(await gateway(prepareNativeComposeRequest(document, message, history)));
+  return verifyNativeComposeReply(await gateway(prepareNativeComposeRequest(document, message, history, arsenal)), arsenal);
 }
 
 const asFrame = (xMm: number, yMm: number, widthMm: number, heightMm: number) =>
