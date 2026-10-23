@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 // Bundled with the Edge Function; scripts/probe-composer.mjs and the VM tests run the same source.
 import {
-  COMPOSER_LIMITS, composerReservationMicrousd, isObj, parseComposerBudgetMode, parseComposerRequest,
+  COMPOSER_LIMITS, COMPOSER_TASKS, composerReservationMicrousd, isObj, parseComposerBudgetMode, parseComposerRequest,
   runComposerGeneration,
   type ComposerAttempt, type ComposerBudgetMode, type ComposerLedger, type ComposerLedgerPort,
 } from '../../../src/vnext/ai-catalog/composer-contract.ts';
@@ -115,7 +115,8 @@ serve(async req => {
   const ledger = budgetLedger(db, mode);
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether the AI is ready.
-    return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: !!serverKey, byok, ...await ledger.remaining() } });
+    return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: !!serverKey, byok, tasks: [...COMPOSER_TASKS],
+      ...await ledger.remaining() } });
   }
   if (request.key && !byok) return fail(c, 503, 'BYOK_DISABLED');
   const key = request.key ?? serverKey;

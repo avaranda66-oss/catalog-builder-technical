@@ -11,7 +11,7 @@ import {
   unmaskNumbers, type EditIntent,
 } from '../../../src/vnext/ai-catalog/edit-intent-contract';
 import {
-  applyEditPlan, assistantLaneFor, planEditIntents, prepareEditIntentRequest, requestEditIntents,
+  applyEditPlan, assistantLaneFor, assistantRouteFor, planEditIntents, prepareEditIntentRequest, requestEditIntents,
   type EditIntentReplyParsed, type EditPlan,
 } from '../../../src/vnext/ai-catalog/edit-intents';
 
@@ -290,6 +290,29 @@ describe('request, reply and routing', () => {
     expect(assistantLaneFor('crie uma página com a tabela comparativa', doc)).toBe('compose');
     expect(assistantLaneFor('troque o título', empty)).toBe('compose');
     expect(assistantLaneFor('monte um folder de duas páginas', doc)).toBe('compose');
+    // A short answer to the edit lane's question stays there; never on a blank catalog, never for new pages.
+    expect(assistantLaneFor('os selos de faixa', doc)).toBe('compose');
+    expect(assistantLaneFor('os selos de faixa', doc, { followUp: true })).toBe('edit');
+    expect(assistantLaneFor('os selos de faixa', empty, { followUp: true })).toBe('compose');
+    expect(assistantLaneFor('crie uma página nova de contato', doc, { followUp: true })).toBe('compose');
+  });
+  it('routes "build from these files" to the catalog plan and drawn pages to the Modo rascunho, only with those files here', () => {
+    const doc = structuredClone(PCON);
+    const files = { catalogFiles: true, sketchPhotos: true };
+    expect(assistantRouteFor('Monte o catálogo a partir destes arquivos', doc, files)).toBe('catalog-draft');
+    expect(assistantRouteFor('crie as páginas com estes PDFs', doc, files)).toBe('catalog-draft');
+    expect(assistantRouteFor('Monte o catálogo a partir destes arquivos', doc)).toBe('compose');
+    expect(assistantRouteFor('crie a página deste rascunho', doc, files)).toBe('sketch');
+    expect(assistantRouteFor('crie a página deste rascunho', doc, { catalogFiles: true })).toBe('compose');
+    // Changes on the open catalog keep going to edit_intent, even with files in the conversation.
+    expect(assistantRouteFor('troque o título da capa para PCON-Y18', doc, files)).toBe('edit');
+    expect(assistantRouteFor('mude a cor da faixa para azul claro', doc, files)).toBe('edit');
+    expect(assistantRouteFor('apague a página 4', doc, files)).toBe('edit');
+    expect(assistantRouteFor('aumente a foto da página 2', doc, files)).toBe('edit');
+    expect(assistantRouteFor('os selos', doc, { ...files, editFollowUp: true })).toBe('edit');
+    // The welcome suggestions still create pages.
+    expect(assistantRouteFor('Crie uma página comparando três modelos, com uma tabela comparativa para eu preencher com os dados.', doc, files)).toBe('compose');
+    expect(assistantRouteFor('Crie uma capa e uma apresentação profissional para este catálogo.', doc, files)).toBe('compose');
   });
   it('numberSources reads the numbers typed by the person and those of the outline', () => {
     const outline = buildDocumentOutline(structuredClone(PCON)).outline;

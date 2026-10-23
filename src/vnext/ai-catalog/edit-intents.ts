@@ -406,10 +406,39 @@ const NEW_PAGES = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|comece|gere|nova[s]? p[á
 /**
  * Which lane of the single assistant answers a typed request: "edit" (this
  * module, on the open document) or "compose" (new pages). Edits need a
- * document with something on it.
+ * document with something on it. `followUp`: the last answer of this
+ * conversation came from the edit lane (a question or a card on screen), so a
+ * short reply ("os selos", "só o título") stays there.
  */
-export function assistantLaneFor(message: string, document: CatalogDocument): 'edit' | 'compose' {
+export function assistantLaneFor(message: string, document: CatalogDocument,
+  options: { readonly followUp?: boolean } = {}): 'edit' | 'compose' {
   const hasContent = document.pages.some(page => page.objects.length > 0);
   if (!hasContent || NEW_PAGES.test(message)) return 'compose';
-  return EDIT_VERBS.test(message) ? 'edit' : 'compose';
+  return options.followUp || EDIT_VERBS.test(message) ? 'edit' : 'compose';
+}
+
+const BUILD_VERB = /(?:^|[^\p{L}])(cri[ea]r?|mont[ea]r?|fa[çc]a|fazer|gere|gerar|prepar[ea]r?|transform[ea]r?|comece)(?:$|[^\p{L}])/iu;
+const FROM_FILES = /(?:^|[^\p{L}])(arquivos?|pdfs?|anexos?|folhetos?|manua(?:l|is))(?:$|[^\p{L}])/iu;
+const WHOLE_CATALOG = /(?:^|[^\p{L}])(cat[áa]logo|p[áa]ginas)(?:$|[^\p{L}])/iu;
+const SKETCH_WORDS = /(?:^|[^\p{L}])(rascunhos?|esbo[çc]os?|desenhos?|desenhei|desenhad[ao]s?)(?:$|[^\p{L}])/iu;
+
+export type AssistantRoute = 'edit' | 'compose' | 'catalog-draft' | 'sketch';
+export interface AssistantRouteContext {
+  /** The last answer of this conversation came from the edit lane. */
+  readonly editFollowUp?: boolean;
+  /** This conversation has PDFs that "Montar catálogo a partir destes arquivos" can read now. */
+  readonly catalogFiles?: boolean;
+  /** This conversation has photos that the Modo rascunho can read now. */
+  readonly sketchPhotos?: boolean;
+}
+/**
+ * FR-73, one assistant: where a typed request goes. "Monte o catálogo com
+ * estes PDFs" (with PDFs sent here) → the catalog plan (FR-70); "crie a
+ * página deste rascunho" (with photos sent here) → Modo rascunho; a change
+ * on the open catalog → edit_intent; anything else → new pages (composer).
+ */
+export function assistantRouteFor(message: string, document: CatalogDocument, context: AssistantRouteContext = {}): AssistantRoute {
+  if (context.sketchPhotos && SKETCH_WORDS.test(message) && BUILD_VERB.test(message)) return 'sketch';
+  if (context.catalogFiles && FROM_FILES.test(message) && WHOLE_CATALOG.test(message) && BUILD_VERB.test(message)) return 'catalog-draft';
+  return assistantLaneFor(message, document, { followUp: context.editFollowUp });
 }

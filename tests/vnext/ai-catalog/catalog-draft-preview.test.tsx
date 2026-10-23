@@ -101,6 +101,20 @@ describe('"Montar catálogo a partir destes arquivos" in the chat (FR-70)', () =
     expect(session.getSnapshot().document).toEqual(doc);
   }, 40000);
 
+  it('a typed "monte o catálogo a partir destes arquivos" opens the same flow as the button (FR-73, one assistant)', async () => {
+    const { doc, session, draft } = make();
+    fireEvent.change(screen.getByLabelText('Escolher arquivos'), { target: { files: [new File([folderPdfBytes().slice().buffer as ArrayBuffer], FOLDER_FILE, { type: 'application/pdf' })] } });
+    await screen.findByRole('button', { name: CATALOG_DRAFT_ACTION }, { timeout: 20000 });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' }), { target: { value: 'Monte o catálogo a partir destes arquivos' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar ao Gemini' }));
+    await screen.findByRole('group', { name: 'Montar catálogo a partir dos arquivos' }, { timeout: 20000 });
+    expect(tasks(draft.invoke)).toEqual(['status']);
+    const composerTasks = (composerClient.functions.invoke as ReturnType<typeof vi.fn>).mock.calls
+      .map(([, options]) => (options as { body: { task: string } }).body.task);
+    expect(composerTasks.filter(task => task !== 'status')).toEqual([]);
+    expect(session.getSnapshot().document).toEqual(doc);
+  }, 40000);
+
   it('reads the spec pages, plans, and shows every page with where each value came from — nothing changes yet', async () => {
     const { doc, session, draft, preview } = await openPreview();
     expect(tasks(draft.invoke)).toEqual(['status', 'extract_facts', 'plan_draft']);

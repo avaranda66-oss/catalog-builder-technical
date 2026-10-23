@@ -2,7 +2,9 @@
 import { webcrypto } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession } from '@/vnext/application';
-import { CatalogDocumentSchema, type CatalogDocument, type TableModel, type TableObject } from '@/vnext/domain';
+import {
+  CatalogDocumentSchema, pageFooterBandMm, pageFooterReserveBottomMm, type CatalogDocument, type PageFooter, type TableModel, type TableObject,
+} from '@/vnext/domain';
 import {
   DRAFT_PAGE_REF_PREFIX, LABEL_HEADER, NOT_APPLICABLE_TEXT, applyCompiledDraft, choosableCandidates, compileDraft, compileDraftDocument,
   conditionPositionId, draftIntegrityProblems, factSetFromReport, openPendingCount, pendingFacts, recordChoice,
@@ -11,6 +13,8 @@ import {
 import type { FactVerificationReport } from '@/vnext/ai-catalog/fact-verifier';
 import { CONTINUATION_LABEL } from '@/vnext/editor/table-split-authoring';
 import { draftPreview } from '@/vnext/ai-catalog/spec-table/draft-preview';
+import { applyPagePlan, compilePagePlan } from '@/vnext/ai-catalog/page-plan-apply';
+import { createPresysPageTemplateRegistry } from '@/vnext/library/presys-ta25n-starter';
 import { TA, folderReport, noCandidate, twoFiles, withCoolingRow } from './draft-compiler-fixture';
 import { cellText, richPlain } from '../editor/table-split-fixtures';
 
@@ -285,6 +289,76 @@ describe('tall tables continue on the next pages (FR-35), all under one transact
     expect(session.getSnapshot().document.pages.length).toBe(1 + draft.parts);
     session.undo();
     expect(session.getSnapshot().document).toEqual(start);
+  });
+
+  describe('the automatic footer of the catalog (FR-55, Onda 4E)', () => {
+    const withFooter = (footer: PageFooter) => {
+      let serial = 0;
+      const createId = () => `id-${++serial}`;
+      const plain = createCatalogDocument(createId, 'Catálogo');
+      const start: CatalogDocument = { ...plain, style: { ...plain.style, pageFooter: footer } };
+      return { start, session: createDocumentSession(start, { createId, templateRegistry: createPresysPageTemplateRegistry() }) };
+    };
+    const bottom = (object: TableObject) => object.frame.yMm + object.frame.heightMm;
+
+    it('every part of a long table stops above the footer, on every page that prints it', () => {
+      const footer: PageFooter = { documentCode: 'FT-PCON', revision: '03', showOnFirstPage: false };
+      const { start, session } = withFooter(footer);
+      const set = tallSet(16, 6);
+      const draft = compileDraft(set, start, { transactionId: 'tx-rodape' });
+      expect(applyCompiledDraft(session, draft).ok).toBe(true);
+      const document = session.getSnapshot().document;
+      const parts = tables(document);
+      expect(parts).toHaveLength(draft.parts);
+      parts.forEach(({ page, object }) => {
+        const number = document.pages.indexOf(page) + 1;
+        expect(number).toBeGreaterThan(1);
+        expect(bottom(object)).toBeLessThanOrEqual(page.heightMm - pageFooterReserveBottomMm(page, footer, number) + 1e-6);
+        expect(bottom(object)).toBeLessThan(pageFooterBandMm(page).yMm);
+      });
+      // Every row still lands exactly once; the footer only moves rows to the next part.
+      expect(draftIntegrityProblems(set, draft)).toEqual([]);
+      const bodies = parts.flatMap(({ object }) => object.table.rows.slice(1).map(row => cellText(object.table, row.id, 0)));
+      expect(bodies.filter(text => text.startsWith('Faixa'))).toHaveLength(96);
+      // The footer only ever takes room: never fewer parts than the same table without it.
+      expect(draft.parts).toBeGreaterThanOrEqual(compileDraft(set, createCatalogDocument(() => crypto.randomUUID(), 'Catálogo')).parts);
+    });
+
+    it('the first page keeps its full height when the footer is off there, and leaves the footer room when it is on', () => {
+      // 33 rows fill page 1 exactly: they fit without the footer, and need a second page when page 1 prints it.
+      const set = tallSet(33);
+      const plain = createCatalogDocument(() => crypto.randomUUID(), 'Catálogo');
+      expect(compileDraft(set, plain, { onPageId: plain.pages[0].id }).parts).toBe(1);
+      for (const showOnFirstPage of [false, true]) {
+        const { start, session } = withFooter({ showOnFirstPage });
+        const draft = compileDraft(set, start, { onPageId: start.pages[0].id, transactionId: `tx-capa-${showOnFirstPage}` });
+        expect(draft.parts).toBe(showOnFirstPage ? 2 : 1);
+        expect(applyCompiledDraft(session, draft).ok).toBe(true);
+        const parts = tables(session.getSnapshot().document);
+        expect(session.getSnapshot().document.pages.indexOf(parts[0].page)).toBe(0);
+        for (const { page, object } of parts) expect(bottom(object)).toBeLessThan(pageFooterBandMm(page).yMm);
+      }
+    });
+
+    it('the AI page plan (Aplicar plano de páginas) keeps its table pages above the footer too', () => {
+      const footer: PageFooter = { showOnFirstPage: false };
+      const { start, session } = withFooter(footer);
+      const compiled = compilePagePlan(start, [
+        { kind: 'template', key: 'visao', template: 'P2', fills: { 'P2.intro': { kind: 'text', text: 'Calibradores de pressão' } } },
+        { kind: 'spec-table', key: 'specs', set: tallSet(16, 6) },
+      ], { transactionId: 'plano-rodape' });
+      const outcome = applyPagePlan(session, compiled);
+      expect(outcome.ok).toBe(true);
+      const document = session.getSnapshot().document;
+      expect(document.pages.length).toBeGreaterThan(2);
+      document.pages.forEach((page, index) => {
+        if (index === 0) return;
+        const band = pageFooterBandMm(page).yMm;
+        // Text, tables and photos end above the footer; the model's own address line (“-footer”) shares it by design.
+        const content = page.objects.filter(object => ['text', 'table', 'image'].includes(object.type) && !object.id.endsWith('-footer'));
+        for (const object of content) expect(object.frame.yMm + object.frame.heightMm, `${object.id} p${index + 1}`).toBeLessThan(band);
+      });
+    });
   });
 
   it('refuses a draft prepared for another catalog, without changing anything', () => {

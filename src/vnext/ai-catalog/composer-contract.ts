@@ -106,6 +106,11 @@ export type EditIntentRequest = {
   key?: string;
 };
 export type ComposerStatusRequest = { task: 'status' };
+/**
+ * What this version of the function can do, told by the free `status` task, so a newer screen knows before it sends
+ * or pays anything (an older deploy has no list: the conversation that edits stays off there).
+ */
+export const COMPOSER_TASKS = Object.freeze(['compose_scaffold', 'revise_selected_text', 'edit_intent'] as const);
 export type ComposerGenerationRequest = ComposeScaffoldRequest | ReviseTextRequest | EditIntentRequest;
 export type ComposerRequest = ComposerGenerationRequest | ComposerStatusRequest;
 

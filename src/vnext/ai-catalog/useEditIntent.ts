@@ -81,5 +81,7 @@ export function useEditIntent({ session, gateway, activePageId, selectedObjectId
   }, [current, session, onBeforeMutation]);
 
   const discard = React.useCallback(() => { serial.current += 1; setPlan(undefined); setBusy(false); }, []);
-  return { plan: current, busy, ask, apply, discard };
+  /** Stops waiting for the answer in flight (its late answer is ignored); a plan already on screen stays. */
+  const cancel = React.useCallback(() => { serial.current += 1; setBusy(false); }, []);
+  return { plan: current, busy, ask, apply, discard, cancel };
 }

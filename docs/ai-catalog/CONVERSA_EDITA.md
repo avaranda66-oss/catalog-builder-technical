@@ -75,9 +75,18 @@ Script: `scripts/probe-edit-intent.ts`. Ele usa o mesmo código da produção (r
 - O nome do objeto vem de Camadas. Na capa PCON, a foto aparece como "Imagem …rid-official-trim". A fatia P está dando nomes melhores às peças da capa, e o cartão aproveita sozinho.
 - "Separar especificações elétricas" (J3) ainda não é uma intenção. Hoje a IA responde com pergunta ou recusa, e a divisão de tabela continua no menu da tabela.
 
-## Como montar no assistente (depois da 4A)
+## Montado no assistente (23/10/2026, ramo `claude/onda-4-provas`)
 
-O plano reserva `CatalogNativeComposer.tsx` para a 4A. Por isso, esta fatia entrega as peças prontas e testadas, mas sem montar:
+`CatalogNativeComposer.tsx` já usa as peças abaixo. No `send()`, `assistantRouteFor(mensagem, documento, contexto)` decide:
+
+1. Ação rápida ("Desfaça", "Deixe a tabela mais compacta") e reescrita do texto selecionado continuam como antes.
+2. "Monte o catálogo a partir destes arquivos" com PDFs enviados nesta conversa → o mesmo fluxo do botão da 4A (`plan_draft`). "Crie a página deste rascunho" com fotos enviadas → Modo rascunho.
+3. Pedido de mudança num catálogo com conteúdo (troque, mude, apague, aumente, traduza…) → `edit_intent` e o cartão "Vou fazer isto". Depois de uma pergunta ou de um cartão da conversa que edita, a resposta curta ("os selos") continua lá.
+4. O resto (criar páginas, catálogo em branco, sugestões da tela inicial) → composer.
+
+Antes de enviar, o `status` gratuito do composer precisa listar `edit_intent` em `tasks` (`COMPOSER_TASKS`). Um servidor mais antigo mostra o cartão "Ainda não dá para mudar o catálogo pela conversa", sem enviar nem cobrar nada. Testes: `tests/vnext/ai-catalog/catalog-native-composer-edit.test.tsx`.
+
+Peças (contrato original da fatia):
 
 - `useEditIntent({ session, gateway: editIntentGateway(client, ownKey), activePageId, selectedObjectIds, onBeforeMutation })` → `{ plan, busy, ask(message, history), apply(), discard() }`. `ask` devolve o texto que o assistente diz (`kind: plan | clarification | refusal | error`). `apply()` devolve "Apliquei… Um Desfazer volta tudo".
 - `<EditIntentCard plan onApply onAdjust onDiscard busy />` usa o `ChatCard` do assistente (Aplicar / Ajustar / Descartar).

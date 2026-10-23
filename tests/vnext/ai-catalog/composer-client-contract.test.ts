@@ -68,6 +68,13 @@ describe('readiness check tolerates the old and the new composer (FR-60)', () =>
       remainingMicrousd: 2_000_000, callReserveMicrousd: 12_040 });
     expect(invoke.mock.calls[0]).toEqual(['vnext-catalog-composer', { body: { version: 1, task: 'status' } }]);
   });
+  it('reads which tasks the deployed composer knows (FR-72: edit_intent)', async () => {
+    const answering = (tasks?: unknown) => clientAnswering({ data: { code: 'OK', status: { enabled: true, mode: 'settled', serverKey: true,
+      byok: false, remainingMicrousd: null, callReserveMicrousd: 12_040, ...(tasks ? { tasks } : {}) } }, error: null }).client;
+    expect(await readComposerReadiness(answering(['compose_scaffold', 'revise_selected_text', 'edit_intent']))).toMatchObject({ editing: true });
+    expect(await readComposerReadiness(answering(['compose_scaffold']))).toMatchObject({ editing: false });
+    expect(await readComposerReadiness(answering())).not.toHaveProperty('editing');
+  });
   it('treats the old composer (no status task) and unreadable answers as available', async () => {
     expect(await readComposerReadiness(clientAnswering(httpFailure(400, { code: 'INVALID_REQUEST' })).client)).toEqual({ kind: 'available' });
     expect(await readComposerReadiness(clientAnswering({ data: { reply: null }, error: null }).client)).toEqual({ kind: 'available' });

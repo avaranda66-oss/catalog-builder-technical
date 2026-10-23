@@ -102,7 +102,9 @@ export function editIntentGateway(client: NativeComposeFunctionsClient, credenti
 
 export type ComposerReadiness =
   /** New composer: ready, with what the server reported. */
-  | { kind: 'ready'; serverKey: boolean; byok: boolean; remainingMicrousd: number | null; callReserveMicrousd: number | null }
+  | { kind: 'ready'; serverKey: boolean; byok: boolean; remainingMicrousd: number | null; callReserveMicrousd: number | null;
+      /** FR-72: the deployed function knows `edit_intent` (absent: an older deploy without the task list). */
+      editing?: boolean }
   /** Composer deployed before the status task, or status could not be read: assume available. */
   | { kind: 'available' }
   /** A known reason the AI cannot answer now. */
@@ -120,7 +122,8 @@ export async function readComposerReadiness(client: NativeComposeFunctionsClient
   if (!result.error && status && typeof status === 'object') {
     const value = status as Record<string, unknown>;
     return { kind: 'ready', serverKey: value.serverKey === true, byok: value.byok === true,
-      remainingMicrousd: finite(value.remainingMicrousd), callReserveMicrousd: finite(value.callReserveMicrousd) };
+      remainingMicrousd: finite(value.remainingMicrousd), callReserveMicrousd: finite(value.callReserveMicrousd),
+      ...(Array.isArray(value.tasks) ? { editing: value.tasks.includes('edit_intent') } : {}) };
   }
   if (!result.error) return { kind: 'available' };
   const failure = await composerFailure(result);

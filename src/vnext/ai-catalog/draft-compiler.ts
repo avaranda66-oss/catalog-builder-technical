@@ -5,7 +5,9 @@ import {
 import type { TablePresetId } from '../application/contracts';
 import { materializeTablePreset, tablePresetFirstColumnMm } from '../application/table-preset-registry';
 import { createTableInsertSpec } from '../app/editor-defaults';
-import { findObjectInTree, mmToU, plainRichText, type CatalogDocument, type DocumentStyle, type Page, type TableModel } from '../domain';
+import {
+  findObjectInTree, mmToU, pageFooterReserveBottomMm, plainRichText, type CatalogDocument, type DocumentStyle, type Page, type TableModel,
+} from '../domain';
 import { estimateTableHeightMm, pastedTableModel } from '../editor/table-paste-import';
 import { planTableComposition, projectTableLook, tableLookSteps } from '../editor/table-look-authoring';
 import { continuationTitle } from '../editor/table-split-authoring';
@@ -586,7 +588,13 @@ export function compileDraft(set: DraftFactSet, document: CatalogDocument, optio
   const blankPage = createCatalogDocument(() => `rascunho-modelo-${++probe}`).pages[0];
   const firstPage = onPage ?? blankPage;
   const widthOf = (page: Page) => Math.max(10, page.widthMm - (page.safeArea?.leftMm ?? 20) - (page.safeArea?.rightMm ?? 20));
-  const availableMm = (page: Page) => page.heightMm - (page.safeArea?.bottomMm ?? 20) - (page.safeArea?.topMm ?? 20) - SAFETY_MM;
+  // FR-55: when the catalog prints the automatic footer, each part stops above it (as a continued table does in
+  // table-split-authoring). Page numbers count the cover as 1: part 0 is on `onPage` or right after the anchor.
+  const anchorNumber = document.pages.findIndex(page => page.id === anchorPageId) + 1;
+  const pageNumberOf = (part: number) => anchorNumber + part + (onPage ? 0 : 1);
+  const bottomMm = (page: Page, part: number) => Math.max(page.safeArea?.bottomMm ?? 20,
+    pageFooterReserveBottomMm(page, document.style.pageFooter, pageNumberOf(part)));
+  const availableMm = (page: Page, part: number) => page.heightMm - bottomMm(page, part) - (page.safeArea?.topMm ?? 20) - SAFETY_MM;
 
   // Paginate the full table (FR-35 paginator) with conservative estimates of the house look.
   const all = grid.cells.map((_, index) => index);
@@ -601,8 +609,8 @@ export function compileDraft(set: DraftFactSet, document: CatalogDocument, optio
     rowHeightsU: heightsFor(estimate, document.style, widthOf(firstPage)),
     titleHeightU: Math.ceil(mmToU(titleMm)), continuationTitleHeightU: Math.ceil(mmToU(continuationMm)),
     footerHeightU: Math.ceil(mmToU(footerMm)),
-    firstPageAvailableU: Math.max(0, Math.floor(mmToU(availableMm(firstPage)))),
-    nextPageAvailableU: Math.max(1, Math.floor(mmToU(availableMm(blankPage)))),
+    firstPageAvailableU: Math.max(0, Math.floor(mmToU(availableMm(firstPage, 0)))),
+    nextPageAvailableU: Math.max(1, Math.floor(mmToU(availableMm(blankPage, 1)))),
   });
   const rowIndex = new Map(estimate.rows.map((row, index) => [row.id, index]));
   const slices = pagination.slices.length
@@ -625,7 +633,7 @@ export function compileDraft(set: DraftFactSet, document: CatalogDocument, optio
     const styled = styledPart(table, document.style, presetId, { ...page, id: pageRef });
     const spec = createTableInsertSpec({ ...page, objects: [] }, styled);
     const partTitleMm = part === 0 ? titleMm : continuationMm;
-    const heightMm = Math.min(availableMm(page) + SAFETY_MM,
+    const heightMm = Math.min(availableMm(page, part) + SAFETY_MM,
       Math.ceil((estimateTableHeightMm(styled, document.style.defaultText, widthOf(page)) + partTitleMm + (last ? footerMm : 0)) * 2) / 2);
     steps.push({ kind: 'table', part, pageRef, action: { type: 'object.insert', pageId: pageRef,
       object: { ...spec, frameU: { ...spec.frameU, heightU: mmToU(heightMm) }, table: styled } } });
