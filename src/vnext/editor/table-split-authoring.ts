@@ -4,11 +4,13 @@ import {
   frameToCanonicalU,
   minimumUForProjectedQ,
   mmToU,
+  pageFooterReserveBottomMm,
   plainRichText,
   qToU,
   uToQ,
   type CatalogDocument,
   type Page,
+  type PageFooter,
   type RichText,
   type TableModel,
   type TableObject,
@@ -173,6 +175,15 @@ function pageGeometry(page: Pick<Page, 'heightMm' | 'safeArea'>): ContinuationPa
   return { heightMm: page.heightMm, safeTopMm: page.safeArea?.topMm ?? 0, safeBottomMm: page.safeArea?.bottomMm ?? 0 };
 }
 
+/**
+ * Onda 4 (FR-55): on a page that prints the automatic footer the table stops above it, so a continued table never
+ * runs under "Página x de y". Continuation pages are never the cover (page number 2 or later).
+ */
+function withFooterReserve(geometry: ContinuationPageGeometry, footer: PageFooter | undefined, pageNumber: number): ContinuationPageGeometry {
+  const reserveMm = pageFooterReserveBottomMm({ widthMm: 210, heightMm: geometry.heightMm }, footer, pageNumber);
+  return reserveMm > geometry.safeBottomMm ? { ...geometry, safeBottomMm: reserveMm } : geometry;
+}
+
 function richTextPlain(rich: RichText): string {
   return rich.paragraphs.map((paragraph) => paragraph.inlines.map((inline) => inline.kind === 'text' ? inline.text : '\n').join('')).join('\n');
 }
@@ -264,8 +275,9 @@ export function planTableSplit(
   document: CatalogDocument,
   objectId: string,
   measurement: FitHeightMeasurement | null | undefined,
-  continuationPage: ContinuationPageGeometry = continuationPageGeometry()
+  blankContinuationPage: ContinuationPageGeometry = continuationPageGeometry()
 ): TableSplitPlanning {
+  const continuationPage = withFooterReserve(blankContinuationPage, document.style.pageFooter, 2);
   const entry = findObjectInTree(document, objectId);
   if (!entry || entry.object.type !== 'table') return unavailable('NO_TABLE', MESSAGES.NO_TABLE);
   if (entry.parentGroup) return unavailable('GROUPED', MESSAGES.GROUPED);
@@ -282,7 +294,7 @@ export function planTableSplit(
   const titleFact = facts.find((fact) => fact.kind === 'tableTitle' && fact.pageId === page.id && fact.tableId === table.id);
 
   const frame = frameToCanonicalU(object.frame);
-  const source = pageGeometry(page);
+  const source = withFooterReserve(pageGeometry(page), document.style.pageFooter, document.pages.indexOf(page) + 1);
   const bottomU = add(mmToU(source.heightMm), -mmToU(source.safeBottomMm));
   const nextBottomU = add(mmToU(continuationPage.heightMm), -mmToU(continuationPage.safeBottomMm));
   const firstAvailableU = Math.max(0, add(bottomU, -frame.yU));
@@ -583,7 +595,7 @@ export function applyTableSplit(session: DocumentSession, prepared: PreparedTabl
     if (!session.execute({ type: 'page.add', afterPageId: previousPageId }, { transactionId }).ok) return failure();
     const pages = session.getSnapshot().document.pages;
     const page = pages[pages.findIndex((entry) => entry.id === previousPageId) + 1];
-    const geometry = page && pageGeometry(page);
+    const geometry = page && withFooterReserve(pageGeometry(page), session.getSnapshot().document.style.pageFooter, pages.indexOf(page) + 1);
     // The parts were measured for this page; a different blank page would need a new measurement.
     if (!page || geometry.heightMm !== plan.continuationPage.heightMm || geometry.safeTopMm !== plan.continuationPage.safeTopMm
       || geometry.safeBottomMm !== plan.continuationPage.safeBottomMm) return failure();

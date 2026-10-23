@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogDocument, Page } from '../../domain';
-import { compilePlans, DocumentRenderer, type TablePlan } from '../../rendering';
+import { compilePlans, DocumentSliceRenderer, type PageSliceNumbering, type TablePlan } from '../../rendering';
 import './PageThumbnail.css';
 
 /**
@@ -33,6 +33,8 @@ export interface PageThumbnailProps {
   /** Content key from `pageThumbnailSignature`; pages with the same key are drawn once. */
   readonly signature: string;
   readonly className?: string;
+  /** FR-55: where this page sits in the catalog, so the footer reads "Página 4 de 11" (page 1 of 1 when absent). */
+  readonly numbering?: PageSliceNumbering;
 }
 
 /**
@@ -67,9 +69,13 @@ function cachedJson<T extends object>(cache: WeakMap<T, string>, value: T): stri
   return json;
 }
 
-/** Everything that changes how a page looks: the page itself, the document style, the images and the language. */
-export function pageThumbnailSignature(page: Page, document: PageThumbnailDocument): string {
-  return `${cachedJson(pageJson, page)}|${cachedJson(styleJson, document.style)}|${cachedJson(assetsJson, document.assets)}|${document.locale}`;
+/**
+ * Everything that changes how a page looks: the page itself, the document style, the images and the language — and,
+ * when the catalog prints the automatic footer, the page's place in the catalog ("4 de 11").
+ */
+export function pageThumbnailSignature(page: Page, document: PageThumbnailDocument, numbering?: PageSliceNumbering): string {
+  const base = `${cachedJson(pageJson, page)}|${cachedJson(styleJson, document.style)}|${cachedJson(assetsJson, document.assets)}|${document.locale}`;
+  return document.style.pageFooter && numbering ? `${base}|${numbering.firstPageNumber}/${numbering.pageCount}` : base;
 }
 
 const SHADOW_ROOTS = new WeakMap<Element, ShadowRoot>();
@@ -157,16 +163,16 @@ class ThumbnailBoundary extends React.Component<{ readonly onError: () => void; 
   }
 }
 
-const ThumbnailDrawing = React.memo(function ThumbnailDrawing({ page, document, assetUrls, signature }: Omit<PageThumbnailProps, 'className'>) {
+const ThumbnailDrawing = React.memo(function ThumbnailDrawing({ page, document, assetUrls, signature, numbering }: Omit<PageThumbnailProps, 'className'>) {
   const single = React.useMemo<CatalogDocument>(() => ({ ...document, pages: [page] }), [document, page]);
   const plans = plansFor(signature, single);
   pageThumbnailDiagnostics.draws += 1;
-  return <DocumentRenderer document={single} plans={plans} assetUrls={assetUrls} />;
+  return <DocumentSliceRenderer document={single} plans={plans} assetUrls={assetUrls} numbering={numbering ?? { firstPageNumber: 1, pageCount: 1 }} />;
 }, (previous, next) => previous.signature === next.signature && previous.assetUrls === next.assetUrls);
 
 type Drawn = Omit<PageThumbnailProps, 'className'>;
 
-function PageThumbnailView({ page, document, assetUrls, signature, className }: PageThumbnailProps) {
+function PageThumbnailView({ page, document, assetUrls, signature, className, numbering }: PageThumbnailProps) {
   const hostRef = React.useRef<HTMLSpanElement>(null);
   const shadowRef = React.useRef<ShadowRoot | null>(null);
   const [mount, setMount] = React.useState<{ root: ShadowRoot; css: string } | null>(null);
@@ -188,9 +194,9 @@ function PageThumbnailView({ page, document, assetUrls, signature, className }: 
     if (!onScreen || drawn?.signature === signature) return;
     React.startTransition(() => {
       setFailed(false);
-      setDrawn({ page, document, assetUrls, signature });
+      setDrawn({ page, document, assetUrls, signature, numbering });
     });
-  }, [assetUrls, document, drawn?.signature, onScreen, page, signature]);
+  }, [assetUrls, document, drawn?.signature, numbering, onScreen, page, signature]);
 
   const scale = width ? width / A4_WIDTH_PX : PAGE_THUMBNAIL_SCALE;
   const state = failed ? 'error' : drawn ? (drawn.signature === signature ? 'rendered' : 'stale') : 'waiting';
@@ -203,7 +209,7 @@ function PageThumbnailView({ page, document, assetUrls, signature, className }: 
           <div className="vnext-thumbnail-stage" style={{ transform: `scale(${scale})` }}>
             <ThumbnailBoundary key={drawn.signature} onError={() => setFailed(true)}>
               <React.Profiler id="page-thumbnail" onRender={recordThumbnailRender}>
-                <ThumbnailDrawing page={drawn.page} document={drawn.document} assetUrls={drawn.assetUrls} signature={drawn.signature} />
+                <ThumbnailDrawing page={drawn.page} document={drawn.document} assetUrls={drawn.assetUrls} signature={drawn.signature} numbering={drawn.numbering} />
               </React.Profiler>
             </ThumbnailBoundary>
           </div>

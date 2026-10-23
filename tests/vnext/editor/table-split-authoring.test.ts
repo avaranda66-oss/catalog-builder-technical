@@ -246,6 +246,18 @@ describe('FR-35 continuing a long table on the next page', () => {
     expect(new Set(continued.paragraphs[0].inlines.map((inline) => inline.id)).size).toBe(3);
   });
 
+  it('FR-55: with the automatic footer on, every part stops above "Página x de y" (box at 280 mm + 1 mm)', () => {
+    const plain = documentWithTable(longTable({ bodyRows: 68 }));
+    const document = { ...plain, style: { ...plain.style, pageFooter: { showOnFirstPage: true } } };
+    const { session, prepared, outcome } = split(document);
+    expect(outcome.ok).toBe(true);
+    const footerTopMm = 280 - 1;
+    for (const part of tables(session.getSnapshot().document)) expect(part.frame.yMm + part.frame.heightMm).toBeLessThanOrEqual(footerTopMm);
+    const without = split(plain).prepared;
+    expect(prepared.plan.nextAvailableU).toBeLessThan(without.plan.nextAvailableU);
+    expect(prepared.plan.continuationPage.safeBottomMm).toBe(297 - 279);
+  });
+
   it('explains plainly when it cannot help, and never changes the catalog in that case', () => {
     const fits = documentWithTable(longTable({ bodyRows: 10 }));
     expect(planTableSplit(fits, SPLIT_OBJECT_ID, measureTable(fits))).toMatchObject({ ok: false, reason: 'FITS', overflows: false });
