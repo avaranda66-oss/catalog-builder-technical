@@ -257,4 +257,17 @@ describe('Linhas de acessórios', () => {
     expect(sketchReadingOrder(source.regions).map(item => item.id)).toEqual(['region-3', 'region-2', 'region-1']);
     expect(sketchReadingOrder([...source.regions].reverse()).map(item => item.id)).toEqual(['region-3', 'region-2', 'region-1']);
   });
+  it('fits the fields again to the page type the person picks, keeping the same three choices', () => {
+    const title = region('title', [40, 60, 90, 700], 'Especificações técnicas');
+    const table = region('table', [150, 60, 650, 940], 'característica TA-25N', 'do PDF');
+    const source = plan('especificacoes', [title, table]);
+    const suggested = snapSketchPlan(source);
+    expect(suggested.suggestedArchetypeId).toBe(suggested.archetypeId);
+    const other = suggested.alternatives[0];
+    const picked = snapSketchPlan(source, { template: other });
+    expect(picked.archetypeId).toBe(other);
+    expect(picked.suggestedArchetypeId).toBe(suggested.archetypeId);
+    expect(new Set([picked.archetypeId, ...picked.alternatives])).toEqual(new Set([suggested.archetypeId, ...suggested.alternatives]));
+    expect(picked.assignments.every(item => item.slotId.startsWith(`${other}.`))).toBe(true);
+  });
 });

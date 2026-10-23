@@ -259,7 +259,9 @@ export async function requestCatalogPlan(client: DraftClient, brief: PlanBrief):
 export type DraftReadiness =
   | { readonly kind: 'ready'; readonly remainingMicrousd: number | null; readonly callReserveMicrousd: number | null;
       /** FR-70: the deployed function knows `plan_draft` (absent: an older deploy that does not). */
-      readonly planning?: boolean }
+      readonly planning?: boolean;
+      /** Modo rascunho: the deployed function knows `interpret_sketch` (absent: an older deploy that does not). */
+      readonly sketching?: boolean }
   | { readonly kind: 'blocked'; readonly code: DraftClientCode };
 /** Free check (no provider call, no budget): can reading files start now? */
 export async function readDraftReadiness(client: DraftClient): Promise<DraftReadiness> {
@@ -275,7 +277,8 @@ export async function readDraftReadiness(client: DraftClient): Promise<DraftRead
   const reserve = typeof status.callReserveMicrousd === 'number' ? status.callReserveMicrousd : null;
   if (remaining !== null && reserve !== null && remaining < reserve) return { kind: 'blocked', code: 'AGENT_DAILY_BUDGET_EXCEEDED' };
   return { kind: 'ready', remainingMicrousd: remaining, callReserveMicrousd: reserve,
-    ...(Array.isArray(status.tasks) ? { planning: status.tasks.includes('plan_draft') } : {}) };
+    ...(Array.isArray(status.tasks)
+      ? { planning: status.tasks.includes('plan_draft'), sketching: status.tasks.includes('interpret_sketch') } : {}) };
 }
 
 /** Plain Portuguese for every outcome, each with what to do next. No codes, no provider text. */

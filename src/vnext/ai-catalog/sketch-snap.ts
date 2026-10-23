@@ -56,6 +56,8 @@ export interface SketchSnapPlan {
   readonly templateId: string;
   readonly label: string;
   readonly proposedArchetypeId: PresysArchetypeId;
+  /** The model this screen suggests (the first choice); `archetypeId` differs only when the person picked another. */
+  readonly suggestedArchetypeId: SketchTemplateId;
   /** The drawn structure agrees with the model's proposal (a cover proposal fits P1 or C1). */
   readonly proposalMatches: boolean;
   readonly alternatives: readonly SketchTemplateId[];
@@ -203,8 +205,12 @@ const SLOT_ORDER: Readonly<Record<SketchTemplateId, Partial<Record<SketchRegionK
 /** Model slots of the C1 family bar (C1.modelo-1 … C1.modelo-6). */
 const MAX_BAR_MODELS = 6;
 
-/** Picks the model and its fields. Builds no page and fills nothing: labels and digits stay in the plan. */
-export function snapSketchPlan(plan: SketchPagePlan): SketchSnapPlan {
+/**
+ * Picks the model and its fields. Builds no page and fills nothing: labels and digits stay in the plan.
+ * `options.template` is the page model the person chose on the review screen (one of the proposal and its
+ * alternatives): the fields are fitted to it and the other two stay as alternatives.
+ */
+export function snapSketchPlan(plan: SketchPagePlan, options: { readonly template?: SketchTemplateId } = {}): SketchSnapPlan {
   const proposedArchetypeId = SKETCH_ARCHETYPES.find(item => item.id === plan.archetype)!.presysId;
   const groups = groupSketchRegions(plan);
   const candidates = structuralCandidates(plan, groups).sort((left, right) =>
@@ -214,9 +220,13 @@ export function snapSketchPlan(plan: SketchPagePlan): SketchSnapPlan {
   const inFamily = candidates.find(candidate => candidate.matches && family.includes(candidate.id));
   const proposalMatches = Boolean(inFamily);
   // A sparse sketch still needs review; when no rule passes, the proposal is kept instead of a guess.
-  const archetypeId: SketchTemplateId = inFamily?.id ?? candidates.find(candidate => candidate.matches)?.id ?? proposedArchetypeId;
+  const suggested: SketchTemplateId = inFamily?.id ?? candidates.find(candidate => candidate.matches)?.id ?? proposedArchetypeId;
+  const forced = options.template && TEMPLATES.some(item => item.id === options.template) ? options.template : undefined;
+  const archetypeId: SketchTemplateId = forced ?? suggested;
   const template = sketchTemplate(archetypeId);
-  const alternatives = candidates.filter(candidate => candidate.id !== archetypeId).slice(0, 2).map(candidate => candidate.id);
+  // The same three choices whichever is picked: the suggestion first, then the best other candidates.
+  const alternatives = [suggested, ...candidates.map(candidate => candidate.id).filter(id => id !== suggested)]
+    .filter(id => id !== archetypeId).slice(0, 2);
   const ordered = sketchReadingOrder(plan.regions);
   const rank = new Map(ordered.map((region, index) => [region.id, index]));
   const byId = new Map(ordered.map(region => [region.id, region]));
@@ -334,7 +344,8 @@ export function snapSketchPlan(plan: SketchPagePlan): SketchSnapPlan {
   if (!proposalMatches) warnings.push('O tipo de página proposto precisa de confirmação porque a estrutura do rascunho é diferente.');
   if (unassignedRegionIds.length) warnings.push('Algumas partes do rascunho não cabem nos campos deste modelo. Revise as pendências antes de montar a página.');
   return {
-    archetypeId, templateId: template.templateId, label: template.label, proposedArchetypeId, proposalMatches, alternatives,
+    archetypeId, templateId: template.templateId, label: template.label, proposedArchetypeId, suggestedArchetypeId: suggested,
+    proposalMatches, alternatives,
     assignments, groups, decorativeRegionIds, sourceNoteRegionIds: [...sourceNotes.keys()], unassignedRegionIds,
     missingSlotIds: template.slots.filter(slot => !assignments.some(assignment => assignment.slotId === slot.id)).map(slot => slot.id),
     questions, warnings, requiresConfirmation: true,
