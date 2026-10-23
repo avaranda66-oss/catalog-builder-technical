@@ -73,7 +73,7 @@ export const EditIntentSchema = z.discriminatedUnion('kind', [
 const BlockedSchema = z.object({ kind: z.enum(EDIT_INTENT_KINDS), target: ref.optional(), page: pageRef.optional(),
   code: z.enum(BLOCKED_CODES) }).strict();
 export const EditIntentReplySchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('proposal'), summary: z.string().trim().min(6).max(EDIT_INTENT_LIMITS.summaryChars + 40),
+  z.object({ status: z.literal('proposal'), summary: z.string().trim().min(6).max(EDIT_INTENT_LIMITS.summaryChars + 40).optional(),
     intents: z.array(EditIntentSchema).max(EDIT_INTENT_LIMITS.intents),
     blocked: z.array(BlockedSchema).max(EDIT_INTENT_LIMITS.intents) }).strict(),
   z.object({ status: z.literal('clarification'), question: z.string().trim().min(8).max(EDIT_INTENT_LIMITS.questionChars) }).strict(),
@@ -124,6 +124,7 @@ export const BLOCKED_REASONS: Readonly<Record<BlockedCode, string>> = {
   LOCKED: 'Este objeto está travado. Destrave em Camadas e peça de novo.',
   INVENTED_NUMBER: 'Recusado: a IA escreveu um número que não está no catálogo nem no seu pedido. Valores técnicos só entram conferidos.',
   NUMBER_DROPPED: 'Recusado: a tradução perdia ou mudava um número do texto original.',
+  CODE_CHANGED: 'Recusado: a tradução mudava um código de modelo. Códigos ficam como estão.',
   TEXT_CUT: 'Este texto é longo demais para a IA mexer com segurança. Edite à mão.',
   NOT_EDITABLE: 'Este texto tem formatação que só dá para mudar à mão.',
   DUPLICATE: 'Pedido repetido para o mesmo objeto.',
@@ -355,7 +356,8 @@ export function planEditIntents(document: CatalogDocument, revision: number, out
     actions.push(...built.actions);
     items.push({ kind: intent.kind, target: targetLabel(outline, ref), ...built.item });
   }
-  return { status: 'plan', plan: { documentId: document.id, revision, summary: reply.summary, actions, items, blocked } };
+  const summary = reply.summary ?? (items.length === 1 ? 'Preparei 1 mudança.' : `Preparei ${items.length} mudanças.`);
+  return { status: 'plan', plan: { documentId: document.id, revision, summary, actions, items, blocked } };
 }
 
 /** Asks the AI and returns the plan to preview. Nothing is changed in the document. */

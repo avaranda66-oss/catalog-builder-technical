@@ -452,6 +452,7 @@ describe('edit_intent (FR-72): the conversation that edits, same guards and boun
     const [body] = x.generationBodies();
     const schema = body.generationConfig.responseSchema;
     expect(schema.properties.intents.maxItems).toBe(40);
+    expect(Object.keys(schema.properties.intents.items.properties)).toEqual(['kind', 'ref', 'text', 'value']);
     expect(schema.properties.intents.items.properties.text).toEqual({ type: 'STRING', maxLength: 400 });
     const prompt = JSON.parse(body.contents[0].parts[0].text);
     expect(prompt.documentOutline.pages[0].detail.length).toBeGreaterThan(30);
@@ -466,11 +467,31 @@ describe('edit_intent (FR-72): the conversation that edits, same guards and boun
       { status: 'proposal', summary: 'Vou apagar tudo.', intents: [{ kind: 'run_script', target: 'o1' }] },
       { status: 'proposal', summary: 'Vou trocar o título.', intents: [{ kind: 'set_text', target: titleRef, text: 'X', css: 'red' }] },
       { status: 'proposal', summary: 'Vou trocar o título.', intents: [] },
+      { status: 'proposal', summary: 'Oi', intents: [{ kind: 'delete_page', page: 'p1' }] },
     ]) {
       const r = await sandbox({ reply }).request(editRequest());
       expect(r.status).toBe(502);
       expect(r.body).toEqual({ code: 'INVALID_PROVIDER_RESPONSE', reason: 'CONTRACT' });
     }
+  });
+  it('reads the flat wire intents {kind, ref, text, value}; a translation may come without summary (seen live)', async () => {
+    const detail = built.outline.pages[0].detail!;
+    const range = detail.find(object => object.hint === 'pilula-a1')!.ref;
+    const band = detail.find(object => object.hint === 'fundo-azul')!.ref;
+    const colour = await sandbox({ reply: { status: 'proposal', summary: 'Vou mudar a cor do fundo.', intents: [
+      { kind: 'set_color', ref: band, value: 'Azul claro' }, { kind: 'delete_page', ref: 'p1' }, { kind: 'resize', ref: titleRef, value: 'larger' }] } })
+      .request(editRequest('Mude a cor do fundo azul para azul claro'));
+    expect(colour.body.reply.intents).toEqual([{ kind: 'set_color', target: band, color: 'azul_claro' },
+      { kind: 'resize', target: titleRef, size: 'larger' }]);
+    expect(colour.body.reply.blocked).toEqual([{ kind: 'delete_page', page: 'p1', code: 'LAST_PAGE' }]);
+    const r = await sandbox({ reply: { status: 'proposal', language: 'en', intents: [
+      { kind: 'translate_text', ref: titleRef, text: 'PCON HYBRID' }, { kind: 'translate_text', ref: range, text: '{{A}} to {{B}} psi' }, {},
+      { kind: '', ref: '', text: '' }] } })
+      .request(editRequest('Traduza esta página para o inglês'));
+    expect(r.status).toBe(200);
+    expect(r.body.reply).toEqual({ status: 'proposal', blocked: [], intents: [
+      { kind: 'translate_text', target: titleRef, text: 'PCON HYBRID', language: 'en' },
+      { kind: 'translate_text', target: range, text: '{{A}} to {{B}} psi', language: 'en' }] });
   });
   it('rejects malformed or oversized outlines before reserving budget', async () => {
     const tampered = structuredClone(built.outline);

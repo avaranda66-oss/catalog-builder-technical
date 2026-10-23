@@ -156,6 +156,20 @@ describe('intent -> existing editor actions, one Desfazer', () => {
     expect(session.getSnapshot().document).toEqual(before);
     expect(session.getSnapshot().canUndo).toBe(false);
   });
+  it('a translation never changes a model code; codes kept as they are are skipped silently', () => {
+    const session = pconSession();
+    const outline = buildDocumentOutline(session.getSnapshot().document);
+    const footer = refOf(outline, id('rodape-2'));
+    const code = refOf(outline, id('modelo-1'));
+    const footerText = outline.outline.pages[0].detail!.find(object => object.ref === footer)!.text!;
+    expect(footerText.startsWith('PCON-HIBRIDO · ')).toBe(true);
+    const result = plan(session, [
+      { kind: 'translate_text', target: footer, text: footerText.replace('PCON-HIBRIDO', 'PCON-HYBRID').replace('Coleção experimental', 'Experimental collection') },
+      { kind: 'translate_text', target: code, text: 'KOMPRESSOR-Y{{A}}' },
+    ], 'traduza esta página para o inglês');
+    expect(result.items).toHaveLength(0);
+    expect(result.blocked.map(item => item.reason)).toEqual(['Recusado: a tradução mudava um código de modelo. Códigos ficam como estão.']);
+  });
   it('"letra maior", "negrito", "cor" and "aumente a foto" use text.setStyle, polygon.setStyle and object.resize', () => {
     const session = pconSession();
     const outline = buildDocumentOutline(session.getSnapshot().document);
