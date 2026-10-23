@@ -24,6 +24,7 @@ import {
   type ArsenalTeamOrigin,
   type ArsenalViewer,
 } from '../../../arsenal';
+import type { ArsenalService } from '../../../arsenal/service';
 
 /**
  * Onda 4.5 — what the editor needs to show the "Arsenal" (ADR-arsenal). The app builds it once (Supabase repository,
@@ -47,6 +48,11 @@ export interface ArsenalEditorRuntime {
   readonly previewAssetUrls?: ReadonlyMap<string, string>;
   /** UUID generator (tests). Default: `crypto.randomUUID`. */
   readonly createId?: () => string;
+  /**
+   * The list the assistant reads (one list, local search, no network per request). Built over `repository` when
+   * absent (`createArsenalEditorRuntime` always gives one).
+   */
+  readonly service?: ArsenalService;
 }
 
 export function arsenalRandomId(runtime: Pick<ArsenalEditorRuntime, 'createId'>): string {

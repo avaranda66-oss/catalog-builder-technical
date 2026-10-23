@@ -173,6 +173,7 @@ import { ArsenalSaveDialog } from './editor/arsenal/ArsenalSaveDialog';
 import {
   arsenalSaveRequestForSelection, createSessionInsertionPort, type ArsenalEditorRuntime, type ArsenalSaveRequest,
 } from './editor/arsenal/arsenal-runtime';
+import { useAssistantArsenal } from './editor/arsenal/use-assistant-arsenal';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -426,6 +427,7 @@ export function EditorWorkspace({
     readonly request: ArsenalSaveRequest; readonly document: CatalogDocument; readonly returnFocus: HTMLElement | null;
   } | null>(null);
   const [arsenalRefresh, setArsenalRefresh] = React.useState(0);
+  const [arsenalSearch, setArsenalSearch] = React.useState<{ readonly serial: number; readonly query: string }>();
   React.useEffect(() => { if (assistantOpen) setArsenalOpen(false); }, [assistantOpen]);
   // Modo rascunho: photos chosen under "Adicionar página" go to the assistant, which reads them there.
   const [sketchRequest, setSketchRequest] = React.useState<{ readonly at: number; readonly files: readonly File[] }>();
@@ -2858,6 +2860,20 @@ export function EditorWorkspace({
     if (!arsenal || !request || !prepareForArsenal()) return;
     setArsenalSave({ request, document: session.getSnapshot().document, returnFocus: trigger });
   };
+  /** "Ver outros" → "Abrir o arsenal" in the chat: the panel opens with the request's words in its search. */
+  const openArsenalFromAssistant = (query: string) => {
+    if (!arsenal || !prepareForArsenal()) return;
+    setArsenalSearch((current) => ({ serial: (current?.serial ?? 0) + 1, query }));
+    setAssistantOpen(false);
+    setArsenalOpen(true);
+  };
+  // Onda 4.5: the same arsenal in the assistant (found without AI, pointed at by the AI, "Guardar no arsenal?").
+  const assistantArsenal = useAssistantArsenal({
+    runtime: arsenal, document, assetUrls: persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS,
+    refreshKey: arsenalRefresh, galleryOpen: arsenalOpen,
+    openGallery: openArsenalFromAssistant,
+    onSaved: () => setArsenalRefresh((value) => value + 1),
+  });
   /** After "Usar": show the page that received the model and select what entered (blocks and tables). */
   const showArsenalInsertion = ({ preset, result, message }: ArsenalInsertedEvent) => {
     if (result.pageId !== activePageIdRef.current) setActivePage(result.pageId);
@@ -5207,6 +5223,7 @@ export function EditorWorkspace({
               selectionLabel={editorState.selectedObjectIds.length
                 ? assistantSelectionLabel({ count: editorState.selectedObjectIds.length, type: selectedObject?.type }) : undefined}
               selectedObjectIds={editorState.selectedObjectIds}
+              arsenal={assistantArsenal}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
               measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
               onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
@@ -5226,7 +5243,7 @@ export function EditorWorkspace({
             assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS}
             currentPageId={selectedPage.id} selectedObjects={selectedObjects}
             createPort={() => createSessionInsertionPort(session, arsenal)}
-            prepare={prepareForArsenal} refreshKey={arsenalRefresh}
+            prepare={prepareForArsenal} refreshKey={arsenalRefresh} searchRequest={arsenalSearch}
             onInserted={showArsenalInsertion} onMessage={setStatusMessage}
             onClose={() => setArsenalOpen(false)} />
         )}

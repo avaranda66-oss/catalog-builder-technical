@@ -1,5 +1,6 @@
 import React from 'react';
-import type { ArsenalPreset, ArsenalPreviewBuilder } from '../../../arsenal';
+import type { ArsenalPreset, ArsenalPreview, ArsenalPreviewBuilder } from '../../../arsenal';
+import { buildArsenalPreview as buildInsertionPreview } from '../../../arsenal/arsenal-preview';
 import { PageThumbnail, pageThumbnailSignature, type PageThumbnailDocument } from '../PageThumbnail';
 import {
   arsenalPayloadAssets,
@@ -18,6 +19,27 @@ export interface ArsenalPresetThumbnailProps {
   readonly className?: string;
 }
 
+/**
+ * The picture the card draws. Without a builder from the runtime it is the insertion's own preview (same position,
+ * fonts and "Foto a escolher" frames as "Usar" would leave, with the open catalog's style and images); this
+ * screen's simpler builder stays as a reserve when that one cannot draw the preset.
+ */
+export function arsenalCardPreview(
+  preset: ArsenalPreset,
+  document: Pick<PageThumbnailDocument, 'style'>,
+  assetUrls: ReadonlyMap<string, string>,
+  builder?: ArsenalPreviewBuilder,
+): ArsenalPreview | null {
+  if (builder) {
+    try { return builder(preset); } catch { return null; }
+  }
+  try {
+    return buildInsertionPreview(preset, { assetUrls, documentStyle: document.style });
+  } catch {
+    try { return buildArsenalPreview(preset); } catch { return null; }
+  }
+}
+
 /** Ratio (height / width) from which the picture is drawn by its height instead of its width. */
 const TALL_RATIO = 0.75;
 
@@ -28,13 +50,11 @@ const TALL_RATIO = 0.75;
 export const ArsenalPresetThumbnail = React.memo(function ArsenalPresetThumbnail({
   preset, document, assetUrls, builder, className,
 }: ArsenalPresetThumbnailProps) {
-  const preview = React.useMemo(() => {
-    try {
-      return (builder ?? buildArsenalPreview)(preset);
-    } catch {
-      return null;
-    }
-  }, [builder, preset]);
+  const style = document.style;
+  const preview = React.useMemo(
+    () => arsenalCardPreview(preset, { style }, assetUrls, builder),
+    [assetUrls, builder, preset, style],
+  );
   const page = React.useMemo(
     () => preview && withArsenalImagePlaceholders(preview.page, (assetId) => assetUrls.has(assetId)),
     [assetUrls, preview],

@@ -42,6 +42,13 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { createTranslationCenterFoundation, VNextTranslationGatewayClient, vnextTranslationGatewayInvokeFromFunctionsClient } from '../translation';
 import { TranslationReviewCoordinator } from '../translation/review-coordinator';
 import { createSaveBeforeLibraryNavigation } from './catalog-navigation';
+import { SupabaseArsenalRepository } from '../arsenal/supabase-repository';
+import { createPresysArsenalBuiltinSource } from '../arsenal/builtin-source';
+import {
+  arsenalAssetAvailability,
+  arsenalViewerFromAuth,
+  createArsenalEditorRuntime,
+} from './editor/arsenal/create-arsenal-runtime';
 import {
   currentTrustedV2ReturnTarget,
   storeTrustedV2ReturnTarget,
@@ -526,6 +533,26 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
       },
     });
     window.addEventListener('pagehide', () => { translation.cancel(); }, { once: true });
+    // Onda 4.5: the team's arsenal (migration 00031) with the PRESYS models read-only. Using a preset never calls
+    // the AI; its photos load through the same bridge as the catalog's and are installed as soon as they load.
+    const arsenal = createArsenalEditorRuntime({
+      repository: new SupabaseArsenalRepository(vnextRpcClientFromSupabase(supabase), {
+        builtins: createPresysArsenalBuiltinSource(),
+        isOffline: browserIsOffline,
+      }),
+      viewer: arsenalViewerFromAuth(initialAuth),
+      createId: createBrowserId,
+      isAssetAvailable: arsenalAssetAvailability(
+        async (asset) => authorityInvalidated
+          ? { ok: false, state: { status: 'unavailable', error: 'A sessão mudou. Abra o catálogo novamente.', asset } }
+          : assetBridge.resolve(asset, getActiveLineage()),
+        (asset, state) => {
+          if (authorityInvalidated || !runtime) return;
+          runtime.workspace.setAssetRuntimeState(asset.id, state);
+          runtime.workspace.setAssetUrl(asset.id, state.url);
+        },
+      ),
+    });
     reactRoot.render(
       <React.StrictMode>
         <VNextApp
@@ -534,6 +561,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
           composerClient={supabase as unknown as NativeComposeFunctionsClient}
           factExtraction={serverSpecTableGateway(supabase as unknown as DraftClient, authorizedUserId)}
           simpleByDefault
+          arsenal={arsenal}
           onRequestLibrary={() => { void requestLibrary(); }}
           translation={translation}
           onOpenTranslatedCopy={catalogId => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}

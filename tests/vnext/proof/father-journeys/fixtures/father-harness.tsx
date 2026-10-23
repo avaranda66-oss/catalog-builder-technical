@@ -75,6 +75,7 @@ import {
 } from '@/vnext/translation';
 import { TranslationReviewCoordinator } from '@/vnext/translation/review-coordinator';
 import { createFatherArsenal } from './father-arsenal';
+import { arsenalAssetAvailability, createArsenalEditorRuntime } from '@/vnext/app/editor/arsenal/create-arsenal-runtime';
 import '@fontsource/noto-sans/400.css';
 import '@fontsource/noto-sans/700.css';
 
@@ -699,6 +700,22 @@ function installEditorRuntime(runtime: VNextPersistenceRuntime, bridge: DefaultA
 
   const requestLibrary = createSaveBeforeLibraryNavigation(runtime, () => navigateTo(), () => activeRuntime === runtime);
 
+  // Arsenal (Onda 4.5), montado como em mountVNextApp: mesmo repositório e serviço que as provas veem em __FATHER__.
+  const editorArsenal = createArsenalEditorRuntime({
+    repository: arsenal.repository,
+    service: arsenal.service,
+    viewer: { userId: HARNESS_USER_ID, role: 'editor' },
+    createId: createUuid,
+    isAssetAvailable: arsenalAssetAvailability(
+      (asset) => bridge.resolve(asset, activeLineage(runtime)),
+      (asset, state) => {
+        if (activeRuntime !== runtime) return;
+        runtime.workspace.setAssetRuntimeState(asset.id, state);
+        runtime.workspace.setAssetUrl(asset.id, state.url);
+      },
+    ),
+  });
+
   mode = 'editor';
   renderer.render(
     <React.StrictMode>
@@ -708,6 +725,7 @@ function installEditorRuntime(runtime: VNextPersistenceRuntime, bridge: DefaultA
         composerClient={composerClient}
         factExtraction={factExtraction}
         simpleByDefault
+        arsenal={editorArsenal}
         onRequestLibrary={() => { void requestLibrary(); }}
         translation={translation}
         onOpenTranslatedCopy={(catalogId) => navigateTo(catalogId)}

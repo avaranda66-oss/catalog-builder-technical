@@ -61,6 +61,8 @@ export interface ArsenalPanelProps {
   readonly prepare: () => boolean;
   /** Changes after something was saved in the arsenal, so the list is read again. */
   readonly refreshKey?: number;
+  /** "Abrir o arsenal" from the assistant: these words go in the search (all categories). */
+  readonly searchRequest?: { readonly serial: number; readonly query: string };
   readonly onInserted: (event: ArsenalInsertedEvent) => void;
   /** Every sentence for the person goes to the editor's one status line (one announcement). */
   readonly onMessage: (message: string) => void;
@@ -78,7 +80,7 @@ const cacheKey = (preset: Pick<ArsenalPresetSummary, 'id' | 'revision'>) => `${p
  */
 export function ArsenalPanel({
   open, runtime, document, assetUrls, currentPageId, selectedObjects, createPort, prepare, refreshKey = 0,
-  onInserted, onMessage, onClose,
+  searchRequest, onInserted, onMessage, onClose,
 }: ArsenalPanelProps) {
   const headingId = React.useId();
   const [mounted, setMounted] = React.useState(open);
@@ -88,7 +90,13 @@ export function ArsenalPanel({
   const [summaries, setSummaries] = React.useState<readonly ArsenalPresetSummary[]>([]);
   const [loaded, setLoaded] = React.useState<ReadonlyMap<string, ArsenalPreset>>(() => new Map());
   const [category, setCategory] = React.useState<ArsenalCategoryFilter>('all');
-  const [query, setQuery] = React.useState('');
+  const [query, setQuery] = React.useState(searchRequest?.query ?? '');
+  const [searchSerial, setSearchSerial] = React.useState(searchRequest?.serial);
+  if (searchRequest && searchRequest.serial !== searchSerial) {
+    setSearchSerial(searchRequest.serial);
+    setQuery(searchRequest.query);
+    setCategory('all');
+  }
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [lastMessage, setLastMessage] = React.useState<string | null>(null);
   const [renameTarget, setRenameTarget] = React.useState<{ preset: ArsenalPresetSummary; trigger: HTMLElement | null } | null>(null);
