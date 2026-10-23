@@ -203,7 +203,16 @@ describe('the AI and the arsenal', () => {
     const proposal = await screen.findByRole('group', { name: 'Proposta de páginas' });
     expect(f.tasksSent()).toEqual(['compose_scaffold']);
     fireEvent.click(within(proposal).getByRole('button', { name: 'Aplicar' }));
+    // The offer is a link in the "Apliquei…" message (no card yet): the conversation keeps its messages in view.
+    await waitFor(() => expect(log()).toHaveTextContent('Apliquei 1 página(s)'));
+    const applied = within(log()).getByText(/^Apliquei 1 página\(s\)/).closest('article')!;
+    expect(within(applied).getByRole('button', { name: 'Desfazer' })).toBeInTheDocument();
+    const link = within(applied).getByRole('button', { name: 'Guardar no arsenal…' });
+    expect(screen.queryByRole('group', { name: 'Guardar no arsenal' })).toBeNull();
+    fireEvent.click(link);
     const offer = await screen.findByRole('group', { name: 'Guardar no arsenal' });
+    expect(within(applied).queryByRole('button', { name: 'Guardar no arsenal…' })).toBeNull();
+    expect(within(offer).getByRole('textbox', { name: 'Nome' })).toHaveFocus();
     expect(within(offer).getByRole('textbox', { name: 'Nome' })).toHaveValue('Contato PRESYS');
     expect(within(offer).getByRole('combobox', { name: 'Categoria' })).toHaveValue('paginas');
     fireEvent.change(within(offer).getByRole('textbox', { name: 'Nome' }), { target: { value: 'Página de contato' } });

@@ -110,6 +110,8 @@ interface SaveCardProps {
   readonly pages: readonly SaveToArsenalPage[];
   readonly busy?: boolean;
   readonly error?: string;
+  /** Opened from the "Guardar no arsenal…" link of the "Apliquei…" message: the fields show at once. */
+  readonly startOpen?: boolean;
   readonly onSave: (pageId: string, name: string, category: 'capas' | 'paginas') => void;
   readonly onDismiss: () => void;
 }
@@ -118,8 +120,13 @@ const suggestedName = (page: SaveToArsenalPage | undefined) => (page?.heading ??
   .slice(0, ARSENAL_LIMITS.nameMaxChars).trim();
 const suggestedCategory = (page: SaveToArsenalPage | undefined): 'capas' | 'paginas' => page?.type === 'cover' ? 'capas' : 'paginas';
 
-/** "Guardar no arsenal?": the AI built something new; the person keeps it for the whole team with a name and category. */
-export function SaveToArsenalCard({ pages, busy, error, onSave, onDismiss }: SaveCardProps) {
+/**
+ * "Guardar no arsenal?": the AI built something new; the person keeps it for the whole team with a name and category.
+ * Normally the "Apliquei…" message offers it as a link and this card opens with the fields (`startOpen`). Without that
+ * message it starts as a short question (two buttons); the name and category fields open only after "Guardar…".
+ */
+export function SaveToArsenalCard({ pages, busy, error, startOpen = false, onSave, onDismiss }: SaveCardProps) {
+  const [open, setOpen] = React.useState(startOpen);
   const [pageId, setPageId] = React.useState(pages[0]?.pageId ?? '');
   const page = pages.find(entry => entry.pageId === pageId) ?? pages[0];
   const [name, setName] = React.useState(() => suggestedName(page));
@@ -131,6 +138,19 @@ export function SaveToArsenalCard({ pages, busy, error, onSave, onDismiss }: Sav
     setCategory(suggestedCategory(chosen));
   };
   const trimmed = name.trim();
+  const built = pages.length > 1 ? `estas ${pages.length} páginas` : 'esta página';
+  if (!open) {
+    return (
+      <ChatCard label={SAVE_TO_ARSENAL_LABEL} title="Guardar no arsenal?"
+        actions={<>
+          <button type="button" className="vnext-btn-primary" aria-expanded={false} disabled={!page}
+            onClick={() => setOpen(true)}>Guardar…</button>
+          <button type="button" onClick={onDismiss}>Agora não</button>
+        </>}>
+        <p>A IA montou {built}. A equipe pode usar de novo, sem gastar IA.</p>
+      </ChatCard>
+    );
+  }
   return (
     <ChatCard label={SAVE_TO_ARSENAL_LABEL} title="Guardar no arsenal?"
       actions={<>
@@ -138,7 +158,7 @@ export function SaveToArsenalCard({ pages, busy, error, onSave, onDismiss }: Sav
           onClick={() => page && onSave(page.pageId, trimmed, category)}>Guardar no arsenal</button>
         <button type="button" onClick={onDismiss}>Agora não</button>
       </>}>
-      <p>A IA montou {pages.length > 1 ? 'estas páginas' : 'esta página'}. Guarde no arsenal para a equipe usar de novo, sem gastar IA.</p>
+      <p>Confira o nome e a categoria. Fica para toda a equipe.</p>
       <div className="ai-chat-arsenal-form">
         {pages.length > 1 && <label>Página
           <select value={page?.pageId} onChange={event => choosePage(event.target.value)}>
@@ -146,7 +166,7 @@ export function SaveToArsenalCard({ pages, busy, error, onSave, onDismiss }: Sav
           </select>
         </label>}
         <label>Nome
-          <input type="text" value={name} maxLength={ARSENAL_LIMITS.nameMaxChars} onChange={event => setName(event.target.value)} />
+          <input type="text" autoFocus value={name} maxLength={ARSENAL_LIMITS.nameMaxChars} onChange={event => setName(event.target.value)} />
         </label>
         <label>Categoria
           <select value={category} onChange={event => setCategory(event.target.value as 'capas' | 'paginas')}>

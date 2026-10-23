@@ -141,7 +141,13 @@ interface ThreadItem { key: string; at: number; order: number; tail?: string; no
 /** Onda 4.5: a card of the arsenal (found without the AI, or pointed at by the AI). */
 interface LocalCardAt extends EditCardAt { message: string; source: 'local' | 'ai'; route: Extract<LocalRoute, { kind: 'local' }> }
 /** Onda 4.5: "Guardar no arsenal?" after pages built by the AI were applied. */
-interface SaveOfferAt extends EditCardAt { pages: readonly SaveToArsenalPage[] }
+interface SaveOfferAt extends EditCardAt {
+  pages: readonly SaveToArsenalPage[];
+  /** The "Apliquei…" message that offers "Guardar no arsenal…" as a link (the form opens only when asked). */
+  turnId?: string;
+  /** The name and category fields are open. */
+  open?: boolean;
+}
 
 /** One free readiness check per client per minute; reopening the panel reuses it. */
 const readinessCache = new WeakMap<NativeComposeFunctionsClient, { at: number; value: Promise<ComposerReadiness> }>();
@@ -676,7 +682,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
           pageId: page.id, heading: pending.plan.pages[index].heading, type: pending.plan.pages[index].type }));
         setSaveError(undefined);
         setSaveOffer(pages.length ? { conversationId: pending.conversationId, pages, serial: ++cardSerial.current,
-          at: said ? Date.parse(said.timestamp) : Date.now() } : undefined);
+          at: said ? Date.parse(said.timestamp) : Date.now(), turnId: said?.id } : undefined);
       }
       setPending(undefined);
       setError('');
@@ -798,6 +804,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // ------------------------------------------------------------------ the conversation, in order
   const inActive = (item: { conversationId?: string } | undefined): boolean =>
     Boolean(item) && (!item?.conversationId || item.conversationId === active.id);
+  const shownSaveOffer = inActive(saveOffer) && arsenal?.save ? saveOffer : undefined;
+  // Onda 4.5: after "Apliquei…" the offer is a link in that message, so the conversation keeps its messages in view.
+  const saveLinkTurn = shownSaveOffer && !shownSaveOffer.open ? shownSaveOffer.turnId : undefined;
   const items: ThreadItem[] = turns.map((turn) => ({
     key: turn.id, at: Date.parse(turn.timestamp) || 0, order: 0,
     node: <article key={turn.id} className={'ai-chat-msg ai-chat-turn ai-chat-' + turn.role} data-chat-action={turn.action}>
@@ -806,6 +815,11 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         <p>{turn.content}</p>
         {undoable.get(turn.id) === snapshot.localSequence && snapshot.canUndo && (
           <button type="button" className="ai-chat-link" onClick={() => undoFromConversation(turn.id)}>Desfazer</button>
+        )}
+        {saveLinkTurn === turn.id && (
+          <button type="button" className="ai-chat-link" data-arsenal-save-offer="" aria-expanded={false}
+            title="A equipe pode usar de novo o que a IA montou, sem gastar IA"
+            onClick={() => setSaveOffer((current) => current && { ...current, open: true })}>Guardar no arsenal…</button>
         )}
       </div>
     </article>,
@@ -934,11 +948,11 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         onDiscard={() => setLocalCard(undefined)} />,
     });
   }
-  const shownSaveOffer = inActive(saveOffer) && arsenal?.save ? saveOffer : undefined;
-  if (shownSaveOffer) {
+  if (shownSaveOffer && !saveLinkTurn) {
     items.push({
       key: `arsenal-save:${shownSaveOffer.serial}`, at: shownSaveOffer.at, order: 2,
       node: <SaveToArsenalCard key={`arsenal-save:${shownSaveOffer.serial}`} pages={shownSaveOffer.pages} busy={saveBusy}
+        startOpen={shownSaveOffer.open}
         error={saveError} onSave={(pageId, name, category) => { void saveToArsenal(pageId, name, category); }}
         onDismiss={() => { setSaveOffer(undefined); setSaveError(undefined); }} />,
     });
