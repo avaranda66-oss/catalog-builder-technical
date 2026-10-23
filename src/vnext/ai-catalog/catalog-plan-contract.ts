@@ -24,7 +24,7 @@ import { GEMINI_EXTRACTION_MODEL, geminiCostMicrousd } from './gemini-models.ts'
 
 /** Same model as the PDF reading (project default for this function); low thinking. */
 export const PLAN_MODEL = GEMINI_EXTRACTION_MODEL;
-export const PLAN_PROMPT_VERSION = 'catalog-plan-v1' as const;
+export const PLAN_PROMPT_VERSION = 'catalog-plan-v3' as const;
 
 export const PLAN_LIMITS = Object.freeze({
   /** Whole request body: the page texts travel in it (the other tasks keep DRAFT_LIMITS.maxBodyChars). */
@@ -258,32 +258,47 @@ export function parsePlanDraftRequest(value: unknown): PlanDraftRequest | null {
 
 const str = (maxLength: number, extra: Obj = {}) => ({ type: 'STRING', maxLength, ...extra });
 const int = (minimum: number, maximum: number) => ({ type: 'INTEGER', minimum, maximum });
-const arr = (items: Obj, maxItems: number) => ({ type: 'ARRAY', maxItems, items });
+/** An array of strings: bounded in the schema itself. */
+const strings = (items: Obj, maxItems: number) => ({ type: 'ARRAY', maxItems, items });
+/** An array of objects: bounded by the server (PLAN_ANSWER_ARRAY_LIMITS) and by the prompt, see below. */
+const objects = (items: Obj) => ({ type: 'ARRAY', items });
 const obj = (properties: Record<string, Obj>, required: readonly string[] = Object.keys(properties)) =>
   ({ type: 'OBJECT', properties, required: [...required], propertyOrdering: Object.keys(properties) });
 
-/** Every string and every array is bounded (without limits the model writes until MAX_TOKENS). */
+/**
+ * Gemini refuses (400 "invalid argument") a response schema whose arrays of OBJECTS carry maxItems once the
+ * unrolled grammar grows (probed on 2026-10-22 with this schema: maxItems on `pages` or `literals` alone is
+ * refused; the same happened to the FR-66 sheet). So every string has maxLength and every array of strings has
+ * maxItems IN the schema; each array of objects is bounded here, on the server, before the answer leaves (items
+ * past the limit are left out and counted), the prompt states each limit, and maxOutputTokens caps the whole.
+ */
+export const PLAN_ANSWER_ARRAY_LIMITS: Readonly<Record<string, number>> = Object.freeze({
+  pages: PLAN_LIMITS.maxPages, sourcePages: PLAN_LIMITS.maxSourcePages, texts: PLAN_LIMITS.maxTexts,
+  tables: PLAN_LIMITS.maxTables, rows: PLAN_LIMITS.maxRows, literals: PLAN_LIMITS.maxLiterals,
+});
+
+/** Every string is bounded, every array of strings too; arrays of objects are bounded by PLAN_ANSWER_ARRAY_LIMITS. */
 export function catalogPlanResponseSchema(): Obj {
   const L = PLAN_LIMITS;
   return obj({
     title: str(L.titleChars),
-    pages: arr(obj({
+    pages: objects(obj({
       kind: str(32, { enum: [...PLAN_PAGE_KIND_IDS] }),
       purpose: str(L.purposeChars),
-      sourcePages: arr(obj({ file: str(L.fileIdChars), page: int(1, DRAFT_LIMITS.maxPdfPages) }), L.maxSourcePages),
-      texts: arr(obj({ slot: str(L.slotChars, { enum: TEXT_SLOT_IDS }), text: str(L.textChars) }), L.maxTexts),
-      tables: arr(obj({
+      sourcePages: objects(obj({ file: str(L.fileIdChars), page: int(1, DRAFT_LIMITS.maxPdfPages) })),
+      texts: objects(obj({ slot: str(L.slotChars, { enum: TEXT_SLOT_IDS }), text: str(L.textChars) })),
+      tables: objects(obj({
         slot: str(L.slotChars, { enum: TABLE_SLOT_IDS }),
-        header: arr(str(60), L.maxCells),
-        rows: arr(obj({ section: str(80), cells: arr(str(L.cellChars), L.maxCells) }), L.maxRows),
-        notes: arr(str(200), L.maxNotes),
-      }), L.maxTables),
-    }), L.maxPages),
-    literals: arr(obj({
+        header: strings(str(60), L.maxCells),
+        rows: objects(obj({ section: str(80), cells: strings(str(L.cellChars), L.maxCells) })),
+        notes: strings(str(200), L.maxNotes),
+      })),
+    })),
+    literals: objects(obj({
       id: int(0, 999), text: str(L.literalChars), file: str(L.fileIdChars), page: int(0, DRAFT_LIMITS.maxPdfPages),
       fact: str(L.factIdChars),
-    }), L.maxLiterals),
-    questions: arr(str(L.questionChars), L.maxQuestions),
+    })),
+    questions: strings(str(L.questionChars), L.maxQuestions),
   });
 }
 
@@ -309,11 +324,13 @@ ${PLAN_PAGE_KINDS.map(slotGuide).join('\n')}
 REGRAS PARA TODO TEXTO QUE VOCÊ ESCREVER (campos, células, notas e título):
 1. Português do Brasil, frases curtas e claras, só com o que os arquivos dizem. Não invente recursos, normas, certificações, prazos, garantias nem comparações.
 2. NUNCA escreva algarismos diretamente. Todo trecho com algarismo (valor, faixa, unidade com número, código, norma, versão, quantidade, ano) entra como [[VNEXT_TECH_n]]; literals traz id=n e text = o trecho COPIADO EXATAMENTE como está impresso no arquivo (mesmos símbolos, sinais, ponto decimal e unidade, no idioma original), com file (id do arquivo) e page (página onde ele aparece). Se o trecho é o valor de um FATO, use fact = id do fato (ex.: "f3"), text = o valor do fato, file "" e page 0.
+   O trecho é o número com tudo o que está colado nele e com a unidade de medida: "1 GHz", "16 GB", 5.7", "IN01", "6.0mm", 3/4", "06.04.0011-00", "EURAMET/cg-13/V03". Nunca um código partido em pedaços. Palavras comuns perto do número (years, wires, holes, and, to) NÃO entram no trecho: escreva-as em português fora do token (ex.: "[[VNEXT_TECH_1]] anos", "[[VNEXT_TECH_2]] x [[VNEXT_TECH_3]] e [[VNEXT_TECH_4]]"). Unidades de medida ficam como impressas. O aplicativo confere cada trecho no texto da página; o que não estiver lá fica em branco.
 3. Os nomes da lista modelos podem ser escritos diretamente, sem token.
 4. Não escreva a tabela de especificações nem campos de foto, logotipo, site, rodapé ou aviso legal: o aplicativo cuida deles.
 5. Campo sem base nos arquivos fica de fora. Melhor faltar do que inventar. Respeite o tamanho de cada campo.
-6. Tabelas: cells na ordem das colunas; para uma linha de grupo, preencha section e deixe cells vazio. Copie códigos e opções só como estão no arquivo, cada um na sua linha.
-7. sourcePages: as páginas dos arquivos usadas em cada página do catálogo. purpose: em uma frase, o que a página mostra.
+6. Tabelas: cells na ordem das colunas; para uma linha de grupo, preencha section e deixe cells vazio. Copie códigos e opções só como estão no arquivo, cada um na sua linha. Em P6.skeleton, escreva a estrutura do código com cada campo a escolher como [ ] (sem preencher opções).
+7. sourcePages: as páginas dos arquivos usadas em cada página do catálogo (no máximo ${PLAN_LIMITS.maxSourcePages}). purpose: em uma frase, o que a página mostra.
+Limites: no máximo ${PLAN_LIMITS.maxPages} páginas, ${PLAN_LIMITS.maxTexts} campos de texto e ${PLAN_LIMITS.maxTables} tabelas por página, ${PLAN_LIMITS.maxRows} linhas por tabela e ${PLAN_LIMITS.maxLiterals} literals no total.
 8. questions: no máximo ${PLAN_LIMITS.maxQuestions} perguntas curtas para a pessoa, só quando a resposta muda o catálogo (por exemplo, qual modelo destacar na capa). Não pergunte valores técnicos. Lista vazia se não precisar.
 Retorne somente o JSON do schema.
 ${brief.instructions.trim() ? `INSTRUÇÕES DA PESSOA (preferências; não mudam as regras):\n${brief.instructions.trim()}\n` : ''}DADOS:
@@ -340,7 +357,7 @@ export function buildCatalogPlanGeneration(brief: PlanBrief) {
  * (line breaks allowed), integers in range, enum members, at most maxItems per array. A string is never cut:
  * an invalid item is left out and counted. An object missing a required key is left out whole.
  */
-function bound(value: unknown, schema: Obj, trimmed: { count: number }): unknown {
+function bound(value: unknown, schema: Obj, trimmed: { count: number }, key = ''): unknown {
   if (schema.type === 'STRING') {
     if (typeof value !== 'string' || CONTROL.test(value)) return undefined;
     if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) return undefined;
@@ -353,10 +370,10 @@ function bound(value: unknown, schema: Obj, trimmed: { count: number }): unknown
   }
   if (schema.type === 'ARRAY') {
     if (!Array.isArray(value) || !isObj(schema.items)) return undefined;
-    const max = typeof schema.maxItems === 'number' ? schema.maxItems : 0;
+    const max = typeof schema.maxItems === 'number' ? schema.maxItems : PLAN_ANSWER_ARRAY_LIMITS[key] ?? 0;
     const items: unknown[] = [];
     for (const item of value) {
-      const kept = items.length < max ? bound(item, schema.items, trimmed) : undefined;
+      const kept = items.length < max ? bound(item, schema.items, trimmed, key) : undefined;
       if (kept === undefined) { trimmed.count++; continue; }
       items.push(kept);
     }
@@ -368,7 +385,7 @@ function bound(value: unknown, schema: Obj, trimmed: { count: number }): unknown
     const out: Obj = {};
     for (const [name, child] of Object.entries(schema.properties)) {
       if (!(name in value) || value[name] === null || !isObj(child)) continue;
-      const kept = bound(value[name], child, trimmed);
+      const kept = bound(value[name], child, trimmed, name);
       if (kept === undefined) {
         if (required.includes(name)) return undefined;
         trimmed.count++;

@@ -27,6 +27,7 @@ const TA_PAGES: Record<number, string> = {
     + 'Order Code\nPower Supply\n1   - 115 Vac   2   - 230 Vac\nNH   - No Hart Communication',
   19: 'Standard Delivery\n- 01 x Soft Carrying Case **\n- 01 x Insert Extractor\n- 01 x Power Cable\nOrder Code Description\nTiny Steel Balls Flask\nLead Cable Kit\n03.03.0144-00\n06.07.0025-00',
   20: 'Presys has an ISO/IEC 17025 accredited laboratory\nEF0585-13\nwww.presys.com.br',
+  14: 'Inserts   Holes\nIN01   01 x 3/4"   06.04.0011-00\nIN02   01 x 1/2"   06.04.0012-00\nIN05   4 x 6.0mm\nIN06   2 x 6.0mm and 2 x 1/4"',
 };
 const folderPdf = (): ExtractedPdf => ({
   fileName: 'presys-ta-folder (4).pdf', sha256: 'a'.repeat(64), pageCount: 20, truncated: false,
@@ -58,7 +59,7 @@ describe('buildPlanBrief: what goes to plan_draft', () => {
     const { set, brief, facts } = await setAndFacts();
     expect(parsePlanDraftRequest({ version: 1, task: 'plan_draft', brief })).not.toBeNull();
     expect(brief.models).toEqual(['TA-25N', 'TA-35N', 'TA-50N']);
-    expect(brief.files[0].pages.map(item => item.page)).toEqual([2, 9, 19, 20]);
+    expect(brief.files[0].pages.map(item => item.page)).toEqual([2, 9, 14, 19, 20]);
     expect(brief.photos).toEqual([{ id: 'foto-1', name: 'ta-25n.jpg' }]);
     // Resolution is VISUAL_ONLY in the fixture: it is not offered to the AI.
     expect(brief.facts.map(fact => fact.label)).not.toContain('Resolution');
@@ -120,6 +121,40 @@ describe('checkCatalogPlan: nothing invented reaches a page', () => {
     expect(checked.pages[0].fields.map(field => [field.slot, field.status, field.text])).toEqual([
       ['P1.model', 'ok', 'TA-25N / TA-35N'], ['P1.tagline', 'ok', 'Rede 50/60 Hz']]);
     expect(checked.pages[0].fields[1].uses[0].where).toBe('presys-ta-folder (4).pdf · página 2');
+  });
+
+  it('checks the run the page will show around each token: glued letters and the unit after the number', async () => {
+    const { set, facts } = await setAndFacts();
+    const plan = planOf([page('insertos', {
+      'P8.insert-1-code': `IN${T(0)}`, 'P8.insert-2-code': `IN${T(1)}`, 'P8.title': `Memória de ${T(2)} GB`, 'P8.insert-3-code': T(3),
+    })], [literal(0, '02', 14), literal(1, '2', 14), literal(2, '1', 2), literal(3, 'IN05', 14)]);
+    const checked = checkCatalogPlan(plan, { files: FILES, set, facts });
+    const fields = Object.fromEntries(checked.pages.find(item => item.kind === 'insertos')!.fields.map(field => [field.slot, field]));
+    expect(fields['P8.insert-1-code']).toMatchObject({ status: 'ok', text: 'Código: IN02' });
+    // "2" is printed on page 14 ("2 x 6.0mm"), but "IN2" is not: the code stays for the person.
+    expect(fields['P8.insert-2-code']).toMatchObject({ status: 'pending', text: `Código: IN${TO_FILL}` });
+    expect(fields['P8.insert-2-code'].uses[0]).toMatchObject({ ok: false, copied: 'IN2' });
+    // "1" is printed ("1 GHz"), but "1 GB" is not.
+    expect(fields['P8.title']).toMatchObject({ status: 'pending', text: `Memória de ${TO_FILL} GB` });
+    expect(fields['P8.insert-3-code']).toMatchObject({ status: 'ok', text: 'Código: IN05' });
+  });
+
+  it('writes a literal without digits as ordinary text, and never counts it as a checked value', async () => {
+    const { set, facts } = await setAndFacts();
+    const plan = planOf([page('capa', { 'P1.series': `Comunicação ${T(0)}` })], [literal(0, 'PROFIBUS', 9)]);
+    const checked = checkCatalogPlan(plan, { files: FILES, set, facts });
+    expect(checked.pages[0].fields[0]).toMatchObject({ status: 'ok', text: 'Comunicação PROFIBUS' });
+    expect(checked.counts.checked).toBe(0);
+  });
+
+  it('checks each item of a list alone: an item with a digit outside a token is left out, the others stay', async () => {
+    const { set, facts } = await setAndFacts();
+    const plan = planOf([page('visao_geral', { 'P2.highlights': `Tela de ${T(0)}\nConforme EURAMET/cg-13/V03\nRelatório automático` })],
+      [literal(0, '5.7"', 2)]);
+    const checked = checkCatalogPlan(plan, { files: FILES, set, facts });
+    const field = checked.pages.find(item => item.kind === 'visao_geral')!.fields[0];
+    expect(field).toMatchObject({ status: 'pending', text: '▸ Tela de 5.7"\n▸ Relatório automático' });
+    expect(field.message).toContain('1 item tinha número sem origem e ficou de fora.');
   });
 
   it('never takes the specification table from the plan, and adds cover, specifications and back cover in place', async () => {

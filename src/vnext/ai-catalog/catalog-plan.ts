@@ -130,6 +130,8 @@ export interface PlanLiteralUse {
   /** The text the AI copied (shown when it was not found). */
   readonly copied: string;
   readonly problem?: PlanLiteralProblem;
+  /** A run without digits: ordinary text, not a checked value. */
+  readonly plain?: true;
 }
 export type PlanTextProblem = 'free-digit' | 'bad-token' | 'too-long' | 'empty';
 export interface PlanText {
@@ -147,13 +149,32 @@ interface CheckContext {
   readonly literals: ReadonlyMap<number, CatalogDraftPlan['literals'][number]>;
   /** Product names that may be written without a token, longest first. */
   readonly names: readonly string[];
-  readonly pageTexts: ReadonlyMap<string, readonly { readonly page: number; readonly text: string; readonly compact: string }[]>;
+  readonly pageTexts: ReadonlyMap<string, readonly IndexedPage[]>;
 }
+type IndexedPage = { readonly page: number; readonly text: string; readonly compact: string };
 
 const TOKEN = /\[\[VNEXT_TECH_(\d{1,3})\]\]/gu;
 const DIGIT = /\p{Nd}/u;
 
-function checkLiteral(n: number, context: CheckContext): PlanLiteralUse {
+const ALPHANUMERIC = /[\p{L}\p{N}]/u;
+/**
+ * `wanted` occurs in `text` as a whole printed run: a match that starts or ends with a letter or digit may not
+ * continue a word ("IN2" is not in "IN20", "1" is not in "16").
+ */
+export function includesRun(text: string, wanted: string): boolean {
+  if (!wanted) return false;
+  const first = ALPHANUMERIC.test(wanted[0]), last = ALPHANUMERIC.test(wanted[wanted.length - 1]);
+  for (let at = text.indexOf(wanted); at >= 0; at = text.indexOf(wanted, at + 1)) {
+    if ((!first || !ALPHANUMERIC.test(text[at - 1] ?? '')) && (!last || !ALPHANUMERIC.test(text[at + wanted.length] ?? ''))) return true;
+  }
+  return false;
+}
+const pageHas = (page: IndexedPage, run: string) => {
+  const wanted = matchableText(run);
+  return includesRun(page.text, wanted) || includesRun(page.compact, compact(wanted));
+};
+
+function checkLiteral(n: number, context: CheckContext): PlanLiteralUse & { readonly fileId?: string; readonly printed?: string } {
   const literal = context.literals.get(n);
   if (!literal) return { n, text: '', ok: false, where: '', copied: '', problem: 'unknown-literal' };
   const copied = literal.text.trim();
@@ -170,19 +191,19 @@ function checkLiteral(n: number, context: CheckContext): PlanLiteralUse {
     return { n, text: valueDisplayText(candidate.value, candidate.unit), ok: true, copied,
       where: `valor conferido da tabela: ${row.label.replace(/\s*:\s*$/u, '')} · ${set.models[position.modelIndex]}` };
   }
+  const printed = canonicalDegreeSign(normalizeSymbolText(copied)).replace(/\s+/gu, ' ');
+  // A run without any digit is ordinary text (the rule is about digits): written as is, never counted as checked.
+  if (copied && !DIGIT.test(copied)) return { n, text: printed, ok: true, copied, where: 'texto sem números', plain: true };
   const file = context.files.find(item => item.id === literal.file.trim());
   if (!file) return { n, text: '', ok: false, where: '', copied, problem: 'unknown-file' };
-  const wanted = matchableText(copied);
   const pages = context.pageTexts.get(file.id) ?? [];
-  const hit = (page: { text: string; compact: string }) => Boolean(wanted) && (page.text.includes(wanted) || page.compact.includes(compact(wanted)));
   const cited = pages.find(page => page.page === literal.page);
-  const found = cited && hit(cited) ? cited : pages.find(hit);
+  const found = cited && pageHas(cited, copied) ? cited : pages.find(page => pageHas(page, copied));
   if (!found) {
-    return { n, text: '', ok: false, copied, problem: 'not-on-page',
+    return { n, text: '', ok: false, copied, problem: 'not-on-page', fileId: file.id, printed,
       where: `${file.fileName} · ${literal.page > 0 ? `página ${literal.page}` : 'página não informada'}` };
   }
-  return { n, text: canonicalDegreeSign(normalizeSymbolText(copied)).replace(/\s+/gu, ' '), ok: true, copied,
-    where: `${file.fileName} · página ${found.page}` };
+  return { n, text: printed, ok: true, copied, where: `${file.fileName} · página ${found.page}`, fileId: file.id };
 }
 
 function stripNames(text: string, names: readonly string[]): string {
@@ -191,22 +212,61 @@ function stripNames(text: string, names: readonly string[]): string {
   return rest;
 }
 
-/** Checks one text the AI wrote (a field, a cell, a note); `maxChars` after the tokens are replaced. */
+/** A unit printed after a number ("1 GHz", "200 W"): the run is checked with it. */
+const UNIT = /^(?:°[CFK]?|[CFK]|%|µm|mm|cm|m|kg|g|kW|W|Vac|Vdc|V|mA|µA|A|mV|Ω|Ohms?|kHz|MHz|GHz|Hz|GB|MB|kB|mbar|bar|psi|kPa|MPa|Pa|inHg|min|ms|s|h|ppm|in)$/u;
+const SPLIT = /\[\[VNEXT_TECH_(\d{1,3})\]\]/u;
+
+/**
+ * Checks one text the AI wrote (a field, a cell, a note); `maxChars` after the tokens are replaced.
+ * Each token is checked twice: its literal must be printed in the file (or be a checked fact), and the run the
+ * page will show around it — the letters glued to it ("TA-" + "25N", "IN" + "02") and the unit after it
+ * ("1" + " GHz") — must be printed in the same file too.
+ */
 export function checkPlanText(raw: string, context: CheckContext, maxChars: number = PLAN_LIMITS.textChars): PlanText {
   const text = raw.replace(/\r\n?/gu, '\n');
   if (!text.trim()) return { status: 'rejected', uses: [], problem: 'empty' };
   const rest = stripNames(text.replace(TOKEN, ' '), context.names);
   if (/\[\[|\]\]|VNEXT_TECH/u.test(rest)) return { status: 'rejected', uses: [], problem: 'bad-token' };
   if (DIGIT.test(rest)) return { status: 'rejected', uses: [], problem: 'free-digit' };
+  const parts = text.split(SPLIT);
+  const checks = parts.map((part, index) => index % 2 ? checkLiteral(Number(part), context) : undefined);
+  const resolved = parts.map((part, index) => {
+    const use = checks[index];
+    return use ? (use.ok ? use.text : TO_FILL) : part;
+  });
   const uses: PlanLiteralUse[] = [];
-  const resolved = text.replace(TOKEN, (_, digits: string) => {
-    const use = checkLiteral(Number(digits), context);
-    uses.push(use);
-    return use.ok ? use.text : TO_FILL;
-  }).trim();
+  checks.forEach((check, index) => {
+    if (!check) return;
+    let use: PlanLiteralUse = check;
+    const before = resolved.slice(0, index).join(''), after = resolved.slice(index + 1).join('');
+    const value = check.ok ? check.text : check.printed;
+    if (check.fileId && value && !before.endsWith(TO_FILL) && !after.startsWith(TO_FILL)) {
+      const left = (/\S*$/u.exec(before)?.[0] ?? '').replace(/^[([“"'«]+/u, '');
+      let right = (/^\S*/u.exec(after)?.[0] ?? '').replace(/[,.;:!?)\]”"'»]+$/u, '');
+      if (!right) {
+        const next = /^\s+(\S+)/u.exec(after)?.[1]?.replace(/[,.;:!?)\]]+$/u, '');
+        if (next && UNIT.test(matchableText(next))) right = ` ${next}`;
+      }
+      const run = `${left}${value}${right}`;
+      const pages = context.pageTexts.get(check.fileId) ?? [];
+      const runPage = run === value ? undefined : pages.find(page => pageHas(page, run));
+      const fileName = check.where.replace(/ · página.*$/u, '');
+      if (run !== value && !runPage && check.ok) {
+        use = { n: check.n, text: '', ok: false, copied: run.trim(), problem: 'not-on-page', where: fileName };
+        resolved[index] = TO_FILL;
+      } else if (runPage && !check.ok) {
+        // The model split a printed run ("IN" + "02"): the whole run is on the page, so the part is too.
+        use = { n: check.n, text: value, ok: true, copied: check.copied, where: `${fileName} · página ${runPage.page}` };
+        resolved[index] = value;
+      }
+    }
+    const { n, text: shown, ok, where, copied, problem, plain } = use;
+    uses.push({ n, text: shown, ok, where, copied, ...(problem ? { problem } : {}), ...(plain ? { plain } : {}) });
+  });
+  const joined = resolved.join('').trim();
   // Tolerance for the model's own count: the frame budget is an estimate, the A4 check measures afterwards.
-  if (resolved.length > Math.ceil(maxChars * 1.15)) return { status: 'rejected', uses, problem: 'too-long' };
-  return { status: uses.every(use => use.ok) ? 'ok' : 'pending', text: resolved, uses };
+  if (joined.length > Math.ceil(maxChars * 1.15)) return { status: 'rejected', uses, problem: 'too-long' };
+  return { status: uses.every(item => item.ok) ? 'ok' : 'pending', text: joined, uses };
 }
 
 /* ---------------------------------------------------------------------------------------------------------- */
@@ -274,17 +334,30 @@ const BULLET = /^[\s▸•·\-–—*]+/u;
 function checkTextField(kind: PlanPageKind, slot: string, raw: string, context: CheckContext, label: string): PlanField | undefined {
   const spec = kind.texts.find(item => item.slot === slot);
   if (!spec) return undefined;
-  let source = raw;
-  let dropped = 0;
   if (spec.maxLines) {
+    // One item per line, each checked alone: an item with a digit outside a token is left out, the others stay.
     const lines = raw.split(/\r?\n/u).map(line => line.replace(BULLET, '').trim()).filter(Boolean);
-    dropped = Math.max(0, lines.length - spec.maxLines);
-    source = lines.slice(0, spec.maxLines).map(line => `${LINE_PREFIX[slot] ?? ''}${line}`).join('\n');
+    const kept: string[] = [], uses: PlanLiteralUse[] = [];
+    let refused = 0, pending = false;
+    for (const line of lines) {
+      if (kept.length >= spec.maxLines) break;
+      const checked = checkPlanText(line, context, Math.ceil((spec.lineChars ?? spec.maxChars) * 1.3));
+      if (checked.status === 'rejected' || checked.text === undefined) { refused++; continue; }
+      uses.push(...checked.uses);
+      pending ||= checked.status === 'pending';
+      kept.push(`${LINE_PREFIX[slot] ?? ''}${checked.text}`);
+    }
+    const dropped = Math.max(0, lines.length - kept.length - refused);
+    if (!kept.length) return { slot, label, kind: 'text', status: 'rejected', uses, message: refused ? PROBLEM_TEXT['free-digit'] : PROBLEM_TEXT.empty };
+    const message = [refused ? `${refused} ${refused === 1 ? 'item tinha' : 'itens tinham'} número sem origem e ${refused === 1 ? 'ficou' : 'ficaram'} de fora.` : undefined,
+      notFoundText(uses), dropped ? `${dropped} ${dropped === 1 ? 'item ficou' : 'itens ficaram'} de fora por falta de espaço.` : undefined]
+      .filter(Boolean).join(' ') || undefined;
+    return { slot, label, kind: 'text', status: refused || pending ? 'pending' : 'ok', text: kept.join('\n'), uses, ...(message ? { message } : {}) };
   }
+  let source = raw;
   if (/^P8\.insert-\d-code$/u.test(slot) && !/^c[óo]digo/iu.test(source.trim())) source = `Código: ${source.trim()}`;
-  const checked = checkPlanText(source, context, spec.maxChars + (spec.maxLines ? spec.maxLines * 2 : 0));
-  const message = checked.problem ? PROBLEM_TEXT[checked.problem] : [notFoundText(checked.uses),
-    dropped ? `${dropped} ${dropped === 1 ? 'item ficou' : 'itens ficaram'} de fora por falta de espaço.` : undefined].filter(Boolean).join(' ') || undefined;
+  const checked = checkPlanText(source, context, spec.maxChars);
+  const message = checked.problem ? PROBLEM_TEXT[checked.problem] : notFoundText(checked.uses);
   return { slot, label, kind: 'text', status: checked.status, ...(checked.text !== undefined ? { text: checked.text } : {}),
     uses: checked.uses, ...(message ? { message } : {}) };
 }
@@ -311,10 +384,18 @@ function checkTableField(kind: PlanPageKind, table: CatalogDraftPlanPage['tables
     rows.push([...cells, ...new Array<string>(Math.max(0, width - cells.length)).fill('')]);
   }
   const dropped = Math.max(0, table.rows.length - spec.maxRows);
-  const notes = table.notes.map(text => cell(text, 200)).filter(Boolean);
+  let droppedNotes = 0;
+  // A note with a number of unknown origin is left out (a note has no place to keep "A COMPLETAR").
+  const notes = table.notes.flatMap(text => {
+    const checked = text.trim() ? checkPlanText(text, context, 200) : undefined;
+    if (!checked || checked.status === 'rejected' || checked.text === undefined) { if (checked) droppedNotes++; return []; }
+    uses.push(...checked.uses);
+    return [checked.text];
+  });
   if (!rows.length) return undefined;
-  const status: PlanField['status'] = rejected || uses.some(use => !use.ok) ? 'pending' : 'ok';
+  const status: PlanField['status'] = rejected || droppedNotes || uses.some(use => !use.ok) ? 'pending' : 'ok';
   const message = [rejected ? `${rejected} ${rejected === 1 ? 'célula tinha' : 'células tinham'} número sem origem e ${rejected === 1 ? 'ficou' : 'ficaram'} “${TO_FILL}”.` : undefined,
+    droppedNotes ? `${droppedNotes} ${droppedNotes === 1 ? 'nota tinha' : 'notas tinham'} número sem origem e ${droppedNotes === 1 ? 'ficou' : 'ficaram'} de fora.` : undefined,
     notFoundText(uses), dropped ? `${dropped} ${dropped === 1 ? 'linha ficou' : 'linhas ficaram'} de fora por falta de espaço.` : undefined,
     'Confira se cada código está na linha certa.'].filter(Boolean).join(' ');
   return { slot: table.slot, label, kind: 'table', status, uses, message,
@@ -406,7 +487,7 @@ export function checkCatalogPlan(plan: CatalogDraftPlan, input: {
     title: plan.title.replace(TOKEN, '').trim().slice(0, PLAN_LIMITS.titleChars),
     pages,
     questions: plan.questions.map(question => oneLine(question, PLAN_LIMITS.questionChars)).filter(Boolean),
-    counts: { checked: uses.filter(use => use.ok).length, notFound: uses.filter(use => !use.ok).length,
+    counts: { checked: uses.filter(use => use.ok && !use.plain).length, notFound: uses.filter(use => !use.ok).length,
       rejected: pages.reduce((total, page) => total + page.fields.filter(field => field.status === 'rejected').length, 0) },
   };
 }

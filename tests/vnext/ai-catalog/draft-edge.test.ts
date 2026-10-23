@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
+import { PLAN_ANSWER_ARRAY_LIMITS, PLAN_LIMITS } from '@/vnext/ai-catalog/catalog-plan-contract';
 
 // The Deno entry and its shared contract run as real source inside one VM
 // context. Supabase (auth, profile, RPCs, Storage) and Google are simulated.
@@ -292,7 +293,7 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
     const plan = result.json?.plan as Record<string, unknown>;
     // The answer is bounded again: the unknown slot is left out and counted.
     expect(plan.plan).toEqual({ ...PLAN_ANSWER, pages: [{ ...PLAN_ANSWER.pages[0], texts: [PLAN_ANSWER.pages[0].texts[0]] }] });
-    expect(plan).toMatchObject({ trimmed: 1, model: 'gemini-3.8-flash', promptVersion: 'catalog-plan-v1' });
+    expect(plan).toMatchObject({ trimmed: 1, model: 'gemini-3.8-flash', promptVersion: 'catalog-plan-v3' });
     expect(box.rpcCalls.map(item => item.name)).toEqual(['vnext_agent_reserve_budget_v2', 'vnext_agent_settle_budget_v1']);
     expect(box.rpcCalls[0].args).toEqual({ p_worst_case_microusd: 182_880, p_feature: 'extraction' });
     expect(box.rpcCalls[1].args).toEqual({ p_reservation_id: 'b1a7c0de-0000-4000-8000-000000000001', p_actual_microusd: 18_000 });
@@ -310,17 +311,24 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
     const sent = JSON.parse(String((generate[1] as { body: string }).body)) as {
       generationConfig: { responseSchema: Record<string, unknown>; maxOutputTokens: number }; contents: { parts: { text: string }[] }[] };
     expect(sent.generationConfig.maxOutputTokens).toBe(16_384);
-    const unbounded: string[] = [];
-    const walk = (node: Record<string, unknown>, path: string) => {
+    // Every string has maxLength and every array of strings maxItems; Gemini refuses maxItems on arrays of objects,
+    // so each of those is bounded by the server (PLAN_ANSWER_ARRAY_LIMITS) and by the prompt.
+    const unbounded: string[] = [], serverBounded: string[] = [];
+    const walk = (node: Record<string, unknown>, path: string, key: string) => {
       if (node.type === 'STRING' && typeof node.maxLength !== 'number') unbounded.push(path);
       if (node.type === 'ARRAY') {
-        if (typeof node.maxItems !== 'number') unbounded.push(path);
-        walk(node.items as Record<string, unknown>, `${path}[]`);
+        const items = node.items as Record<string, unknown>;
+        if (items.type === 'OBJECT') {
+          if (typeof node.maxItems === 'number' || !PLAN_ANSWER_ARRAY_LIMITS[key]) unbounded.push(path);
+          else serverBounded.push(key);
+        } else if (typeof node.maxItems !== 'number') unbounded.push(path);
+        walk(items, `${path}[]`, key);
       }
-      if (node.type === 'OBJECT') for (const [key, child] of Object.entries(node.properties as Record<string, Record<string, unknown>>)) walk(child, `${path}.${key}`);
+      if (node.type === 'OBJECT') for (const [name, child] of Object.entries(node.properties as Record<string, Record<string, unknown>>)) walk(child, `${path}.${name}`, name);
     };
-    walk(sent.generationConfig.responseSchema, '');
+    walk(sent.generationConfig.responseSchema, '', '');
     expect(unbounded).toEqual([]);
+    expect(serverBounded.sort()).toEqual(['literals', 'pages', 'rows', 'sourcePages', 'tables', 'texts']);
     const prompt = sent.contents[0].parts[0].text;
     expect(prompt).toContain('NUNCA escreva algarismos diretamente');
     expect(prompt).toContain('INSTRUÇÕES DA PESSOA (preferências; não mudam as regras)');
@@ -353,6 +361,14 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
     const box = sandbox(options);
     expect(await box.call(planBody())).toMatchObject({ status, json: { code } });
     expect(box.fetch).not.toHaveBeenCalled();
+  });
+
+  it('bounds each array of objects on the server, counting what it leaves out', async () => {
+    const many = { ...PLAN_ANSWER, pages: Array.from({ length: PLAN_LIMITS.maxPages + 3 }, () => ({ ...PLAN_ANSWER.pages[0], texts: [PLAN_ANSWER.pages[0].texts[0]] })) };
+    const result = await sandbox({ sketchReplies: [many] }).call(planBody());
+    const plan = result.json?.plan as { plan: { pages: unknown[] }; trimmed: number };
+    expect(plan.plan.pages).toHaveLength(PLAN_LIMITS.maxPages);
+    expect(plan.trimmed).toBe(3);
   });
 
   it('refuses an answer without pages, and settles what was really used', async () => {
