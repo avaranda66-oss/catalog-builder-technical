@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { VNEXT_TRANSLATION_PROFILES, type RegisteredTranslationProfile } from '@/vnext/translation/language-registry';
 import type { TranslationProviderRequest } from '@/vnext/translation/contracts';
 import { GEMINI_TRANSLATION_MODEL } from '@/vnext/ai-catalog/gemini-models';
+import { PRESYS_GLOSSARY_VERSION } from '@/vnext/translation/presys-glossary';
 
 // FR-86: every profile, including the server-only canonical Spanish bridge, uses the registry model.
 const MODEL = GEMINI_TRANSLATION_MODEL;
@@ -16,7 +17,10 @@ interface Prompt { sourceLocale: string; targetLocale: string; profileVersion: s
   rules: string[]; units: TranslationProviderRequest['units'] }
 interface GenerationRequest { contents: Array<{ role: string; parts: Array<{ text: string }> }>;
   generationConfig: { responseMimeType: string; temperature: number; candidateCount: number; maxOutputTokens: number;
-    thinkingConfig?: { thinkingLevel: string } } }
+    thinkingConfig?: { thinkingLevel: string }; responseSchema?: unknown } }
+
+/** Every Gemini answer is bounded (FR-87 / principle: responseSchema with maxItems/maxLength everywhere). */
+const boundedSchema = expect.objectContaining({ type: 'OBJECT', required: ['units'] });
 
 /** Executes the actual Deno handler and actual local registry. All external modules, env and fetch are fixtures. */
 function gateway() {
@@ -34,6 +38,10 @@ function gateway() {
     if (resolve(dirname(registryPath), moduleId) === modelsPath) return modelsExports;
     throw new Error(`Unexpected registry dependency: ${moduleId}`);
   } }), { filename: registryPath });
+  // FR-87: the versioned PRESYS glossary (pure, no imports) bundled with the gateway.
+  const glossaryPath = resolve(dirname(gatewayPath), '../../../src/vnext/translation/presys-glossary.ts');
+  const glossaryExports: Record<string, unknown> = {};
+  runInContext(transpile(glossaryPath), createContext({ exports: glossaryExports }), { filename: glossaryPath });
   let handler: ((request: Request) => Promise<Response>) | undefined;
   const state = { authenticated: true, active: true, role: 'editor', profileError: false, providerStatus: 200,
     providerThrows: false, malformedEnvelope: false, missingEnvironment: '',
@@ -86,6 +94,7 @@ function gateway() {
       if (moduleId === 'https://deno.land/std@0.177.0/http/server.ts') return { serve: (callback: typeof handler) => { handler = callback; } };
       if (moduleId === 'https://esm.sh/@supabase/supabase-js@2.112.4') return { createClient };
       if (resolve(dirname(gatewayPath), moduleId) === registryPath) return registryExports;
+      if (resolve(dirname(gatewayPath), moduleId) === glossaryPath) return glossaryExports;
       throw new Error(`Unexpected gateway dependency: ${moduleId}`);
     },
     Deno: { env: { get: (key: string) => {
@@ -244,7 +253,7 @@ describe('P2 server-first compatibility with the canonical Spanish client', () =
     const input = JSON.parse(g.fakeProvider.mock.calls[0][1].body as string) as { contents: Array<{ parts: Array<{ text: string }> }> };
     const prompt = JSON.parse(input.contents[0].parts[0].text) as Prompt;
     expect((input as GenerationRequest).generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0.1,
-      candidateCount: 1, maxOutputTokens: 65_536 });
+      candidateCount: 1, maxOutputTokens: 65_536, responseSchema: boundedSchema });
     expect(Object.keys(prompt).sort()).toEqual(['contractVersion', 'profileVersion', 'sourceLocale', 'targetLocale', 'rules', 'units', 'responseShape'].sort());
     expect(prompt.rules).toEqual([
       'Translate only protectedText values from Portuguese (Brazil) to Spanish (Spain).',
@@ -304,7 +313,8 @@ describe.each(budgetProfiles)('P2 server-owned token budget $label', item => {
     expect(output.units).toHaveLength(10);
     expect(g.countProvider).not.toHaveBeenCalled(); expect(g.generateProvider).toHaveBeenCalledTimes(1);
     const generated = JSON.parse(g.generateProvider.mock.calls[0][0].body as string) as GenerationRequest;
-    expect(generated.generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0.1, candidateCount: 1, maxOutputTokens: 65_536 });
+    expect(generated.generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0.1, candidateCount: 1, maxOutputTokens: 65_536,
+      responseSchema: boundedSchema });
     expect(generated.generationConfig).not.toHaveProperty('thinkingConfig');
   });
 
@@ -327,7 +337,7 @@ describe.each(budgetProfiles)('P2 server-owned token budget $label', item => {
     expect(prompt.units[0].runs).toEqual(input.units[0].runs);
     expect(prompt.rules).toContain('Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.');
     expect(generated.generationConfig).toEqual({ responseMimeType: 'application/json', temperature: 0.1,
-      candidateCount: 1, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'minimal' } });
+      candidateCount: 1, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'minimal' }, responseSchema: boundedSchema });
     expect(JSON.stringify(output)).not.toContain('fixture-server-key');
   });
 
@@ -436,4 +446,112 @@ it('preserves preflight/method/CORS handling without reading provider credential
   expect(get.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
   const malformed = await g.invoke({}, { rawBody: '{' }); expect(malformed.status).toBe(400);
   expect(g.envReads).not.toContain('GEMINI_API_KEY'); expect(g.fakeProvider).not.toHaveBeenCalled();
+});
+
+interface SchemaNode { type?: string; maxItems?: number; minItems?: number; maxLength?: number;
+  properties?: Record<string, SchemaNode>; items?: SchemaNode; required?: string[] }
+
+function withFirstRunText(body: TranslationProviderRequest, protectedText: string): TranslationProviderRequest {
+  return { ...body, units: body.units.map((unit, index) => index === 0 ? { ...unit, runs: [{ ...unit.runs[0], protectedText }] } : unit) };
+}
+
+/** Every array has maxItems and every string has maxLength, at any depth. */
+function unboundedPaths(node: SchemaNode, path = '$'): string[] {
+  const own = node.type === 'ARRAY' && typeof node.maxItems !== 'number' ? [path]
+    : node.type === 'STRING' && typeof node.maxLength !== 'number' ? [path] : [];
+  return [...own,
+    ...Object.entries(node.properties ?? {}).flatMap(([key, child]) => unboundedPaths(child, `${path}.${key}`)),
+    ...(node.items ? unboundedPaths(node.items, `${path}[]`) : [])];
+}
+
+describe.each(VNEXT_TRANSLATION_PROFILES)('FR-87 PRESYS glossary in the executed gateway $targetLocale', profile => {
+  const brandRequest = (): TranslationProviderRequest => ({ ...request(profile), units: [
+    { unitId: 'unit-0', sourceHash: 'a'.repeat(64), kind: 'textObject', context: 'Página 2 · especificações',
+      runs: [{ runId: 'run', protectedText: 'Exatidão do Kompressor com MCS-XV e ST-[[VNEXT_TECH_0_001]]' }] },
+    { unitId: 'unit-1', sourceHash: 'a'.repeat(64), kind: 'tableCell', context: 'Tabela de especificações',
+      runs: [{ runId: 'run', protectedText: 'Código de Encomenda [[VNEXT_TECH_1_001]]' }] },
+  ] });
+  const promptOf = (g: ReturnType<typeof gateway>) => {
+    const generated = JSON.parse(g.generateProvider.mock.calls[0][0].body as string) as GenerationRequest;
+    return { generated, prompt: JSON.parse(generated.contents[0].parts[0].text) as Prompt & {
+      glossaryVersion?: string; glossary?: Array<{ source: string; target: string }> } };
+  };
+
+  it('hides brands and models from the model and returns them byte for byte', async () => {
+    const g = gateway(); const response = await g.invoke(brandRequest()); const output = await response.json();
+    expect(response.status).toBe(200);
+    const { prompt } = promptOf(g);
+    expect(prompt.units[0].runs[0].protectedText).toBe('Exatidão do [[VNEXT_KEEP_001]] com [[VNEXT_KEEP_002]] e ST-[[VNEXT_TECH_0_001]]');
+    expect(JSON.stringify(prompt.units)).not.toMatch(/Kompressor|MCS-XV/);
+    expect(prompt.rules.join(' ')).toContain('[[VNEXT_KEEP...]]');
+    // The fixture model answers "Translated <what it saw>"; the gateway restores the exact names.
+    expect(output.units[0].runs[0].translatedText).toBe('Translated Exatidão do Kompressor com MCS-XV e ST-[[VNEXT_TECH_0_001]]');
+    expect(output.units[1].runs[0].translatedText).toBe('Translated Código de Encomenda [[VNEXT_TECH_1_001]]');
+  });
+
+  it('sends only the glossary terms of the batch, with the versioned glossary', async () => {
+    const g = gateway(); expect((await g.invoke(brandRequest())).status).toBe(200);
+    const { prompt } = promptOf(g);
+    expect(prompt.glossaryVersion).toBe(PRESYS_GLOSSARY_VERSION);
+    expect(prompt.glossary).toEqual(profile.targetLocale === 'en-US'
+      ? [{ source: 'Código de Encomenda', target: 'Order Code' }, { source: 'Exatidão', target: 'Accuracy' }]
+      : [{ source: 'Código de Encomenda', target: 'Código de Pedido' }, { source: 'Exatidão', target: 'Exactitud' }]);
+    expect(prompt.rules.join(' ')).toContain('glossary target term');
+  });
+
+  it('adds no glossary or brand rule when the batch has none', async () => {
+    const g = gateway(); expect((await g.invoke(request(profile))).status).toBe(200);
+    const { prompt } = promptOf(g);
+    expect(prompt.glossaryVersion).toBe(PRESYS_GLOSSARY_VERSION);
+    expect(prompt).not.toHaveProperty('glossary');
+    expect(prompt.rules.join(' ')).not.toContain('VNEXT_KEEP');
+  });
+
+  it.each(['lost', 'duplicated', 'invented', 'translated-name'])('rejects a %s brand placeholder after one dispatch', async scenario => {
+    const g = gateway(); g.state.transform = payload => {
+      const run = payload.units[0].runs[0];
+      if (scenario === 'lost') run.translatedText = run.translatedText.replace('[[VNEXT_KEEP_002]]', '');
+      if (scenario === 'duplicated') run.translatedText += ' [[VNEXT_KEEP_001]]';
+      if (scenario === 'invented') run.translatedText += ' [[VNEXT_KEEP_003]]';
+      if (scenario === 'translated-name') run.translatedText = run.translatedText.replace('[[VNEXT_KEEP_001]]', 'Compressor');
+      return payload;
+    };
+    const response = await g.invoke(brandRequest());
+    expect(response.status).toBe(502); expect((await response.json()).error).toBe('INVALID_PROVIDER_RESPONSE');
+    expect(g.generateProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds every array and string of the Gemini answer to the request', async () => {
+    const g = gateway(); expect((await g.invoke(brandRequest())).status).toBe(200);
+    const schema = promptOf(g).generated.generationConfig.responseSchema as SchemaNode;
+    expect(unboundedPaths(schema)).toEqual([]);
+    const units = schema.properties!.units;
+    expect(units).toMatchObject({ minItems: 2, maxItems: 2 });
+    expect(units.items!.properties!.runs).toMatchObject({ minItems: 1, maxItems: 1 });
+    expect(units.items!.properties!.unitId.maxLength).toBe('unit-0'.length);
+    const longest = 'Exatidão do [[VNEXT_KEEP_001]] com [[VNEXT_KEEP_002]] e ST-[[VNEXT_TECH_0_001]]'.length;
+    expect(units.items!.properties!.runs.items!.properties!.translatedText.maxLength).toBe(Math.max(200, longest * 3));
+  });
+
+  it('never lets the translated text bound exceed the per-run limit', async () => {
+    const g = gateway(); const body = withFirstRunText(request(profile), `Texto ${'x'.repeat(3_900)} [[VNEXT_TECH_0_001]]`);
+    g.state.transform = payload => { payload.units.forEach(unit => unit.runs.forEach(run => { run.translatedText = run.translatedText.replace(/^Translated /, ''); })); return payload; };
+    expect((await g.invoke(body)).status).toBe(200);
+    const schema = promptOf(g).generated.generationConfig.responseSchema as SchemaNode;
+    expect(schema.properties!.units.items!.properties!.runs.items!.properties!.translatedText.maxLength).toBe(4_000);
+  });
+});
+
+describe('FR-87 canonical Spanish bridge keeps its original prompt', () => {
+  it('does not protect brands or send the glossary for the old identity', async () => {
+    const g = gateway();
+    const body = { ...withFirstRunText(request(VNEXT_TRANSLATION_PROFILES[0]), 'Exatidão do Kompressor [[VNEXT_TECH_0_001]]'),
+      profileVersion: 'w5-ptbr-eses-v1' };
+    expect((await g.invoke(body)).status).toBe(200);
+    const generated = JSON.parse(g.generateProvider.mock.calls[0][0].body as string) as GenerationRequest;
+    const prompt = JSON.parse(generated.contents[0].parts[0].text) as Prompt;
+    expect(prompt.units[0].runs[0].protectedText).toBe('Exatidão do Kompressor [[VNEXT_TECH_0_001]]');
+    expect(Object.keys(prompt)).not.toContain('glossary');
+    expect(Object.keys(prompt)).not.toContain('glossaryVersion');
+  });
 });

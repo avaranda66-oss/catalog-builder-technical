@@ -36,10 +36,16 @@ describe('W5.A VNext server gateway contract', () => {
   it('strictly validates provider identity and technical placeholders before returning semantic output', () => {
     expect(gatewaySource).toContain('exactStringSet(request.units.map((unit) => unit.unitId), returnedIds)');
     expect(gatewaySource).toContain('placeholderMultiset(expectedRun.protectedText)');
-    expect(gatewaySource).toContain('placeholderMultiset(rawRun.translatedText)');
+    expect(gatewaySource).toContain('placeholderMultiset(translatedText)');
     expect(gatewaySource).toContain("'INVALID_PROVIDER_RESPONSE'");
     expect(gatewaySource).toContain('providerId: translationProfile.providerId');
     expect(gatewaySource).toContain('modelId: translationProfile.modelId');
+  });
+
+  it('bundles the versioned PRESYS glossary and always bounds the Gemini answer (FR-87)', () => {
+    expect(gatewaySource).toContain("from '../../../src/vnext/translation/presys-glossary.ts'");
+    expect(gatewaySource).toContain('responseSchema: providerResponseSchema(body, keepProtections)');
+    expect(gatewaySource).toContain('restoreKeepTerms(rawRun.translatedText, protection)');
   });
 
   it('keeps server-only acceptance caps separate from production capacity and requires completed generation', () => {
