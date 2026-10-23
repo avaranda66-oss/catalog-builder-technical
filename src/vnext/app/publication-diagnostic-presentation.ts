@@ -24,6 +24,10 @@ export function publicationDiagnosticMessage(code: string): string {
       return 'O texto não cabe no espaço reservado. Aumente o quadro de texto ou reduza o conteúdo.';
     case 'PRINTABLE_CONTENT_OVERLAP':
       return 'O conteúdo deste objeto está sobre outro texto ou tabela. Mova os objetos para separar o conteúdo antes de publicar.';
+    case 'PAGE_FOOTER_OVERLAP':
+      return 'O rodapé automático está por cima deste texto. Se for um rodapé ou número de página digitado, apague: o rodapé automático já mostra isso. Se não for, suba o texto.';
+    case 'PAGE_FOOTER_INCOMPLETE':
+      return 'O rodapé das páginas está incompleto. Clique na página, sem selecionar nada, e preencha em “Rodapé de todas as páginas”.';
     case 'TABLE_CONTENT_OVERFLOW':
       return 'A tabela ultrapassa a altura reservada. Aumente o quadro da tabela ou reduza seu conteúdo.';
     case 'TABLE_WIDTH_INFEASIBLE':
@@ -111,6 +115,14 @@ export function publicationDiagnosticText(issue: Diagnostic): string {
     return token
       ? `Ainda está escrito “${token}”${where ? ` ${where}` : ''}. Troque pela informação correta antes de publicar.`
       : publicationDiagnosticMessage(issue.code);
+  }
+  if (issue.code === 'PAGE_FOOTER_INCOMPLETE') {
+    const names: Record<string, string> = { documentCode: 'o código do documento', revision: 'a revisão', issuedOn: 'a data' };
+    const missing = (detailValue(issue, 'missing') ?? '').split(',').map((key) => names[key.trim()]).filter(Boolean);
+    if (missing.length) {
+      const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} e ${missing[missing.length - 1]}`;
+      return `${missing.length === 1 ? 'Falta' : 'Faltam'} ${list} no rodapé das páginas. Clique na página, sem selecionar nada, e preencha em “Rodapé de todas as páginas”.`;
+    }
   }
   if (issue.code === 'EMPTY_TABLE_ROW') {
     const count = Number(detailValue(issue, 'emptyRows'));

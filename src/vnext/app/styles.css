@@ -55,9 +55,12 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-canvas-meta strong { color: #2a394d; font-size: 12px; }
 .vnext-canvas-meta div span { color: #7b899b; font-size: 11px; }
 .vnext-canvas-statuses { justify-content: flex-end; }
-/* Integração Onda 1: com o zoom (1I) e o contador de problemas (1D) na mesma linha, o texto do contador ou do "Salvo" mudando fazia a linha quebrar e a folha pular durante um arraste. O grupo da direita tem largura reservada: a quebra de linha passa a depender só da largura da janela. */
-.vnext-canvas-meta > .vnext-canvas-statuses { flex: 0 1 300px; min-width: 0; flex-wrap: nowrap; white-space: nowrap; }
-.vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta > .vnext-canvas-statuses { flex-basis: 200px; }
+/* Integração Onda 1: com o zoom (1I) e o contador de problemas (1D) na mesma linha, o texto do contador ou do "Salvo" mudando fazia a linha quebrar e a folha pular durante um arraste. O grupo da direita tem largura reservada: a quebra de linha passa a depender só da largura da janela.
+   Onda 4 (P): a largura reservada cabe "Camadas" + o contador (medido: 336 px no modo simples). O grupo nunca fica mais
+   estreito que o seu maior botão (sem min-width: 0) e, se faltar lugar, os botões descem dentro dele: antes o conteúdo
+   transbordava para a esquerda e "Camadas" ficava atrás da coluna de páginas (961–1180 px e 1366 a 125%).
+   tests/vnext/app/canvas-header-layout.test.ts confere; tests/vnext/proof/fixtures/canvas-header-measure.mjs mede. */
+.vnext-canvas-meta > .vnext-canvas-statuses { flex: 1 1 320px; flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; white-space: nowrap; }
 .vnext-canvas-statuses .vnext-memory-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* FR-16b: zoom as "−", the list of levels and "+", so the line stays one line with the bigger 60+ text. */
 .vnext-canvas-meta .vnext-zoom-control { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 4px; }
@@ -799,7 +802,7 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta { max-width: 960px; gap: 8px 10px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta strong { font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta div span { font-size: 13px; }
-.vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta > .vnext-canvas-statuses { flex-basis: 260px; }
+.vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta > .vnext-canvas-statuses { flex-basis: 360px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta .vnext-zoom-label { font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-zoom-control .vnext-zoom-step { min-width: 40px; min-height: 44px; font-size: 15px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-canvas-meta .vnext-zoom-step span { font-size: 22px; }

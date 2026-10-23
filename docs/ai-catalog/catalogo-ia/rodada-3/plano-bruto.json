@@ -1,0 +1,1288 @@
+{
+ "plan": {
+  "title": "Calibradores de Temperatura TA-25N / TA-35N / TA-50N",
+  "pages": [
+   {
+    "kind": "capa",
+    "purpose": "Apresentação da família, série e modelos de calibradores de temperatura.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 1
+     },
+     {
+      "file": "arquivo-1",
+      "page": 9
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P1.family",
+      "text": "Calibradores de Temperatura"
+     },
+     {
+      "slot": "P1.series",
+      "text": "Série TA Avançada"
+     },
+     {
+      "slot": "P1.tagline",
+      "text": "Pronto para a Indústria [[VNEXT_TECH_1]] e DCC"
+     },
+     {
+      "slot": "P1.model",
+      "text": "TA-25N / TA-35N / TA-50N"
+     }
+    ],
+    "tables": []
+   },
+   {
+    "kind": "visao_geral",
+    "purpose": "Visão geral sobre os calibradores de temperatura e principais características.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 2
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P2.title",
+      "text": "Visão Geral"
+     },
+     {
+      "slot": "P2.intro",
+      "text": "Os novos calibradores de temperatura TA Advanced são resultado de [[VNEXT_TECH_2]] anos de experiência na fabricação de calibradores de bloco seco. Possuem padrão interno de temperatura, calibrador para medições do dispositivo sob teste e processador interno para controle de ciclos automáticos e geração de relatórios de calibração, dispensando a instalação de software específico. Conectam-se facilmente a sistemas de metrologia ou gerenciamento de manutenção por meio de protocolo aberto e interfaces Ethernet, Wi-Fi ou USB, atendendo às diretrizes EURAMET/cg-[[VNEXT_TECH_3]]."
+     },
+     {
+      "slot": "P2.highlights-title",
+      "text": "Principais Características"
+     },
+     {
+      "slot": "P2.highlights",
+      "text": "Display colorido sensível ao toque de [[VNEXT_TECH_4]] polegadas.\nProcessador Dual Core de [[VNEXT_TECH_5]] e memória Flash de [[VNEXT_TECH_6]].\nAlimentação elétrica em [[VNEXT_TECH_7]] ou [[VNEXT_TECH_8]], [[VNEXT_TECH_9]].\nComunicação Ethernet, Wi-Fi via adaptador e USB serial com protocolo SCPI.\nPorta USB Host e Device integrada.\nEntrada para sensor de referência externo.\nAuto-calibração automática utilizando sonda de referência externa.\nConfiguração de rampas de temperatura.\nTeste e relatório automáticos de termostatos.\nFonte de alimentação regulada para transmissores de [[VNEXT_TECH_10]]."
+     }
+    ],
+    "tables": []
+   },
+   {
+    "kind": "especificacoes",
+    "purpose": "Especificações técnicas dos modelos TA-25N, TA-35N e TA-50N.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 9
+     }
+    ],
+    "texts": [],
+    "tables": []
+   },
+   {
+    "kind": "faixas_entradas",
+    "purpose": "Faixas elétricas, exatidões de entrada e dados gerais de operação.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 2
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P5.title",
+      "text": "Entradas e Sinais Elétricos"
+     },
+     {
+      "slot": "P5.general-title",
+      "text": "Dados Gerais"
+     }
+    ],
+    "tables": [
+     {
+      "slot": "P5.ranges",
+      "header": [
+       "Entrada ou função",
+       "Faixa",
+       "Resolução",
+       "Exatidão",
+       "Observações"
+      ],
+      "rows": [
+       {
+        "section": "Termopares",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "Termopar J, K, T, N, L",
+         "-",
+         "-",
+         "[[VNEXT_TECH_11]]",
+         "Em [[VNEXT_TECH_12]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Termopar E",
+         "-",
+         "-",
+         "[[VNEXT_TECH_13]]",
+         "Em [[VNEXT_TECH_12]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Termopar R, S, C",
+         "-",
+         "-",
+         "[[VNEXT_TECH_14]]",
+         "Em [[VNEXT_TECH_12]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Compensação de junta fria (CJC)",
+         "-",
+         "-",
+         "[[VNEXT_TECH_15]]",
+         "-"
+        ]
+       },
+       {
+        "section": "Termorresistências e Corrente",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "RTD (Pt-[[VNEXT_TECH_16]], Pt-[[VNEXT_TECH_17]])",
+         "-",
+         "-",
+         "[[VNEXT_TECH_18]]",
+         "Ligação a [[VNEXT_TECH_19]], [[VNEXT_TECH_20]] ou [[VNEXT_TECH_21]] fios"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Corrente",
+         "[[VNEXT_TECH_22]]",
+         "-",
+         "[[VNEXT_TECH_23]]",
+         "-"
+        ]
+       }
+      ],
+      "notes": []
+     },
+     {
+      "slot": "P5.general",
+      "header": [
+       "Característica",
+       "Valor"
+      ],
+      "rows": [
+       {
+        "section": "",
+        "cells": [
+         "Alimentação elétrica",
+         "[[VNEXT_TECH_24]] ou [[VNEXT_TECH_25]], [[VNEXT_TECH_26]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Display",
+         "[[VNEXT_TECH_27]] colorido sensível ao toque"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Processador e memória",
+         "Dual Core [[VNEXT_TECH_28]], Flash [[VNEXT_TECH_29]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Alimentação do transmissor",
+         "[[VNEXT_TECH_30]] regulada"
+        ]
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "kind": "codigo_pedido",
+    "purpose": "Estrutura do código de pedido e opções para os calibradores.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 9
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P6.title",
+      "text": "Código de Pedido"
+     },
+     {
+      "slot": "P6.skeleton",
+      "text": "[ ] - [ ] - [ ] - [ ] - [ ]"
+     },
+     {
+      "slot": "P6.example",
+      "text": "TA-25N - [[VNEXT_TECH_31]] - [[VNEXT_TECH_32]] - [[VNEXT_TECH_33]] - [[VNEXT_TECH_34]]"
+     }
+    ],
+    "tables": [
+     {
+      "slot": "P6.options",
+      "header": [
+       "Código",
+       "Significado"
+      ],
+      "rows": [
+       {
+        "section": "Modelo",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "TA-25N",
+         "Faixa de [[VNEXT_TECH_35]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "TA-35N",
+         "Faixa de [[VNEXT_TECH_36]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "TA-50N",
+         "Faixa de [[VNEXT_TECH_37]]"
+        ]
+       },
+       {
+        "section": "Alimentação",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_38]]",
+         "[[VNEXT_TECH_39]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_40]]",
+         "[[VNEXT_TECH_41]]"
+        ]
+       },
+       {
+        "section": "Inserto Incluso",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "IN[ ]",
+         "Escolher da tabela de insertos"
+        ]
+       },
+       {
+        "section": "Comunicação HART",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_42]]",
+         "Sem comunicação HART"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_43]]",
+         "Calibrador HART"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_44]]",
+         "Configurador Full-HART"
+        ]
+       },
+       {
+        "section": "Comunicação Profibus",
+        "cells": []
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_45]]",
+         "Sem comunicação Profibus"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_46]]",
+         "Comunicação Profibus PA"
+        ]
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "kind": "fornecimento_acessorios",
+    "purpose": "Itens inclusos no fornecimento e acessórios sobressalentes.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 19
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P7.title",
+      "text": "Fornecimento e Acessórios"
+     },
+     {
+      "slot": "P7.delivery",
+      "text": "[[VNEXT_TECH_47]] bolsa flexível de transporte\n[[VNEXT_TECH_47]] extrator de inserto\n[[VNEXT_TECH_47]] inserto escolhido\n[[VNEXT_TECH_47]] inserto tipo copo\n[[VNEXT_TECH_47]] frasco de esferas de aço\n[[VNEXT_TECH_47]] cabo de alimentação\n[[VNEXT_TECH_47]] kit de cabos de ligação\n[[VNEXT_TECH_47]] manual técnico\n[[VNEXT_TECH_47]] certificado de calibração rastreável"
+     },
+     {
+      "slot": "P7.accessories-title",
+      "text": "Acessórios"
+     }
+    ],
+    "tables": [
+     {
+      "slot": "P7.accessories",
+      "header": [
+       "Descrição",
+       "Código de pedido"
+      ],
+      "rows": [
+       {
+        "section": "",
+        "cells": [
+         "Bolsa flexível para TA-25N e TA-35N",
+         "[[VNEXT_TECH_48]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Bolsa flexível para TA-50N",
+         "[[VNEXT_TECH_49]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Extrator de inserto",
+         "[[VNEXT_TECH_50]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Frasco de esferas de aço",
+         "[[VNEXT_TECH_51]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Kit de cabos de ligação",
+         "[[VNEXT_TECH_52]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Cabo de alimentação padrão US tipo B",
+         "[[VNEXT_TECH_53]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "Cabo de alimentação padrão Europa universal tipo F",
+         "[[VNEXT_TECH_54]]"
+        ]
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "kind": "insertos",
+    "purpose": "Insertos disponíveis para TA-25N, TA-35N e TA-50N com furações e códigos.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 14
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P8.title",
+      "text": "Insertos de Calibração"
+     },
+     {
+      "slot": "P8.insert-1-code",
+      "text": "[[VNEXT_TECH_55]]"
+     },
+     {
+      "slot": "P8.insert-2-code",
+      "text": "[[VNEXT_TECH_56]]"
+     },
+     {
+      "slot": "P8.insert-3-code",
+      "text": "[[VNEXT_TECH_57]]"
+     },
+     {
+      "slot": "P8.insert-4-code",
+      "text": "[[VNEXT_TECH_58]]"
+     }
+    ],
+    "tables": [
+     {
+      "slot": "P8.inserts",
+      "header": [
+       "Código",
+       "Furos",
+       "Código de pedido"
+      ],
+      "rows": [
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_55]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_59]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_60]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_61]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_62]]",
+         "[[VNEXT_TECH_63]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_56]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_64]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_65]], [[VNEXT_TECH_66]] x [[VNEXT_TECH_61]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_67]]",
+         "[[VNEXT_TECH_68]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_57]]",
+         "[[VNEXT_TECH_71]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_58]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_72]]",
+         "[[VNEXT_TECH_73]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_74]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_75]]",
+         "[[VNEXT_TECH_76]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_77]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_78]] e [[VNEXT_TECH_79]] x [[VNEXT_TECH_61]]",
+         "[[VNEXT_TECH_80]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_81]]",
+         "[[VNEXT_TECH_79]] x [[VNEXT_TECH_78]] e [[VNEXT_TECH_47]] x [[VNEXT_TECH_61]]",
+         "[[VNEXT_TECH_82]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_83]]",
+         "[[VNEXT_TECH_84]] x [[VNEXT_TECH_78]]",
+         "[[VNEXT_TECH_85]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_86]]",
+         "[[VNEXT_TECH_66]] x [[VNEXT_TECH_78]] e [[VNEXT_TECH_66]] x [[VNEXT_TECH_61]]",
+         "[[VNEXT_TECH_87]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_88]]",
+         "[[VNEXT_TECH_47]] x [[VNEXT_TECH_78]], [[VNEXT_TECH_47]] x [[VNEXT_TECH_89]] e [[VNEXT_TECH_47]] x [[VNEXT_TECH_67]]",
+         "[[VNEXT_TECH_90]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_91]]",
+         "Sem furos, para usinagem pelo cliente",
+         "[[VNEXT_TECH_92]]"
+        ]
+       },
+       {
+        "section": "",
+        "cells": [
+         "[[VNEXT_TECH_93]]",
+         "Inserto tipo copo (para uso com microesferas de aço)",
+         "[[VNEXT_TECH_94]]"
+        ]
+       }
+      ],
+      "notes": [
+       "Um inserto está incluso no fornecimento padrão, selecionado entre os modelos disponíveis."
+      ]
+     }
+    ]
+   },
+   {
+    "kind": "contracapa",
+    "purpose": "Informações institucionais da PRESYS e código do documento.",
+    "sourcePages": [
+     {
+      "file": "arquivo-1",
+      "page": 20
+     }
+    ],
+    "texts": [
+     {
+      "slot": "P9.about",
+      "text": "A Presys é líder em desenvolvimento e fabricação de calibradores para temperatura, pressão e sinais de processo, além de softwares de calibração, oferecendo uma solução completa para necessidades de calibração de processos. Possui laboratório acreditado conforme ISO/IEC [[VNEXT_TECH_95]], emitindo certificados acreditados de acordo com normas internacionais."
+     },
+     {
+      "slot": "P9.document-code",
+      "text": "[[VNEXT_TECH_96]]"
+     }
+    ],
+    "tables": []
+   }
+  ],
+  "literals": [
+   {
+    "id": 1,
+    "text": "4.0",
+    "file": "arquivo-1",
+    "page": 1,
+    "fact": ""
+   },
+   {
+    "id": 2,
+    "text": "20",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 3,
+    "text": "EURAMET/cg-13/V03",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 4,
+    "text": "5.7\"",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 5,
+    "text": "1 GHz",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 6,
+    "text": "16 GB",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 7,
+    "text": "115",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 8,
+    "text": "230 Vac",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 9,
+    "text": "50/60 Hz",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 10,
+    "text": "24 Vdc",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 11,
+    "text": "± 0.2 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 12,
+    "text": "660 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 13,
+    "text": "± 0.1 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 14,
+    "text": "± 0.7 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 15,
+    "text": "± 0.2 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 16,
+    "text": "100",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 17,
+    "text": "1000",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 18,
+    "text": "± 0.1 ºC",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 19,
+    "text": "2",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 20,
+    "text": "3",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 21,
+    "text": "4",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 22,
+    "text": "-1 to 24.5 mA",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 23,
+    "text": "± 0.01% FS",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 24,
+    "text": "115",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 25,
+    "text": "230 Vac",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 26,
+    "text": "50/60 Hz",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 27,
+    "text": "5.7\"",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 28,
+    "text": "1 GHz",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 29,
+    "text": "16 GB",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 30,
+    "text": "24 Vdc",
+    "file": "arquivo-1",
+    "page": 2,
+    "fact": ""
+   },
+   {
+    "id": 31,
+    "text": "1",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 32,
+    "text": "IN01",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 33,
+    "text": "NH",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 34,
+    "text": "NP",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 35,
+    "text": "-25 °C to +155 °C",
+    "file": "",
+    "page": 0,
+    "fact": "f1"
+   },
+   {
+    "id": 36,
+    "text": "-35 °C to +155 °C",
+    "file": "",
+    "page": 0,
+    "fact": "f2"
+   },
+   {
+    "id": 37,
+    "text": "-50 °C to +155 °C",
+    "file": "",
+    "page": 0,
+    "fact": "f3"
+   },
+   {
+    "id": 38,
+    "text": "1",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 39,
+    "text": "115 Vac",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 40,
+    "text": "2",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 41,
+    "text": "230 Vac",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 42,
+    "text": "NH",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 43,
+    "text": "CH",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 44,
+    "text": "FH",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 45,
+    "text": "NP",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 46,
+    "text": "PB",
+    "file": "arquivo-1",
+    "page": 9,
+    "fact": ""
+   },
+   {
+    "id": 47,
+    "text": "01",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 48,
+    "text": "06.01.1031-00",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 49,
+    "text": "06.01.1032-00",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 50,
+    "text": "02.06.0085-00",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 51,
+    "text": "03.03.0144-00",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 52,
+    "text": "06.07.0025-00",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 53,
+    "text": "01.14.0100-10",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 54,
+    "text": "01.14.0089-10",
+    "file": "arquivo-1",
+    "page": 19,
+    "fact": ""
+   },
+   {
+    "id": 55,
+    "text": "IN1P",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 56,
+    "text": "IN1A",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 57,
+    "text": "IN1E",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 58,
+    "text": "IN01",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 59,
+    "text": "3mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 60,
+    "text": "6mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 61,
+    "text": "1/4\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 62,
+    "text": "8mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 63,
+    "text": "06.04.0121-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 64,
+    "text": "1/8\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 65,
+    "text": "3/16\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 66,
+    "text": "2",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 67,
+    "text": "3/8\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 68,
+    "text": "06.04.0122-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 69,
+    "text": "4mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 70,
+    "text": "10mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 71,
+    "text": "06.04.0123-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 72,
+    "text": "3/4\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 73,
+    "text": "06.04.0011-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 74,
+    "text": "IN02",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 75,
+    "text": "1/2\"",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 76,
+    "text": "06.04.0012-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 77,
+    "text": "IN03",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 78,
+    "text": "6.0mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 79,
+    "text": "3",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 80,
+    "text": "06.04.0013-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 81,
+    "text": "IN04",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 82,
+    "text": "06.04.0014-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 83,
+    "text": "IN05",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 84,
+    "text": "4",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 85,
+    "text": "06.04.0015-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 86,
+    "text": "IN06",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 87,
+    "text": "06.04.0016-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 88,
+    "text": "IN07",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 89,
+    "text": "8.0mm",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 90,
+    "text": "06.04.0017-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 91,
+    "text": "IN09",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 92,
+    "text": "06.04.0019-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 93,
+    "text": "INCL",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 94,
+    "text": "06.04.0086-00",
+    "file": "arquivo-1",
+    "page": 14,
+    "fact": ""
+   },
+   {
+    "id": 95,
+    "text": "17025",
+    "file": "arquivo-1",
+    "page": 20,
+    "fact": ""
+   },
+   {
+    "id": 96,
+    "text": "EF0585-13",
+    "file": "arquivo-1",
+    "page": 20,
+    "fact": ""
+   }
+  ],
+  "questions": []
+ },
+ "trimmed": 1,
+ "model": "gemini-3.8-flash",
+ "modelVersion": "gemini-3.8-flash",
+ "promptVersion": "catalog-plan-v3",
+ "usage": {
+  "inputTokens": 16879,
+  "outputTokens": 10076,
+  "estimatedUsd": 0.100889
+ },
+ "ms": 58894
+}

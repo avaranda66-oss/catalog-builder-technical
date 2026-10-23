@@ -1,0 +1,369 @@
+{
+  "image": {
+    "fileName": "acessorios_stress.jpg",
+    "width": 900,
+    "height": 1273,
+    "originalWidth": 900,
+    "originalHeight": 1273
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/d354e5773894175d4362dbdaf739ebf41013b9b49e4a8483c01f3b829e8b6e9b.jpg",
+    "sha256": "d354e5773894175d4362dbdaf739ebf41013b9b49e4a8483c01f3b829e8b6e9b",
+    "mimeType": "image/jpeg",
+    "fileName": "acessorios_stress.jpg",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "fornecimento_acessorios",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "title",
+              "bbox": [
+                120,
+                85,
+                172,
+                380
+              ],
+              "normalizedBox": [
+                0.12,
+                0.085,
+                0.172,
+                0.38
+              ],
+              "text": "Acessórios",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "callout",
+              "bbox": [
+                126,
+                344,
+                217,
+                808
+              ],
+              "normalizedBox": [
+                0.126,
+                0.344,
+                0.217,
+                0.808
+              ],
+              "text": "fotos pequenas à esquerda",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-3",
+              "kind": "image",
+              "bbox": [
+                228,
+                93,
+                354,
+                271
+              ],
+              "normalizedBox": [
+                0.228,
+                0.093,
+                0.354,
+                0.271
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-4",
+              "kind": "subtitle",
+              "bbox": [
+                229,
+                287,
+                269,
+                390
+              ],
+              "normalizedBox": [
+                0.229,
+                0.287,
+                0.269,
+                0.39
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-5",
+              "kind": "paragraph",
+              "bbox": [
+                258,
+                290,
+                331,
+                843
+              ],
+              "normalizedBox": [
+                0.258,
+                0.29,
+                0.331,
+                0.843
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-6",
+              "kind": "image",
+              "bbox": [
+                393,
+                109,
+                517,
+                283
+              ],
+              "normalizedBox": [
+                0.393,
+                0.109,
+                0.517,
+                0.283
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-7",
+              "kind": "subtitle",
+              "bbox": [
+                394,
+                303,
+                429,
+                403
+              ],
+              "normalizedBox": [
+                0.394,
+                0.303,
+                0.429,
+                0.403
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-8",
+              "kind": "paragraph",
+              "bbox": [
+                419,
+                304,
+                492,
+                874
+              ],
+              "normalizedBox": [
+                0.419,
+                0.304,
+                0.492,
+                0.874
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-9",
+              "kind": "image",
+              "bbox": [
+                552,
+                122,
+                676,
+                297
+              ],
+              "normalizedBox": [
+                0.552,
+                0.122,
+                0.676,
+                0.297
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-10",
+              "kind": "subtitle",
+              "bbox": [
+                553,
+                315,
+                590,
+                419
+              ],
+              "normalizedBox": [
+                0.553,
+                0.315,
+                0.59,
+                0.419
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-11",
+              "kind": "paragraph",
+              "bbox": [
+                577,
+                316,
+                652,
+                872
+              ],
+              "normalizedBox": [
+                0.577,
+                0.316,
+                0.652,
+                0.872
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-12",
+              "kind": "image",
+              "bbox": [
+                714,
+                137,
+                836,
+                310
+              ],
+              "normalizedBox": [
+                0.714,
+                0.137,
+                0.836,
+                0.31
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-13",
+              "kind": "subtitle",
+              "bbox": [
+                713,
+                329,
+                749,
+                434
+              ],
+              "normalizedBox": [
+                0.713,
+                0.329,
+                0.749,
+                0.434
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-14",
+              "kind": "paragraph",
+              "bbox": [
+                733,
+                330,
+                811,
+                893
+              ],
+              "normalizedBox": [
+                0.733,
+                0.33,
+                0.811,
+                0.893
+              ],
+              "text": "",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": []
+        },
+        "dimensions": {
+          "width": 900,
+          "height": 1273
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 1890,
+          "estimatedUsd": 0.016764
+        },
+        "ms": 19138
+      }
+    },
+    "ms": 19738
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1287
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2228
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 302
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 15314,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"fornecimento_acessorios\",\n  \"regions\": [\n    {\n      \"kind\": \"title\",\n      \"bbox\": [120, 85, 172, 380],\n      \"text\": \"Acessórios\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"callout\",\n      \"bbox\": [126, 344, 217, 808],\n      \"text\": \"fotos pequenas à esquerda\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [228, 93, 354, 271],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [229, 287, 269, 390],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [258, 290, 331, 843],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [393, 109, 517, 283],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [394, 303, 429, 403],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [419, 304, 492, 874],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [552, 122, 676, 297],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [553, 315, 590, 419],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [577, 316, 652, 872],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [714, 137, 836, 310],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [713, 329, 749, 434],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [733, 330, 811, 893],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "EvgTCvUTAWkUfRNdTgBXyIQH1fRLNq3uXJp6ZSV5RMYLIc97tdos6nZa79Mu9tJGel8SjjFx1+/n/FFSLnqzuE/V+q2kc5M9ZqLx2AszWwOKqX391jCDQqVwfBc2Uom8OHVQ+OtxK5v0G1w9T094o5roeAVTDFZRkIPMSZY76S1+SNEfeDLdCXmjqqYPLArezqfHnITe8DYW4v8EVTpib6BRMT+E7S/609/9/s8wuvBlnddCwuqHRe3L4YrW3CCd7wEym7HNdbuBysodLT5avrpwgwdOO2nfsDqT2Q02fKtBfmCUQcYRmEqp+eWMZc7PGzQv0POGeBVCSIdEGDNecYlpIcp63v113iKMDFAmlV91c2Sf/LlFDtiCM0Ceozt9/nA9s9QKZtcCDYMUru1PjtgasoqKywOAQ8WkO2xSeUazr/H3Htips74vt7b3sYRBZCXbVEG1u+AJoC66GhNDUoCSOHYTZKWkMBmJFiK0ar59cbr98hdlqW0tJBBP/exgs08COhqO0lNr1w9g1HD1tOZQxKH2zxfUyTVzvqSw775qYLDOzv++5g3KlohdEHxeCy4Hw+bnHE0pU10Ga8N8dTfzzFuzGIIbi97KqYQjJmqm3kxaCXZpY6fDlTFETXb8+iuCmaePKKIoLtwoTqVbUFZxj3UVbsFk4wy4UKJUZAl7hzlQuTvR4s9fALpiwKQWajYO90eHb08tcQme/fIfXCkEp42wW5ZlNJV/BT17buPRfCM+WmrygaVzbXcOFFFlXd+ddQFkyNEhJKpQy63sTFwWlFjKmNzwt2xo6xf35msckYvAI1RAWKBkKf5o6iKwYNWJm2osicQJKqqLVP2nCqsUTR44FRhG3dBAKAyYtfb2mKXQnSU9qC2O7tO/bPsnEoS8AmHPk+UKV/BWGgLZC1ui9tY+DAjHNayM4lgNV3IcH1kWy8V9XETCcHTTdDeeP00XIKUsCAPc/B4ioTsojfMmgPEI0JTZFLjbxzPSHYXEfhj92fYzEghexzV6jcrSMgBE2uluXJ9chCPRk+buhynWNLi5ZeeiBjiQfz4Y73s7rQozzZU7UdjSZ9Qw3GyT0iH527w96zCxFHlbG/GNpt3NoaOvS63E/tg/wu/cfiBTK95qAQgb7DJYs7U+QbNv7sum2lRHpB4BPUQv4prNjDjHLrUFbLLmbpjDGWgoB8FwqX9LxeU90zAEirQFGQ/2O8JYGjZf6oTWxZff6f5Zv6+La/QCoYLyDzypm/+Jq+Mp2Sl2Cwk1GJjnSvTeKiS+Pr5gROCuoLRqdQZeqtRqQWl7XRuZk7WXEOxWl58bswn8EKSWybjN7Fxj8IR9NIiM6HUGpNyXJK0uvRXaazQmsa/shWSLCMhNNgUfvYbPSUD2r8YVZ7U2SS0PfpAAvNM/tQ6tDX+CFDhw15eFqx1DFQAQFVR+ddFywTgm5CJdZWQI6yVFzSOLo5u4xw9Cvsz8dZSGigTyCj7omgLSgC7RcAMOpi5sV0gQcmcjVXPBmxt5S7boYa+4PqauXrBXAq6uvA6/1COkT8KIHkIDOkaNqE9t7H8NQjZmpvLgG/q9EsIKese6o4MhXagzETf1txtyTtSSOco1ldYnLST1ZDXkcchqFW1hR8DGuX0agBOttzMdOU+l3slspjSezNzzqckdALXzGGO7otAhQoAp526k5g/3+PJRRum4xiR4IdXlee2MlCNnYOIanAtajRaNCh/Wm73UVJXXrGQ1kBqo4NSS7FeORE8yea4za3eDoUqUkfn/WodW2gY4Gz55PwhHj6ya9UzxrmZ76FhHZ1n2e42al2uZnxtSTRJ2E67PKKS/7xIEEwRLf13yqEN968YklUrmFbzdlaHlynjhxGE//2M6s7q3qMDcr/eS7VTPrsWwP+cSqgmTAauC6y3blU1zUG0bYM0zuF0WVrfqWlAF2adXAow46qswPCmzTqTCMpu2er/ilr+uhPzrNknodx/AQtoJllFnJdn7rBu934wXGzD9HqsJw5ZkCY9clF5fhQSbS2AwgG80REcF1uSmKeE4okgAigw3GfBNAqhsE2b48oMwWwwHsvw0/ucqafFur2fGRqK5nIaE3R4towa6rrYnOcKTTUsI9EsXofAH7AVWOvjrtNHYmo205TggJKIqslmUW6usOSpukYMywbPhQmdwgb0OhTD9PNcgr1zu5HQAlQ5a9BKIWhUrJetA/OUMCYV4avgCDbUp6nPiaPuhNendWDz6NHR6xadW+KRh+LFf8btRjEMPI/xc9jGooRPJFjzqftwuy6yGoXhLctBXY+U3ZPb5EBxawxOSy7kEgNN7M0gusW+8G9rnNy1t/qgpRWXI/mYuMu3YPMIDY0Xx1RNgKki2dYggq0vIhSDK+6AD+CjSTFLewQBWoD6B4ijkXgjsoQFzRZJDCG6MizVM75t5HxJ3mHim+sIucFMhgmXlgOmZj9Iv5fPK66aElnEwo++O4zFuRYtfLj2FF29kUQQmQM0BbAaPSFqgXnnXzu4fARFyFTmgpzpYsunBV+zr8nootBK80egFAseglo8YEF5twN+tO+UHmjUrXr6rgcNHkoWJBur9FnxivsVL1dHU3gZ9sv4L32vys1IReCWyv0KG4KCFH6wkYbS5qwyuWR04eyCfxIizWBzLR9+sSmzTN6g290EPDUl/pGoe3R42lrcsJ7FAJrGJj2ZipC507LjO3NX7iBUSf0w7ApG0X0SeCbSihHl8uk6+8zkWVSY0EXRe/1jMjXXqD4UYPjC70lh6tdnW0N6NKnFtB6rXx7o8ibwnrukRFXDnh92qd/7B4q+WLT2iVX9I5bwPKYgWgOudvuQ//ldEs5CdfaGShkXWToibGDqEvHqSyOaDLtbfVJn799rotOvlIlMYJvD31xU2D9ZuZzU+9YPgb5rXAfXt27/etfq5H3U1ku4sgA3TCwUNtnTtZin/RnRB3XTXmCFuL9A/pLScruunX1OuwpUmjZNeLhP6pcmDRXaq+2a7b8l/ovkTmETWpUUAp7WG/MTQc81pasqierojkngc5DMZMlhsHAgR+X/lbVKwGXs27tAmfGjmZphZFM8zEu6RXvPUxk34W/JIK+GOaLkEL0G6Oobug0z0aDlSxUEoXn0kmmdiI8GicXQqVNRvPybNn+at9KXuAobFdmOO6SnXQjDXY83V1aILM06kneHu6OBIhVXNndCsrbGQQLIRN+85yIGZ+cfbnepBFp/XtO8khrbMZS5ZoMED3DsBT0bLMhmrE6o2tMUF8dAvWkcdFAn+AAeJ5DqBbu+d3ZYbH6oci/tTnOambgqapUY9PIFQa225c1N9sNThewNq1nKOBgAshTcM1Octm2KBS8ddo8E3xzrNvJ/qOPLUyr74X5DI3ZBL8Pvls/O9zpHO2cdbyk5sGu4="
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 778,
+          "totalTokenCount": 3616,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            },
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            }
+          ],
+          "thoughtsTokenCount": 1112,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "jbLaauuOE-H6wbUPz_29iQg"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 1890
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 599
+    }
+  ]
+}

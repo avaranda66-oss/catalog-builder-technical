@@ -1,0 +1,196 @@
+{
+  "image": {
+    "fileName": "especificacoes_foto.jpg",
+    "width": 1131,
+    "height": 1600,
+    "originalWidth": 1240,
+    "originalHeight": 1754
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/267278652c8a9cbd3efc2a302105a3b545ef11520a29dccfedd02db9b80d7924.jpg",
+    "sha256": "267278652c8a9cbd3efc2a302105a3b545ef11520a29dccfedd02db9b80d7924",
+    "mimeType": "image/jpeg",
+    "fileName": "especificacoes_foto.jpg",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "especificacoes",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "title",
+              "bbox": [
+                112,
+                81,
+                156,
+                663
+              ],
+              "normalizedBox": [
+                0.112,
+                0.081,
+                0.156,
+                0.663
+              ],
+              "text": "Especificações técnicas",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "table",
+              "bbox": [
+                188,
+                91,
+                650,
+                894
+              ],
+              "normalizedBox": [
+                0.188,
+                0.091,
+                0.65,
+                0.894
+              ],
+              "text": "característica TA-25N TA-35N TA-50N",
+              "instruction": "do PDF"
+            },
+            {
+              "id": "region-3",
+              "kind": "note",
+              "bbox": [
+                671,
+                140,
+                719,
+                902
+              ],
+              "normalizedBox": [
+                0.671,
+                0.14,
+                0.719,
+                0.902
+              ],
+              "text": "notas embaixo",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": [
+            {
+              "id": "region-2-text",
+              "source": "text",
+              "regionId": "region-2",
+              "text": "característica TA-25N TA-35N TA-50N",
+              "matches": [
+                {
+                  "value": "25",
+                  "start": 18,
+                  "end": 20
+                },
+                {
+                  "value": "35",
+                  "start": 25,
+                  "end": 27
+                },
+                {
+                  "value": "50",
+                  "start": 32,
+                  "end": 34
+                }
+              ],
+              "status": "confirmar"
+            }
+          ]
+        },
+        "dimensions": {
+          "width": 1131,
+          "height": 1600
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 754,
+          "estimatedUsd": 0.008244
+        },
+        "ms": 11239
+      }
+    },
+    "ms": 11984
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1090
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2052
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 489
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 7604,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"especificacoes\",\n  \"regions\": [\n    {\n      \"kind\": \"title\",\n      \"bbox\": [112, 81, 156, 663],\n      \"text\": \"Especificações técnicas\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"table\",\n      \"bbox\": [188, 91, 650, 894],\n      \"text\": \"característica TA-25N TA-35N TA-50N\",\n      \"instruction\": \"do PDF\"\n    },\n    {\n      \"kind\": \"note\",\n      \"bbox\": [671, 140, 719, 902],\n      \"text\": \"notas embaixo\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "Eu0MCuoMAWkUfRN/gET4u8BM8JrhWIXk8H9WyIAEd/lBW5Wo3N+4g4RMk2yCDJP39zVVnd0PSd0Q98PO+SIc6KgoFN3UUgQqPJvWJ5RpVO+zhSrGNxtzxgdfmE1u86CZiyhsI7Yb5/nx02giWa1p1dh86Kvbu9PK1dbdBBpblF5RemeBtZBb4xxzGXKwI0FalPPzZ6B0KBOCUrg4UrBauS6CsXjfG0/vAdegJ7bOVcK2vFyzYVQ7Ct/0AH3t8PaKOtVmiNO92xTrVdvi1is+gRX0CUpbfRuuOHfkMpPHaxcGqp2sQ1wX+RdpDMU21K7toOigRACV0AUdRKNaoEqkZYw2ao6Cwg9nF8PYkf5CmNfMQjRRkvgunRoGjel6G0ysrONB9dsT5Octk/cBHYF3LHZZVGrANu/xPf+vFbgzpr+KkMGKJincTTbECo5HQxdtwQPa6cy+VHCebUrAQDSrzb3WRPTEycFDgLwwU4Jy/Y/3dqgXgDe9gZiCfQhv/gxY1jVkXWt4kVfhJRvY/VvZIP/W8EpLAlgqELe1FHXvu2A0O6T9FBT9Ndzcoqk/7ooOuDBocZj7dY2hHY75wbjYeARzlCZD4clhFVH+C0IRP+z4D+ZPTQ1jxbLdD+mzEDQJH55ZVK26Wej9gLMSyA/qwTBvG4adxfrjg3flXKEHZfLuVZPF6YdEMPrX/oHFf5gpRsf7R/wk1uE0Bx6ciAHeI/h+3j1v1wK1iK2IBQwk27wZYOxRdNEBIKx9AVehTNOuI/9J+tMfPLdQXkZddVC8VNdfe43PFNQmfQTZlwuW8eZHP+iDJqhN5Uu/4dm6cm1JaK3hlv+DlyIsoiArB9zYRUdpMlA+MBIidSBnNVN+zvkNefOrOWvjjlzy4OF9KDxS1gJpQj0qfJ8Ck18OfykAb1vKsYESII/ku3nPP4VowO8E92j8UQvFH+RXy7Z6OMRevyHWr27GK4QmpckhbWfecQRvYWGxgNo5AYrLHzH0LBSfzgOe+ogg5pgqaOCq8tc7bV2viFpLJKbZXtkLw5+4Oittq+4M4Bv6+wge6vM4HVOvdHpCAGj1OZ/eRpgNHpgpMGe3BfJ3z5Jz/2fd+wKPzWmpKdSSP4/0tnoiGVgbjjuzCGBE3nIgv/OrP/8MaiGz5v8EZgSr7QgZVCaiCUhiyfE107CUPXVcHgMkYMFKaKOFZqS93E0+iQnzqvRjhXHIeifRXrBPZ0kuMRQSeABpbEFIsTmwHvye5eyhQvEISWz4wKBI68R1cdjSwLboguW4G5uwdR7ksx8it71+YQ+nR1tURgQHSI6Rf/53pwKWUaOlbaOoBsKXHOGGcoaUrErLLVFb19MP0CiUWujSprmt+1prMHR8PS+erQsSONjzZJRtWYnCgL6jHlFsAyrjHNw6t3g9MhBvSTUcRiaUCB//vwdNSkubao2FoMKb0eTRCn7dwmSpt14LBdXtpwvP8uuULieu8y1J9N4XdxEaWteQSM5jX+8RtR+fylPdEzUOFZQ5oK4ODijcKx7ILSvb6iVJFOWTicBvK8cebZVtBnoTbVMZaNpHBKJd+Ke5cyecWWYGHZezjfSzVQ0yOciMgpKgoglQLQ/CVMlEGyLn/C/54J+RqhjMhRUo0kPROwTF9jcBvnSgGq8dW+RAvZ6/iCUQukpmB1KLIjdZVpzVKq6WF+d0bKtEmLoWj3i8yJoLX22R8Mf7nCeBWiJOilo39aro5Zx6bvpSFPdi0omAWQef7pXOuYWLsoPlpgivRJPoqdYktqoO4n3aNhsSyjQHSpwUuQoE6N6mdG4OFNdlupqR4h/BXNAR5lX/AnC9LJwKp1s8e/Zm43bOXBjufsn+IJh6U34sk7VMqw2C0DmssQH++I/K0AY4T6Axx5pP+iuXE9X/fUDJXzdrZvouJ7ICxckEM3Ht3BUpYIR/CwY7MRfPpyiCX42cdfcB0pBg2THZEZR0kCfCo3KH+C5OVBsTnD6bmBP7zPMqD7qf20lrBD776zJIJp4ounsdD15VchQ9kHkwo82cU5xw5RPHu0Rkgk5D6XgA5JcMFTLu31b5hwk0BNazCBX+EMvXqfHqRaRxhAexQ0+sR3r0aj2EUHMbtKm8UXP3sXGMKdfPqL1Ti3AY2Fe0GRBEK/kUgKq0CvFXXa0kSUcn+NWXmAZwERI8zf/dZyeJ6ZtsVCVpomt4OqMQXw=="
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 209,
+          "totalTokenCount": 2480,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 545,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "R7LaapmHDZ7QiLMPnKmVsAY"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 754
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 744
+    }
+  ]
+}

@@ -1,0 +1,467 @@
+{
+ "promptVersion": "fr66-2026-10-17.3",
+ "model": "gemini-3.8-flash",
+ "modelVersion": "gemini-3.8-flash",
+ "cached": false,
+ "sheet": {
+  "title": "Technical Specifications TA-25N / TA-35N / TA-50N",
+  "models": [
+   "TA-25N",
+   "TA-35N",
+   "TA-50N"
+  ],
+  "sections": [
+   {
+    "title": "Technical Specifications TA-25N / TA-35N / TA-50N",
+    "rows": [
+     {
+      "key": "operating-range",
+      "label": "Operating Range",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "-25 °C to +155 °C",
+        "unit": "",
+        "condition": "ambient temperature: 23 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Operating Range\nambient temperature: 23 °C -25 °C to +155 °C -35 °C to +155 °C -50 °C to +155 °C"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "-35 °C to +155 °C",
+        "unit": "",
+        "condition": "ambient temperature: 23 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Operating Range\nambient temperature: 23 °C -25 °C to +155 °C -35 °C to +155 °C -50 °C to +155 °C"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "-50 °C to +155 °C",
+        "unit": "",
+        "condition": "ambient temperature: 23 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Operating Range\nambient temperature: 23 °C -25 °C to +155 °C -35 °C to +155 °C -50 °C to +155 °C"
+        }
+       }
+      ]
+     },
+     {
+      "key": "display-accuracy",
+      "label": "Display Accuracy:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "± 0.1",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Display Accuracy: ± 0.1 °C Full range ± 0.1 °C Full range ± 0.1 °C Full range"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "± 0.1",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Display Accuracy: ± 0.1 °C Full range ± 0.1 °C Full range ± 0.1 °C Full range"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "± 0.1",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Display Accuracy: ± 0.1 °C Full range ± 0.1 °C Full range ± 0.1 °C Full range"
+        }
+       }
+      ]
+     },
+     {
+      "key": "resolution",
+      "label": "Resolution:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "0.01",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Resolution: 0.01 °C 0.01 °C 0.01 °C"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "0.01",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Resolution: 0.01 °C 0.01 °C 0.01 °C"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "0.01",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Resolution: 0.01 °C 0.01 °C 0.01 °C"
+        }
+       }
+      ]
+     },
+     {
+      "key": "stability",
+      "label": "Stability:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "± 0.02",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Stability: ± 0.02 °C ± 0.02 °C ± 0.02 °C"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "± 0.02",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Stability: ± 0.02 °C ± 0.02 °C ± 0.02 °C"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "± 0.02",
+        "unit": "°C",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Stability: ± 0.02 °C ± 0.02 °C ± 0.02 °C"
+        }
+       }
+      ]
+     },
+     {
+      "key": "axial-uniformity",
+      "label": "Axial Uniformity (40 mm) Dry Block:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "± 0.05",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Axial Uniformity (40 mm) Dry Block: ± 0.05 °C Full range ± 0.06 °C Full range ± 0.07 °C Full range"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "± 0.06",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Axial Uniformity (40 mm) Dry Block: ± 0.05 °C Full range ± 0.06 °C Full range ± 0.07 °C Full range"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "± 0.07",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Axial Uniformity (40 mm) Dry Block: ± 0.05 °C Full range ± 0.06 °C Full range ± 0.07 °C Full range"
+        }
+       }
+      ]
+     },
+     {
+      "key": "radial-uniformity",
+      "label": "Radial Uniformity Dry Block:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "± 0.01",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Radial Uniformity Dry Block: ± 0.01 °C Full range ± 0.01 °C Full range ± 0.02 °C Full range"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "± 0.01",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Radial Uniformity Dry Block: ± 0.01 °C Full range ± 0.01 °C Full range ± 0.02 °C Full range"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "± 0.02",
+        "unit": "°C",
+        "condition": "Full range",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Radial Uniformity Dry Block: ± 0.01 °C Full range ± 0.01 °C Full range ± 0.02 °C Full range"
+        }
+       }
+      ]
+     },
+     {
+      "key": "heating-time",
+      "label": "Heating Time:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "10",
+        "unit": "min",
+        "condition": "25 °C to 140 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Heating Time: 10 min (25 °C to 140 °C) 16 min (25 °C to 140 °C) 11 min (25 °C to 140 °C)"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "16",
+        "unit": "min",
+        "condition": "25 °C to 140 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Heating Time: 10 min (25 °C to 140 °C) 16 min (25 °C to 140 °C) 11 min (25 °C to 140 °C)"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "11",
+        "unit": "min",
+        "condition": "25 °C to 140 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Heating Time: 10 min (25 °C to 140 °C) 16 min (25 °C to 140 °C) 11 min (25 °C to 140 °C)"
+        }
+       }
+      ]
+     },
+     {
+      "key": "cooling-time",
+      "label": "Cooling Time:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "11",
+        "unit": "min",
+        "condition": "25 °C to -25 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Cooling Time: 11 min (25 °C to -25 °C) 16 min (25 °C to -35 °C) 25 min (25 °C to -50 °C)"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "16",
+        "unit": "min",
+        "condition": "25 °C to -35 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Cooling Time: 11 min (25 °C to -25 °C) 16 min (25 °C to -35 °C) 25 min (25 °C to -50 °C)"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "25",
+        "unit": "min",
+        "condition": "25 °C to -50 °C",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Cooling Time: 11 min (25 °C to -25 °C) 16 min (25 °C to -35 °C) 25 min (25 °C to -50 °C)"
+        }
+       }
+      ]
+     },
+     {
+      "key": "electric-power",
+      "label": "Electric Power:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "200",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Electric Power: 200 W 300 W 400 W"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "300",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Electric Power: 200 W 300 W 400 W"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "400",
+        "unit": "W",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Electric Power: 200 W 300 W 400 W"
+        }
+       }
+      ]
+     },
+     {
+      "key": "well-dimensions",
+      "label": "Well Diameter x Depth:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "Ø 25.4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Well Diameter x Depth: Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "Ø 25.4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Well Diameter x Depth: Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "Ø 25.4 mm (1”) x 124 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Well Diameter x Depth: Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm Ø 25.4 mm (1”) x 124 mm"
+        }
+       }
+      ]
+     },
+     {
+      "key": "weight",
+      "label": "Weight:",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "10.5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Weight: 10.5 kg 10.5 kg 12.5 kg"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "10.5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Weight: 10.5 kg 10.5 kg 12.5 kg"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "12.5",
+        "unit": "kg",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Weight: 10.5 kg 10.5 kg 12.5 kg"
+        }
+       }
+      ]
+     },
+     {
+      "key": "dimensions",
+      "label": "Dimension (HxWxD):",
+      "values": [
+       {
+        "model": "TA-25N",
+        "literal": "260 x 200 x 305 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Dimension (HxWxD): 260 x 200 x 305 mm 315 x 200 x 305 mm 315 x 200 x 305 mm"
+        }
+       },
+       {
+        "model": "TA-35N",
+        "literal": "315 x 200 x 305 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Dimension (HxWxD): 260 x 200 x 305 mm 315 x 200 x 305 mm 315 x 200 x 305 mm"
+        }
+       },
+       {
+        "model": "TA-50N",
+        "literal": "315 x 200 x 305 mm",
+        "unit": "",
+        "condition": "",
+        "sourceRef": {
+         "page": 9,
+         "quote": "Dimension (HxWxD): 260 x 200 x 305 mm 315 x 200 x 305 mm 315 x 200 x 305 mm"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "sharedTables": [],
+  "pages": [
+   {
+    "page": 9,
+    "content": "specifications"
+   }
+  ]
+ },
+ "trimmed": 0,
+ "usage": {
+  "inputTokens": 11841,
+  "outputTokens": 4586,
+  "estimatedUsd": 0.052157
+ },
+ "ms": 31041
+}

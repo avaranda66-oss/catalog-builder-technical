@@ -218,7 +218,9 @@ export function PagePanel({ pages, currentPageId, session, prepareForChange, onS
                 onClick={() => onSelectPage(page.id)}
               >
                 {thumbnails
-                  ? <PageThumbnail page={page} document={thumbnails.document} assetUrls={thumbnails.assetUrls} signature={pageThumbnailSignature(page, thumbnails.document)} />
+                  ? <PageThumbnail page={page} document={thumbnails.document} assetUrls={thumbnails.assetUrls}
+                    numbering={{ firstPageNumber: index + 1, pageCount: pages.length }}
+                    signature={pageThumbnailSignature(page, thumbnails.document, { firstPageNumber: index + 1, pageCount: pages.length })} />
                   : <span className="vnext-page-icon" aria-hidden="true"><FileText size={16} /></span>}
                 <span className="vnext-page-label">
                   <span>{label}</span>

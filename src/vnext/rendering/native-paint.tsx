@@ -173,6 +173,7 @@ export function LeaderPaint({ size, leader }: { size: { widthMm: number; heightM
 export function useTextFitScale(flowRef: React.RefObject<HTMLElement>, enabled: boolean, availableWidthMm: number, resetKey: string): number {
   const [state, setState] = React.useState({ key: resetKey, scale: 1, fonts: 0 });
   const scale = state.key === resetKey ? state.scale : 1;
+  const lastShrink = React.useRef<{ scale: number; ratio: number } | undefined>(undefined);
   React.useEffect(() => {
     const fonts = globalThis.document?.fonts;
     if (!fonts?.addEventListener) return;
@@ -187,10 +188,21 @@ export function useTextFitScale(flowRef: React.RefObject<HTMLElement>, enabled: 
     const range = globalThis.document.createRange();
     range.selectNodeContents(flow);
     const natural = typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect().width : 0;
-    const available = flow.parentElement?.clientWidth ?? 0;
+    // The room is the flow root itself: it fills the selo inside its side padding (Onda 4 P: the padding stays free of
+    // text, as the publication review measures it), and it is measured the same way as the words, in screen pixels.
+    // Before, the room came from clientWidth, which ignores the page zoom: above 100% every selo shrank to 40%, and
+    // at 101% the editor stopped with "Maximum update depth exceeded" (the paragraphs are never narrower than the room,
+    // so the words never "fitted"). A text that fits measures exactly the room here, at any zoom.
+    const available = flow.getBoundingClientRect().width;
     if (!(natural > 0) || !(available > 0) || natural <= available + 0.5 || scale <= 0.4) return;
-    const next = Math.max(0.4, Math.floor(scale * (available / natural) * 100) / 100);
-    if (next < scale) setState((current) => ({ ...current, scale: next }));
+    const ratio = natural / available;
+    // The last shrink did not make the words narrower (nothing follows the font size): stop instead of looping to 40%.
+    if (lastShrink.current && lastShrink.current.scale > scale && ratio >= lastShrink.current.ratio - 0.001) return;
+    const next = Math.max(0.4, Math.floor((scale / ratio) * 100) / 100);
+    if (next < scale) {
+      lastShrink.current = { scale, ratio };
+      setState((current) => ({ ...current, scale: next }));
+    }
   }, [enabled, availableWidthMm, resetKey, scale, state.key, state.fonts, flowRef]);
   return enabled ? scale : 1;
 }

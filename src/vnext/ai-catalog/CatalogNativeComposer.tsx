@@ -2,9 +2,12 @@ import React from 'react';
 import type { DocumentSession } from '../application';
 import { ProviderCredentialsSettings } from './ProviderCredentialsSettings';
 import {
-  ComposerRequestError, nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
+  ComposerRequestError, editIntentGateway, nativeComposeGateway, nativeTextEditGateway, readComposerReadiness,
   type ComposerReadiness, type NativeComposeFunctionsClient,
 } from './native-compose-client';
+import { assistantRouteFor, type EditIntentGateway } from './edit-intents';
+import { useEditIntent } from './useEditIntent';
+import { EditIntentCard } from './EditIntentCard';
 import { applyNativeTextEdit, plainSelectedEditorialText, proposeNativeTextEdit,
   type NativeTextEditReply, type SelectedEditorialText } from './native-text-edit';
 import {
@@ -31,6 +34,7 @@ import { DROP_ZONE_TEXT, useFileDrop } from './intake/SourceDropZone';
 import { useSourceIntake } from './intake/useSourceIntake';
 import { useSourceTableInsertion } from './intake/useSourceTableInsertion';
 import { batchEntries, dropBatchIntoIntake, intakeBatchSummary, intakeBatchesFor } from './intake/intake-batches';
+import type { IntakeEntry } from './intake/intake-model';
 import { IntakeBatchMessage } from './intake/IntakeBatchMessage';
 import { ChatHeader } from './chat/ChatHeader';
 import { ChatThread } from './chat/ChatThread';
@@ -40,6 +44,11 @@ import type { ChatMenuSection } from './chat/ChatMenu';
 import type { SpecTableGateway } from './spec-table/spec-table-gateway';
 import { specTableActionLabel, specTablePdfs, useSpecTableDraft } from './spec-table/useSpecTableDraft';
 import { SpecTableMessages } from './spec-table/SpecTableMessages';
+import { CATALOG_DRAFT_ACTION, useCatalogDraft } from './useCatalogDraft';
+import { CatalogDraftMessages } from './DraftPreview';
+import { SKETCH_ACCEPT, SKETCH_ACTION, useSketchDraft } from './useSketchDraft';
+import { SketchDraftMessages } from './SketchDraft';
+import { factSetSketchSource, spreadsheetSketchSources, type SketchTableSource } from './sketch-review';
 import './chat/assistant-chat.css';
 
 interface Props {
@@ -56,6 +65,8 @@ interface Props {
   activePageId?: string;
   /** Shows a table inserted from a file in the editor. */
   onShowTable?: (pageId: string, objectId: string) => void;
+  /** FR-70: opens a page in the editor (the first page of a catalog built from files). */
+  onShowPage?: (pageId: string) => void;
   /**
    * FR-03: the technical review with a hand-written JSON manifest is not on the father's screen. It stays for
    * development and the browser proofs only (the dev server), never in the published app.
@@ -76,6 +87,13 @@ interface Props {
    * assistant never sends a file anywhere. Injectable so a proof harness can answer with a controlled provider.
    */
   factExtraction?: SpecTableGateway;
+  /**
+   * Modo rascunho from outside the conversation ("Página a partir de rascunho…" under "Adicionar página"): photos the
+   * person chose there; each new `at` starts reading them here.
+   */
+  sketchRequest?: { readonly at: number; readonly files: readonly File[] };
+  /** The request was taken here (so a later remount does not read the same photos again). */
+  onSketchRequestTaken?: () => void;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -94,6 +112,8 @@ interface PendingRewrite {
   at: number;
 }
 interface InConversation { text: string; conversationId: string }
+/** FR-72: where the "Vou fazer isto" card sits (the plan itself lives in useEditIntent), or the card saying why not yet. */
+interface EditCardAt { conversationId: string; at: number; serial: number }
 interface ThreadItem { key: string; at: number; order: number; tail?: string; node: React.ReactNode }
 
 /** One free readiness check per client per minute; reopening the panel reuses it. */
@@ -108,6 +128,19 @@ function cachedReadiness(client: NativeComposeFunctionsClient): Promise<Composer
 /** PROVIDER_NOT_CONFIGURED where no personal key can be used: no mention of an option that is not there. */
 const SERVER_AI_NOT_CONFIGURED = 'A IA do servidor ainda não foi configurada. Fale com o administrador. Enquanto isso, continue editando à mão.';
 const NOT_CHANGED = ' O catálogo não foi alterado.';
+/** FR-72 on a server that does not know `edit_intent` yet: said in the card, before anything is sent or paid. */
+export const EDIT_NOT_DEPLOYED = 'Mudar o catálogo pela conversa ainda não chegou ao servidor. Nada foi enviado à IA e nada '
+  + 'foi cobrado. Por enquanto, faça esta mudança à mão no editor; o administrador pode atualizar o servidor.' + NOT_CHANGED;
+/** FR-72: an answer that failed the checks here (the composer's own sentence speaks of pages). */
+const EDIT_UNUSABLE = 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo, com outras palavras.' + NOT_CHANGED;
+/** FR-72: undefined when the conversation that edits can be asked now; otherwise what its card says (nothing is sent). */
+function editIntentBlocked(readiness: ComposerReadiness, usingOwnKey: boolean): string | undefined {
+  if (readiness.kind === 'blocked') return composerErrorMessage(new ComposerRequestError(readiness.code), { usingOwnKey });
+  return readiness.kind === 'ready' && readiness.editing === true ? undefined : EDIT_NOT_DEPLOYED;
+}
+/** Photos of one message that the Modo rascunho can read. */
+const sketchPhotoEntries = (entries: readonly IntakeEntry[]) =>
+  entries.filter(entry => entry.kind === 'photo' && entry.state !== 'duplicate' && entry.state !== 'skipped');
 /** C-05: shown next to the switched-off send button once the daily limit is known. */
 export const DAILY_LIMIT_SEND_EXPLANATION = 'O envio está desligado até amanhã, porque o limite diário de uso da IA foi atingido. '
   + 'O que você escreveu continua guardado nesta caixa.';
@@ -117,6 +150,9 @@ const FOOTNOTE = 'Os arquivos são lidos aqui no computador e não vão para a I
 /** With J2-lite a PDF goes to the AI only after “Ler estas páginas”. */
 const FOOTNOTE_WITH_PDF_READING = 'Os arquivos são lidos aqui no computador. Só vai para a IA o PDF que você mandar ler para '
   + 'montar uma tabela. A IA não inventa valores técnicos.';
+/** Modo rascunho: a photo of a sketch goes to the AI only after “Ler o rascunho”. */
+const FOOTNOTE_WITH_SKETCH = 'Os arquivos são lidos aqui no computador. Só vai para a IA o PDF que você mandar ler para '
+  + 'montar uma tabela, ou a foto de rascunho que você mandar ler. A IA não inventa valores técnicos.';
 
 /** C-05: the server already said today's AI budget is used up (when the panel opened, or on the last request). */
 function dailyLimitKnown(readiness: ComposerReadiness | undefined): boolean {
@@ -147,7 +183,8 @@ const bump = (value: number) => value + 1;
  */
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
-  canPublish, onPublication, selectionLabel, factExtraction }: Props) {
+  canPublish, onPublication, selectionLabel, factExtraction, onShowPage, sketchRequest,
+  onSketchRequestTaken }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -160,10 +197,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const ownKey = useByokCredential(ownerScope);
   const requestSerial = React.useRef(0);
   const inFlightText = React.useRef('');
-  const [busy, setBusy] = React.useState<false | { kind: 'compose' | 'rewrite'; conversationId: string }>(false);
+  const [busy, setBusy] = React.useState<false | { kind: 'compose' | 'rewrite' | 'edit'; conversationId: string }>(false);
   const [pending, setPending] = React.useState<Pending>();
   const [rewriteMode, setRewriteMode] = React.useState(false);
   const [pendingRewrite, setPendingRewrite] = React.useState<PendingRewrite>();
+  // FR-72/FR-73: a change typed about the open catalog goes to `edit_intent` and comes back as the "Vou fazer isto" card.
+  const [editShown, setEditShown] = React.useState<EditCardAt>();
+  const [editBlocked, setEditBlocked] = React.useState<EditCardAt & { text: string }>();
+  /** The conversation whose last answer came from the edit lane: a short reply ("os selos") stays there. */
+  const editFollowUp = React.useRef<string>();
   const editableSelectedText = selected ? plainSelectedEditorialText(selected) : null;
   const [error, setErrorState] = React.useState<InConversation>();
   const [unsent, setUnsent] = React.useState<InConversation>();
@@ -184,11 +226,18 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const readinessText = !client ? 'A IA não está disponível nesta tela.'
     : !ownKey && !ownKeyOffered && readiness?.kind === 'ready' && !readiness.serverKey ? SERVER_AI_NOT_CONFIGURED
       : composerReadinessText(readiness, !!ownKey);
+  // Built at call time, so a bad personal key becomes a plain error in the conversation, never a broken panel.
+  const editGateway = React.useMemo<EditIntentGateway | undefined>(() => client
+    ? request => editIntentGateway(client, ownKey)(request) : undefined, [client, ownKey]);
+  const selectedObjectIds = React.useMemo(() => [selected?.objectId, selectedTable?.objectId]
+    .filter((id): id is string => Boolean(id)), [selected?.objectId, selectedTable?.objectId]);
+  const editIntent = useEditIntent({ session, gateway: editGateway, activePageId, selectedObjectIds, onBeforeMutation });
   const proposalRef = React.useRef<HTMLDivElement>(null);
   const noticeRef = React.useRef<HTMLDivElement>(null);
   const focusNotice = React.useRef(false);
   const input = React.useRef<HTMLTextAreaElement>(null);
   const filePicker = React.useRef<HTMLInputElement>(null);
+  const sketchPicker = React.useRef<HTMLInputElement>(null);
   const conversationFull = turns.length > CONVERSATION_MESSAGE_LIMIT - 2;
   const setError = (text: string, conversationId = activeIdRef.current) =>
     setErrorState(text ? { text, conversationId } : undefined);
@@ -276,13 +325,30 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       runTool(tool, text);
       return;
     }
+    const isRewriting = rewriteMode && !!selected;
+    const found = isRewriting ? {} : filesToRead(conversationId);
+    const route = isRewriting ? 'rewrite' : assistantRouteFor(text, session.getSnapshot().document, {
+      editFollowUp: editFollowUp.current === conversationId, catalogFiles: Boolean(found.catalog), sketchPhotos: Boolean(found.photos),
+    });
+    // "Monte o catálogo com estes PDFs" / "crie a página deste rascunho": the same flows as the buttons under the files.
+    if (route === 'sketch' && found.photos) {
+      setMessage(''); setUnsent(undefined); setError('');
+      sketch.start(found.photos, conversationId);
+      setFollow(bump);
+      return;
+    }
+    if (route === 'catalog-draft' && found.catalog) {
+      setMessage(''); setUnsent(undefined); setError('');
+      catalogDraft.start(found.catalog.batchId, found.catalog.entries, conversationId);
+      setFollow(bump);
+      return;
+    }
     if (!client) {
       setError('A IA não está disponível nesta tela. Continue editando manualmente.');
       return;
     }
     // Never ask a provider to mutate. Only request a typed proposal; approval
     // will execute canonical document commands after a CAS revision check.
-    const isRewriting = rewriteMode && !!selected;
     const target = selected;
     const before = session.getSnapshot();
     const earlier = conversationsRef.current.conversations.find((conversation) => conversation.id === conversationId)?.entries ?? [];
@@ -294,10 +360,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     inFlightText.current = text;
     // A proposal already received stays until the new answer arrives (or is rejected, or the catalog changes):
     // a failed or cancelled request never throws away what was already paid for.
-    setBusy({ kind: isRewriting ? 'rewrite' : 'compose', conversationId }); setError(''); setUnsent(undefined);
+    setBusy({ kind: route === 'edit' ? 'edit' : isRewriting ? 'rewrite' : 'compose', conversationId });
+    setError(''); setUnsent(undefined);
     setMessage('');
     setFollow(bump);
     try {
+      if (route === 'edit') {
+        await askEdit(text, conversationId, history, sequence);
+        return;
+      }
       const reply = isRewriting && target
         ? await proposeNativeTextEdit(target, text, nativeTextEditGateway(client, ownKey), history)
         : await requestNativeCompose(before.document, text, nativeComposeGateway(client, ownKey), history);
@@ -309,6 +380,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         return;
       }
       if (!saveTurn(conversationId, 'user', text)) return;
+      // The conversation moved to new pages or a rewrite: an edit card from before is no longer the current answer.
+      editFollowUp.current = undefined;
+      if (reply.status !== 'clarification') { editIntent.discard(); setEditShown(undefined); }
       if (reply.status === 'clarification') {
         saveTurn(conversationId, 'assistant', reply.question);
       } else if ('revisedText' in reply) {
@@ -330,15 +404,72 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         restoreUnsent(text, conversationId);
         if (failure instanceof ComposerRequestError && failure.code === 'AGENT_DAILY_BUDGET_EXCEEDED' && !ownKey) setLimitAnswered(true);
         setError(failure instanceof ComposerRequestError && failure.code === 'PROVIDER_NOT_CONFIGURED' && !ownKey &&
-          !ownKeyOfferedRef.current ? SERVER_AI_NOT_CONFIGURED + NOT_CHANGED : composerErrorMessage(failure, { usingOwnKey: !!ownKey }),
+          !ownKeyOfferedRef.current ? SERVER_AI_NOT_CONFIGURED + NOT_CHANGED
+          : route === 'edit' && !(failure instanceof ComposerRequestError) ? EDIT_UNUSABLE
+            : composerErrorMessage(failure, { usingOwnKey: !!ownKey }),
         conversationId);
       }
     } finally {
       if (sequence === requestSerial.current) setBusy(false);
     }
   };
+  /**
+   * FR-72: a change on the open catalog. A free readiness check first: a server without `edit_intent` is said in a
+   * card, before anything is sent or paid. The AI only proposes; "Aplicar" on the card changes the catalog.
+   */
+  const askEdit = async (text: string, conversationId: string, history: NativeComposeRequest['history'], sequence: number) => {
+    const ready = readiness ?? (client ? await cachedReadiness(client) : undefined);
+    if (sequence !== requestSerial.current) return;
+    const blocked = ready ? editIntentBlocked(ready, !!ownKey) : EDIT_NOT_DEPLOYED;
+    if (blocked) {
+      const said = saveTurn(conversationId, 'user', text);
+      if (said) setEditBlocked({ text: blocked, conversationId, at: Date.parse(said.timestamp) || Date.now(), serial: sequence });
+      setFollow(bump);
+      return;
+    }
+    const answer = await editIntent.ask(text, history);
+    if (sequence !== requestSerial.current || (answer.kind === 'error' && !answer.text)) return;
+    if (answer.kind === 'error') {
+      restoreUnsent(text, conversationId);
+      setError(answer.text, conversationId);
+      return;
+    }
+    if (!saveTurn(conversationId, 'user', text)) return;
+    const said = saveTurn(conversationId, 'assistant', answer.text);
+    editFollowUp.current = answer.kind === 'refusal' ? undefined : conversationId;
+    setEditBlocked(undefined);
+    if (answer.kind === 'plan' && answer.plan.items.length > 0) {
+      // One proposal on screen at a time.
+      setPending(undefined); setPendingRewrite(undefined);
+      setEditShown({ conversationId, at: said ? Date.parse(said.timestamp) : Date.now(), serial: sequence });
+    } else {
+      setEditShown(undefined);
+    }
+  };
+  const approveEdit = () => {
+    if (!editShown || !editIntent.plan || busy) return;
+    if (onBeforeMutation && !onBeforeMutation()) {
+      setError('Conclua ou cancele a edição aberta antes de aplicar as mudanças.');
+      return;
+    }
+    const result = editIntent.apply();
+    if (result.ok) {
+      rememberUndo(saveTurn(editShown.conversationId, 'assistant', result.text));
+      setError('');
+    } else {
+      setError(result.text, editShown.conversationId);
+    }
+    setEditShown(undefined);
+    editFollowUp.current = undefined;
+  };
+  const discardEdit = () => {
+    editIntent.discard();
+    setEditShown(undefined);
+    editFollowUp.current = undefined;
+  };
   const cancel = () => {
     if (!busy) return;
+    if (busy.kind === 'edit') editIntent.cancel();
     requestSerial.current++;
     restoreUnsent(inFlightText.current, busy.conversationId);
     setBusy(false);
@@ -399,6 +530,61 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
     },
   });
+  // FR-70: the whole catalog from the files of one message, as cards in this conversation.
+  const catalogDraft = useCatalogDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowPage,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'catalog-draft');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
+  // Modo rascunho: photos of pages drawn on paper → the areas the AI understood → the same Aplicar as above.
+  const sketch = useSketchDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowPage,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'catalog-draft');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
+  const sketchRequestAt = React.useRef<number>();
+  React.useEffect(() => {
+    if (!sketchRequest || sketchRequest.at === sketchRequestAt.current) return;
+    sketchRequestAt.current = sketchRequest.at;
+    sketch.start(sketchRequest.files, activeIdRef.current);
+    onSketchRequestTaken?.();
+    setFollow(bump);
+    // Only a new request starts reading; the controller itself changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sketchRequest?.at]);
+  // Files already checked in this conversation that can fill a drawn table (spreadsheets; the PDF table read and checked).
+  const sketchSources = React.useMemo<SketchTableSource[]>(() => {
+    const sets: SketchTableSource[] = [];
+    const spec = specTable.flow?.stage;
+    if (spec && (spec.kind === 'review' || spec.kind === 'applied')) sets.push(factSetSketchSource(`pdf:tabela:${specTable.flow!.at}`, spec.set));
+    const draft = catalogDraft.flow?.stage;
+    const draftSet = draft?.kind === 'preview' ? draft.set : draft?.kind === 'applied' ? draft.planned.set : undefined;
+    if (draftSet) sets.push(factSetSketchSource(`pdf:catalogo:${catalogDraft.flow!.at}`, draftSet));
+    return [...spreadsheetSketchSources(files.entries), ...sets];
+  }, [files.entries, specTable.flow, catalogDraft.flow]);
+  const sketchBusy = sketch.flow?.stage.kind === 'working' || sketch.flow?.stage.kind === 'checking';
+  const readingBusy = working || sketchBusy || specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking'
+    || catalogDraft.flow?.stage.kind === 'working' || catalogDraft.flow?.stage.kind === 'checking';
+  /** The latest files of this conversation that a typed request can hand to the catalog plan or to the Modo rascunho. */
+  function filesToRead(conversationId: string): { catalog?: { batchId: string; entries: IntakeEntry[] }; photos?: File[] } {
+    if (readingBusy) return {};
+    let catalog: { batchId: string; entries: IntakeEntry[] } | undefined;
+    let photos: File[] | undefined;
+    for (const batch of [...batches].reverse()) {
+      if (batch.conversationId && batch.conversationId !== conversationId) continue;
+      const entries = batchEntries(batch, files.entries);
+      if (!catalog && catalogDraft.available && specTablePdfs(entries).length > 0) catalog = { batchId: batch.id, entries };
+      const drawn = sketch.available ? sketchPhotoEntries(entries) : [];
+      if (!photos && drawn.length > 0) photos = drawn.map(entry => entry.file);
+    }
+    return { catalog, photos };
+  }
   const undoFromConversation = (entryId: string) => {
     if (undoable.get(entryId) !== session.getSnapshot().localSequence || !session.getSnapshot().canUndo) return;
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -446,16 +632,46 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     const entries = batchEntries(batch, files.entries);
     if (!entries.length) continue;
     const pdfs = specTable.available ? specTablePdfs(entries) : [];
-    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking';
+    const catalogPdfs = catalogDraft.available ? specTablePdfs(entries) : [];
+    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking'
+      || catalogDraft.flow?.stage.kind === 'working' || catalogDraft.flow?.stage.kind === 'checking' || sketchBusy;
+    const sketchPhotos = sketch.available ? sketchPhotoEntries(entries) : [];
     items.push({
-      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text + pdfs.length,
+      key: batch.id, at: batch.at, order: 1,
+      tail: batch.id + intakeBatchSummary(entries).text + pdfs.length + catalogPdfs.length + sketchPhotos.length,
       node: <IntakeBatchMessage key={batch.id} batch={batch} entries={entries} working={working}
         onInsert={insertion.insert} onReread={files.reread} onBeforeChange={insertion.dismissNotice}
         onInserted={() => { focusNotice.current = true; }}
-        actions={pdfs.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
-          <button type="button" data-spec-table-start="" disabled={working || specBusy}
-            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>
+        actions={pdfs.length > 0 || catalogPdfs.length > 0 || sketchPhotos.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
+          {catalogPdfs.length > 0 && <button type="button" data-catalog-draft-start="" disabled={working || specBusy}
+            onClick={() => catalogDraft.start(batch.id, entries, active.id)}>{CATALOG_DRAFT_ACTION}</button>}
+          {pdfs.length > 0 && <button type="button" data-spec-table-start="" disabled={working || specBusy}
+            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>}
+          {sketchPhotos.length > 0 && <button type="button" data-sketch-start="" disabled={working || specBusy}
+            onClick={() => sketch.start(sketchPhotos.map(entry => entry.file), active.id)}>
+            {sketchPhotos.length === 1 ? 'Esta foto é um rascunho: criar a página' : 'Estas fotos são rascunhos: criar as páginas'}</button>}
         </div> : undefined} />,
+    });
+  }
+  const shownCatalogDraft = inActive(catalogDraft.flow) ? catalogDraft.flow : undefined;
+  if (shownCatalogDraft) {
+    items.push({
+      key: `catalog-draft:${shownCatalogDraft.at}`, at: shownCatalogDraft.at, order: 2,
+      tail: `catalog-draft:${shownCatalogDraft.id}:${shownCatalogDraft.stage.kind}`
+        + (shownCatalogDraft.stage.kind === 'working' ? `:${shownCatalogDraft.stage.step}` : ''),
+      node: <CatalogDraftMessages key={`catalog-draft:${shownCatalogDraft.at}`} controller={catalogDraft} document={snapshot.document}
+        activePageId={activePageId} />,
+    });
+  }
+  const shownSketch = inActive(sketch.flow) ? sketch.flow : undefined;
+  if (shownSketch) {
+    const sketchStage = shownSketch.stage;
+    items.push({
+      key: `sketch:${shownSketch.at}`, at: shownSketch.at, order: 2,
+      tail: `sketch:${shownSketch.id}:${sketchStage.kind}` + (sketchStage.kind === 'working'
+        ? `:${sketchStage.pages.map(page => `${page.state}${page.step ?? ''}`).join(',')}` : ''),
+      node: <SketchDraftMessages key={`sketch:${shownSketch.at}`} controller={sketch} document={snapshot.document}
+        activePageId={activePageId} sources={sketchSources} />,
     });
   }
   const shownSpecTable = inActive(specTable.flow) ? specTable.flow : undefined;
@@ -515,6 +731,25 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       </ChatCard>,
     });
   }
+  const shownEdit = inActive(editShown) && editIntent.plan ? editShown : undefined;
+  if (shownEdit && editIntent.plan) {
+    items.push({
+      key: `edit:${shownEdit.serial}`, at: shownEdit.at, order: 2,
+      node: <EditIntentCard key={`edit:${shownEdit.serial}`} plan={editIntent.plan} busy={!!busy} cardRef={proposalRef}
+        onApply={approveEdit} onAdjust={() => adjust('Ajuste o pedido: ')} onDiscard={discardEdit} />,
+    });
+  }
+  const shownEditBlocked = inActive(editBlocked) ? editBlocked : undefined;
+  if (shownEditBlocked) {
+    items.push({
+      key: `edit-blocked:${shownEditBlocked.serial}`, at: shownEditBlocked.at, order: 2,
+      node: <ChatCard key={`edit-blocked:${shownEditBlocked.serial}`} label="Mudanças pedidas na conversa"
+        title="Ainda não dá para mudar o catálogo pela conversa"
+        actions={<button type="button" onClick={() => setEditBlocked(undefined)}>Entendi</button>}>
+        <p data-edit-intent-blocked="">{shownEditBlocked.text}</p>
+      </ChatCard>,
+    });
+  }
   items.sort((a, b) => a.at - b.at || a.order - b.order);
   if (unsent && inActive(unsent)) {
     items.push({
@@ -533,7 +768,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       key: 'busy', at: Infinity, order: 1,
       node: <div key="busy" className="ai-chat-msg ai-chat-assistant">
         <p className="ai-chat-bubble ai-chat-typing" role="status"><span className="ai-chat-dots" aria-hidden="true"><i /><i /><i /></span>
-          {busy.kind === 'rewrite' ? 'Gemini está preparando uma reescrita do texto…' : 'Gemini está preparando uma proposta de páginas…'}</p>
+          {busy.kind === 'rewrite' ? 'Gemini está preparando uma reescrita do texto…'
+            : busy.kind === 'edit' ? 'Gemini está lendo a página aberta para preparar as mudanças…'
+              : 'Gemini está preparando uma proposta de páginas…'}</p>
       </div>,
     });
   }
@@ -551,7 +788,8 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const empty = items.length === 0;
   // The spec-table preview is not revealed from its top: the conversation follows to its end, where "Aplicar" is.
   const revealKey = shownPending ? `pages:${shownPending.requestSequence}`
-    : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}` : '';
+    : shownRewrite?.reply.status === 'proposal' ? `rewrite:${shownRewrite.serial}`
+      : shownEdit ? `edit:${shownEdit.serial}` : '';
 
   // ------------------------------------------------------------------ header menus
   const history: ChatMenuSection[] = [{
@@ -637,7 +875,10 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       {empty && <div className="ai-chat-welcome">
         <p className="ai-chat-welcome-title">O que vamos fazer neste catálogo?</p>
         <div className="ai-chat-suggestions">
+          {catalogDraft.available && <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar um catálogo inteiro a partir de PDFs</button>}
           <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar uma ficha técnica a partir de um PDF</button>
+          {sketch.available && <button type="button" data-sketch-welcome="" disabled={working || sketchBusy}
+            onClick={() => sketchPicker.current?.click()}>{`${SKETCH_ACTION} em papel (fotos)`}</button>}
           <button type="button" onClick={() => fill(SUGGESTIONS.compare)}>Comparar modelos</button>
           <button type="button" onClick={() => fill(SUGGESTIONS.cover)}>Criar uma capa e uma apresentação</button>
           {editableSelectedText && <button type="button" disabled={!!busy}
@@ -664,7 +905,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       busy={Boolean(busy)} onCancel={cancel}
       onAttach={() => filePicker.current?.click()} attachDisabled={working}
       files={files.entries} onRemoveFile={files.remove}
-      context={selectionContext} footnote={factExtraction ? FOOTNOTE_WITH_PDF_READING : FOOTNOTE} />
+      context={selectionContext} footnote={sketch.available ? FOOTNOTE_WITH_SKETCH : factExtraction ? FOOTNOTE_WITH_PDF_READING : FOOTNOTE} />
     <input ref={filePicker} type="file" multiple accept={INTAKE_ACCEPT} hidden aria-label="Escolher arquivos" tabIndex={-1}
       disabled={working}
       onChange={(event) => {
@@ -672,6 +913,13 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         // The same file can be chosen again after it was taken out of the list.
         event.target.value = '';
         if (list.length) addFiles(list);
+      }} />
+    <input ref={sketchPicker} type="file" multiple accept={SKETCH_ACCEPT} hidden aria-label="Escolher fotos do rascunho" tabIndex={-1}
+      disabled={working || sketchBusy}
+      onChange={(event) => {
+        const list = Array.from(event.target.files ?? []);
+        event.target.value = '';
+        if (list.length) { sketch.start(list, active.id); setFollow(bump); }
       }} />
     {drop.dragging && <div className="ai-chat-drop-overlay" aria-hidden="true">Solte aqui para ler os arquivos</div>}
   </section>;

@@ -5,6 +5,7 @@ import { CatalogTitleButton } from './editor/CatalogTitleButton';
 import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
+import { SKETCH_ACCEPT } from '../ai-catalog/useSketchDraft';
 import { FolderOpen, Layers, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
@@ -21,7 +22,7 @@ import {
   type TableObject,
   type TextObject,
 } from '../domain';
-import { compilePlans, DocumentRenderer, type LayoutSnapshot, type TablePlan } from '../rendering';
+import { compilePlans, DocumentSliceRenderer, type LayoutSnapshot, type TablePlan } from '../rendering';
 import {
   explicitTableAxisIds,
   navigateTableSelection,
@@ -160,6 +161,7 @@ import { TableInspectorPanel } from './editor/TableInspectorPanel';
 import { TextInspectorSection } from './editor/TextInspectorSection';
 import { NativeStyleSection } from './editor/NativeStyleSection';
 import { PageBackgroundSection } from './editor/PageBackgroundSection';
+import { PageFooterSection } from './editor/PageFooterSection';
 import { ElementInsertButtons } from './editor/ElementInsertButtons';
 import { polygonHitClipPath } from '../editor/native-element-authoring';
 import { TextEditToolbar } from './editor/TextEditToolbar';
@@ -410,6 +412,9 @@ export function EditorWorkspace({
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
+  // Modo rascunho: photos chosen under "Adicionar página" go to the assistant, which reads them there.
+  const [sketchRequest, setSketchRequest] = React.useState<{ readonly at: number; readonly files: readonly File[] }>();
+  const sketchPhotos = React.useRef<HTMLInputElement>(null);
   const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(!simpleByDefault);
   const [tablePasteFallbackOpen, setTablePasteFallbackOpen] = React.useState(false);
   const [tablePasteFallbackText, setTablePasteFallbackText] = React.useState('');
@@ -4302,6 +4307,20 @@ export function EditorWorkspace({
               {pageReuseOpen ? 'Ocultar modelos' : 'Usar modelo…'}
             </button>
           )}
+          {simpleByDefault && factExtraction?.sketch && <>
+            <button type="button" className="vnext-page-reuse-toggle" data-editor-action="page-from-sketch"
+              title="Escolha fotos de páginas desenhadas no papel; a IA propõe as páginas no padrão PRESYS e você confere antes"
+              onClick={() => sketchPhotos.current?.click()}>Página a partir de rascunho…</button>
+            <input ref={sketchPhotos} type="file" multiple accept={SKETCH_ACCEPT} hidden tabIndex={-1}
+              aria-label="Fotos do rascunho para criar páginas"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = '';
+                if (!files.length) return;
+                setSketchRequest({ at: Date.now(), files });
+                setAssistantOpen(true);
+              }} />
+          </>}
           {pageReuseOpen && (
             <div id="vnext-page-reuse" className="vnext-page-reuse">
               {officialPageReuse && <PageTemplateGallery value={pageTemplateChoice} onChange={setPageTemplateChoice} disabled={pageTemplateBusy} onClose={simpleByDefault ? () => setPageReuseOpen(false) : undefined} />}
@@ -4446,7 +4465,8 @@ export function EditorWorkspace({
               beginEmptyAreaPointer(event);
             }}>
             <div ref={pageStageRef} className="vnext-page-stage" data-vnext-page-stage="" style={{ width: qCss(uToQ(pageWidthU)), height: qCss(uToQ(pageHeightU)) }}>
-              <DocumentRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} />
+              <DocumentSliceRenderer document={previewDocument} plans={plans} assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS}
+                numbering={{ firstPageNumber: Math.max(1, selectedPageIndex + 1), pageCount: document.pages.length }} />
               <div ref={editorOverlayRef} className="vnext-editor-overlay" data-editor-overlay="" aria-label="Camada de interação do editor"
                 onPointerDown={(event) => {
                   const target = event.target as HTMLElement;
@@ -5077,6 +5097,11 @@ export function EditorWorkspace({
                 prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
                 onMessage={setStatusMessage} />
             )}
+            {editorState.activePageId && selectedObjects.length === 0 && (
+              <PageFooterSection pageId={editorState.activePageId} session={session}
+                prepare={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
+                onMessage={setStatusMessage} />
+            )}
           </>}
           {selectedObject && (() => {
             const where = layerPosition(selectedPage, selectedObject.id);
@@ -5118,6 +5143,8 @@ export function EditorWorkspace({
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
               measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
               onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
+              onShowPage={setActivePage}
+              sketchRequest={sketchRequest} onSketchRequestTaken={() => setSketchRequest(undefined)}
               onClose={() => setAssistantOpen(false)} wide={assistantWide} onWideChange={setAssistantWide}
               canPublish={Boolean(onRequestPublication) && (!persistence || (!persistence.runtime.workspace.getSnapshot().dirty &&
                 persistence.save.phase === 'idle' && !conflictResolutionBusy))}

@@ -1,0 +1,746 @@
+{
+  "generatedAt": "2026-10-23T01:04:27.252Z",
+  "mode": "live-gemini-simulated-supabase",
+  "ceilingUsd": 0.3,
+  "budgetUsedConservativeUsd": 0.103732,
+  "budgetEvents": [
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "microusd": 9932
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000003",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000003",
+      "microusd": 12167
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000005",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000005",
+      "microusd": 6062
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000007",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000007",
+      "microusd": 8244
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000009",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000009",
+      "microusd": 17507
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000011",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000011",
+      "microusd": 14597
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000013",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000013",
+      "microusd": 18459
+    },
+    {
+      "event": "reserve",
+      "id": "00000000-0000-4000-8000-000000000015",
+      "microusd": 170880
+    },
+    {
+      "event": "settle",
+      "id": "00000000-0000-4000-8000-000000000015",
+      "microusd": 16764
+    }
+  ],
+  "storageReads": 8,
+  "runs": [
+    {
+      "sample": "capa.png",
+      "image": {
+        "fileName": "capa.png",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 13046,
+      "generateMs": 7857,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 10,
+      "recall": {
+        "total": 10,
+        "strict": 10,
+        "tolerant": 10,
+        "misses": [],
+        "extraRegions": 0
+      },
+      "rawQuestions": [],
+      "questions": [],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 7,
+        "confirmedDigitRuns": 7,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "C1",
+      "snappedArchetypeId": "C1",
+      "proposedArchetypeId": "P1",
+      "archetypeMatches": true,
+      "unassigned": 0,
+      "warnings": [],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 979
+      },
+      "costUsdConservative": 0.009932,
+      "costUsdCurrent": 0.004966,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1339
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2653
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 508
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 7857,
+          "tokens": {
+            "input": 1726,
+            "output": 979
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 679
+        }
+      ]
+    },
+    {
+      "sample": "capa_foto.jpg",
+      "image": {
+        "fileName": "capa_foto.jpg",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 15875,
+      "generateMs": 11106,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 10,
+      "recall": {
+        "total": 10,
+        "strict": 10,
+        "tolerant": 10,
+        "misses": [],
+        "extraRegions": 0
+      },
+      "rawQuestions": [],
+      "questions": [],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 7,
+        "confirmedDigitRuns": 7,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "C1",
+      "snappedArchetypeId": "C1",
+      "proposedArchetypeId": "P1",
+      "archetypeMatches": true,
+      "unassigned": 0,
+      "warnings": [],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 1277
+      },
+      "costUsdConservative": 0.012167,
+      "costUsdCurrent": 0.0060835,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1213
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2380
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 318
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 11106,
+          "tokens": {
+            "input": 1726,
+            "output": 1277
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 854
+        }
+      ]
+    },
+    {
+      "sample": "especificacoes.png",
+      "image": {
+        "fileName": "especificacoes.png",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 14010,
+      "generateMs": 8323,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 3,
+      "recall": {
+        "total": 3,
+        "strict": 3,
+        "tolerant": 3,
+        "misses": [],
+        "extraRegions": 0
+      },
+      "rawQuestions": [],
+      "questions": [
+        "table-source: De onde vêm os dados da “Tabela de comparação”?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 3,
+        "confirmedDigitRuns": 3,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "P4",
+      "snappedArchetypeId": "P4",
+      "proposedArchetypeId": "P4",
+      "archetypeMatches": true,
+      "unassigned": 0,
+      "warnings": [],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 463
+      },
+      "costUsdConservative": 0.006062,
+      "costUsdCurrent": 0.003031,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1381
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 3057
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 523
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 8323,
+          "tokens": {
+            "input": 1726,
+            "output": 463
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 723
+        }
+      ]
+    },
+    {
+      "sample": "especificacoes_foto.jpg",
+      "image": {
+        "fileName": "especificacoes_foto.jpg",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 11984,
+      "generateMs": 7604,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 3,
+      "recall": {
+        "total": 3,
+        "strict": 3,
+        "tolerant": 3,
+        "misses": [],
+        "extraRegions": 0
+      },
+      "rawQuestions": [],
+      "questions": [
+        "table-source: De onde vêm os dados da “Tabela de comparação”?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 3,
+        "confirmedDigitRuns": 3,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "P4",
+      "snappedArchetypeId": "P4",
+      "proposedArchetypeId": "P4",
+      "archetypeMatches": true,
+      "unassigned": 0,
+      "warnings": [],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 754
+      },
+      "costUsdConservative": 0.008244,
+      "costUsdCurrent": 0.004122,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1090
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2052
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 489
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 7604,
+          "tokens": {
+            "input": 1726,
+            "output": 754
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 744
+        }
+      ]
+    },
+    {
+      "sample": "acessorios.png",
+      "image": {
+        "fileName": "acessorios.png",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 19262,
+      "generateMs": 14386,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 14,
+      "recall": {
+        "total": 9,
+        "strict": 5,
+        "tolerant": 9,
+        "misses": [],
+        "extraRegions": 1
+      },
+      "rawQuestions": [],
+      "questions": [
+        "table-source: De onde vêm os dados da “Tabela de acessórios”?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 0,
+        "confirmedDigitRuns": 0,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "P7",
+      "snappedArchetypeId": "P7",
+      "proposedArchetypeId": "P7",
+      "archetypeMatches": true,
+      "unassigned": 5,
+      "warnings": [
+        "As fotos de cada acessório precisam ser revistas: este modelo tem só a foto do kit.",
+        "Algumas partes do rascunho não cabem nos campos deste modelo. Revise as pendências antes de montar a página."
+      ],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 1989
+      },
+      "costUsdConservative": 0.017507,
+      "costUsdCurrent": 0.0087535,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1252
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2500
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 496
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 14386,
+          "tokens": {
+            "input": 1726,
+            "output": 1989
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 617
+        }
+      ]
+    },
+    {
+      "sample": "acessorios_foto.jpg",
+      "image": {
+        "fileName": "acessorios_foto.jpg",
+        "width": 1131,
+        "height": 1600,
+        "originalWidth": 1240,
+        "originalHeight": 1754
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 17430,
+      "generateMs": 12130,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 14,
+      "recall": {
+        "total": 9,
+        "strict": 5,
+        "tolerant": 9,
+        "misses": [],
+        "extraRegions": 1
+      },
+      "rawQuestions": [],
+      "questions": [
+        "table-source: De onde vêm os dados da “Tabela de acessórios”?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 0,
+        "confirmedDigitRuns": 0,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "P7",
+      "snappedArchetypeId": "P7",
+      "proposedArchetypeId": "P7",
+      "archetypeMatches": true,
+      "unassigned": 5,
+      "warnings": [
+        "As fotos de cada acessório precisam ser revistas: este modelo tem só a foto do kit.",
+        "Algumas partes do rascunho não cabem nos campos deste modelo. Revise as pendências antes de montar a página."
+      ],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 1601
+      },
+      "costUsdConservative": 0.014597,
+      "costUsdCurrent": 0.0072985,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1350
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2732
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 527
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 12130,
+          "tokens": {
+            "input": 1726,
+            "output": 1601
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 690
+        }
+      ]
+    },
+    {
+      "sample": "capa_stress.jpg",
+      "image": {
+        "fileName": "capa_stress.jpg",
+        "width": 900,
+        "height": 1273,
+        "originalWidth": 900,
+        "originalHeight": 1273
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 21219,
+      "generateMs": 16425,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 10,
+      "recall": {
+        "total": 10,
+        "strict": 10,
+        "tolerant": 10,
+        "misses": [],
+        "extraRegions": 0
+      },
+      "rawQuestions": [
+        "O elemento apontado como 'saída pneumática' deve ser mantido como callout sobre a imagem na capa final?"
+      ],
+      "questions": [
+        "layout: O elemento apontado como 'saída pneumática' deve ser mantido como callout sobre a imagem na capa final?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 7,
+        "confirmedDigitRuns": 7,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "C1",
+      "snappedArchetypeId": "C1",
+      "proposedArchetypeId": "P1",
+      "archetypeMatches": true,
+      "unassigned": 0,
+      "warnings": [],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 2116
+      },
+      "costUsdConservative": 0.018459,
+      "costUsdCurrent": 0.0092295,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1190
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2307
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 604
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 16425,
+          "tokens": {
+            "input": 1726,
+            "output": 2116
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 688
+        }
+      ]
+    },
+    {
+      "sample": "acessorios_stress.jpg",
+      "image": {
+        "fileName": "acessorios_stress.jpg",
+        "width": 900,
+        "height": 1273,
+        "originalWidth": 900,
+        "originalHeight": 1273
+      },
+      "httpStatus": 200,
+      "code": "OK",
+      "attempts": 1,
+      "ms": 19738,
+      "generateMs": 15314,
+      "model": "gemini-3.8-flash",
+      "modelVersion": "gemini-3.8-flash",
+      "regions": 14,
+      "recall": {
+        "total": 9,
+        "strict": 5,
+        "tolerant": 9,
+        "misses": [],
+        "extraRegions": 1
+      },
+      "rawQuestions": [],
+      "questions": [
+        "table-source: De onde vêm os dados da “Tabela de acessórios”?"
+      ],
+      "boxesValid": true,
+      "audit": {
+        "digitRuns": 0,
+        "confirmedDigitRuns": 0,
+        "missing": [],
+        "allConfirmed": true
+      },
+      "expectedArchetypeId": "P7",
+      "snappedArchetypeId": "P7",
+      "proposedArchetypeId": "P7",
+      "archetypeMatches": true,
+      "unassigned": 5,
+      "warnings": [
+        "As fotos de cada acessório precisam ser revistas: este modelo tem só a foto do kit.",
+        "Algumas partes do rascunho não cabem nos campos deste modelo. Revise as pendências antes de montar a página."
+      ],
+      "extraDigitValues": [],
+      "tokens": {
+        "input": 1726,
+        "output": 1890
+      },
+      "costUsdConservative": 0.016764,
+      "costUsdCurrent": 0.008382,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1287
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2228
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 302
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 15314,
+          "tokens": {
+            "input": 1726,
+            "output": 1890
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 599
+        }
+      ]
+    }
+  ]
+}

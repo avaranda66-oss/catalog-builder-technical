@@ -210,14 +210,16 @@ try {
   const t3 = Date.now();
   await clicks.click('pedir "aumente a foto da capa" (Gemini)', dock().getByRole('button', { name: 'Enviar ao Gemini' }));
   const proposal = dock().getByRole('group', { name: 'Proposta de páginas' });
+  const editCard = dock().getByRole('group', { name: 'Mudanças pedidas na conversa' });
   const alertG = dock().locator('[role="alert"]');
-  await Promise.race([proposal.waitFor({ timeout: 10000 }), alertG.first().waitFor({ timeout: 10000 })]).catch(() => {});
+  await Promise.race([proposal.waitFor({ timeout: 10000 }), editCard.waitFor({ timeout: 10000 }), alertG.first().waitFor({ timeout: 10000 })]).catch(() => {});
   timings.respostaGeminiMs = Date.now() - t3;
   texts.respostaGeminiFoto = await dockText();
   const composerTasks = (await state(page)).composerCalls.map((c) => c.task);
-  observations.gotFotoCapa = { proposta: (await proposal.count()) > 0, alerta: (await alertG.count()) > 0, tarefasEnviadas: composerTasks };
+  const editText = (await editCard.count()) ? ((await editCard.innerText().catch(() => '')) ?? '').replace(/\s+/g, ' ').trim() : '';
+  observations.gotFotoCapa = { proposta: (await proposal.count()) > 0, cartaoMudanca: editText, alerta: (await alertG.count()) > 0, tarefasEnviadas: composerTasks };
   pendingStep(j, 'J3-A "aumente a foto da capa" mostra um cartão antes/depois da foto com Aplicar / Ajustar / Descartar',
-    `pendente Onda 4 (4B: ajustar por conversa) — hoje o pedido vai pelo mesmo caminho de "criar páginas" (tarefa ${composerTasks.filter((t) => t !== 'status').join(', ') || '-'}); no harness volta uma proposta FALSA de páginas novas (a resposta real do Gemini a este pedido NÃO foi verificada aqui). O painel nunca mexe na foto: ${observations.gotFotoCapa.proposta ? 'veio "Proposta para revisar" de páginas novas' : 'veio aviso'}`);
+    `pendente deploy do vnext-catalog-composer com edit_intent (4B montada no assistente): o pedido vai para "mudar pela conversa" (tarefas enviadas: ${composerTasks.filter((t) => t !== 'status').join(', ') || 'nenhuma'}); o servidor do harness não diz que sabe edit_intent, então o cartão avisa sem enviar nem cobrar${editText ? `: "${editText.slice(0, 160)}"` : ''}. O cartão real (antes/depois, Aplicar = um Desfazer) está provado no Vitest; a resposta real do Gemini a este pedido NÃO foi verificada aqui. ${observations.gotFotoCapa.proposta ? 'ATENÇÃO: veio "Proposta para revisar" de páginas novas' : 'Nenhuma página nova foi proposta.'}`);
   if (await proposal.count()) {
     await clicks.click('descartar proposta', proposal.getByRole('button', { name: 'Descartar', exact: true }));
     await page.waitForTimeout(200);

@@ -13,6 +13,7 @@ import {
   textBoxAction,
   textLeaderAction,
 } from '../../editor/native-element-authoring';
+import { familyBarOf, highlightFamilyModel } from '../../editor/family-bar-highlight';
 import { AdvancedToggle } from './NativeStyleSection';
 import { TableColorField } from './TableColorField';
 import { TableDecimalField } from './TableDecimalField';
@@ -53,11 +54,24 @@ export function TextDecorationSection({ object, disabled, session, prepare, onMe
     run((text) => textLeaderAction(text, next(text.leader ?? defaultTextLeader(text, document.style), text)));
   const box = current.box, leader = current.leader;
   const anchor = leader ? leaderAnchorOnPage(current, leader) : undefined;
+  // Onda 4 (P): a selo of a family bar ("KOMPRESSOR-Y18 … HÍBRIDO") can take the highlight in one step.
+  const page = box ? document.pages.find((entry) => entry.objects.some((candidate) => candidate.id === object.id)) : undefined;
+  const bar = page ? familyBarOf(page, object.id, document.style.defaultText.color) : undefined;
+  const highlight = () => {
+    if (disabled || !page || !prepare()) return;
+    onMessage(highlightFamilyModel(session, page.id, object.id, createTransactionId()).message);
+  };
   return (
     <>
       <div className="vnext-divider" />
       <section className="vnext-native-style" data-text-decoration="" aria-labelledby={`${idBase}-heading`}>
         <h3 id={`${idBase}-heading`}>{box ? 'Selo' : leader ? 'Chamada' : 'Fundo e seta do texto'}</h3>
+        {box && bar && (bar.highlighted.id === object.id
+          ? <p className="vnext-text-basic-hint" data-family-bar-current="">Este é o modelo destacado da barra.</p>
+          : <div className="vnext-native-choice">
+            <button type="button" data-family-bar-highlight="" disabled={disabled} onClick={highlight}
+              title="Este selo fica com a cor de destaque e a seta vem para cima dele. Um passo de Desfazer.">Destacar este modelo</button>
+          </div>)}
         {box && <>
           <div className="vnext-native-group" role="group" aria-label="Cor do selo">
             <span className="vnext-text-basic-label">Cor do selo</span>

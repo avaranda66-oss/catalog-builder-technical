@@ -30,6 +30,8 @@ idioma só vale para trechos que passaram pelo revisor.
 | `1,500 mm` (três casas, Beamex/Fluke) | `1.500 mm` — e **não** vira pergunta depois (`settled`) | vírgula decimal → ponto |
 | `0,1 %/0,2 % FE` / `0,5/1,0 bar` / `Exatidão:0,02` | `0.1 %/0.2 % FS` / `0.5/1.0 bar` / `Exatidão:0.02` | barra entre decimais e rótulo sem espaço |
 | `M20x1,5` / `M12x1,5` | `M20x1.5` / `M12x1.5` | rosca métrica / prensa-cabo (`decimal`) |
+| `-25,5 a 140,5 °C` / `−0,5 °C` / `Ø25,4 mm` | `-25.5 a 140.5 °C` / `−0.5 °C` / `Ø25.4 mm` | decimal com sinal ou diâmetro (Onda 4C) |
+| `24 Vcc` / `230 Vca` | `24 Vdc` / `230 Vac` | mesma unidade, sigla do inglês (Onda 4C) |
 | `1.500,5 Pa` / `1.000.000 Pa` | `1,500.5 Pa` / `1,000,000 Pa` | milhar + decimal (não é ambíguo) |
 | `% FE`, `%FE`, `% F.E.` | `% FS`, `%FS`, `% F.S.` | abreviação |
 | `% da leitura`, `% leitura`, `% da leit.`, `% of reading` | `% RDG` | abreviação |
@@ -157,16 +159,17 @@ para trechos corrigidos pelo revisor: o texto do provedor precisa trazer os dado
 - `páginas 3,4` no fim do texto, sem palavra de lista antes, ainda é tratado como decimal.
 - A equivalência aceita aplicações parciais ("0,02 % FS") para não travar quem edita à mão.
 
-## Reuso no servidor (Onda 4C)
+## No servidor (Onda 4C, feito)
 
-Os módulos de números, glossário e sugestões são puros (sem DOM, sem React). O gateway
-`vnext-translation-provider` pode importá-los com caminho `.ts` explícito, como já faz com
-`language-registry.ts`, para:
+O glossário passou para `src/vnext/translation/presys-glossary.ts` (versionado, `presys-glossary-v1`,
+sem imports) e `glossary.ts` lê os mesmos dados. O gateway `vnext-translation-provider`:
 
-1. anexar `changes`/`confirmations` por trecho na resposta (sem alterar `translatedText`, que
-   precisa continuar com os dados protegidos exatamente como na origem — o guardião recusa qualquer
-   adaptação vinda do provedor);
-2. incluir no prompt o glossário fixo (`glossaryTerms()`) e a lista de erros conhecidos
-   (`knownMisspellings()`), reduzindo o retrabalho na revisão.
+1. troca marcas e modelos (PRESYS, Kompressor, MCS-XV, ST-501, KOMPRESSOR-Y18 e qualquer código em
+   MAIÚSCULAS com hífen e dígito) por `[[VNEXT_KEEP_nnn]]` antes do Gemini e os devolve byte a byte;
+   marcador perdido, repetido ou inventado recusa a resposta;
+2. manda no pedido só os termos do glossário presentes no lote (`glossary`, `glossaryVersion`);
+3. limita a resposta com `responseSchema` (`maxItems`/`maxLength` em tudo).
 
-A aplicação continua sendo da pessoa, na tela de revisão.
+A resposta continua com os dados protegidos exatamente como na origem: `changes`/`confirmations`
+seguem calculados na tela de revisão, e a aplicação continua sendo da pessoa. Prova real e números:
+`docs/ai-catalog/IDIOMAS.md`.

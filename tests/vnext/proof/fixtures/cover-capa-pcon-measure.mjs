@@ -390,13 +390,9 @@ await scenario('S15', 'Travar o fundo para não pegar sem querer', async (p) => 
 
 await scenario('S16', 'Barra da família: destacar outro modelo (DT) e mover a barra', async (p) => {
   // Destaque: HÍBRIDO volta a branco, DT fica dourado (cor do selo + cor do texto), a seta vai para cima do DT.
-  await p.clickObj(oid('modelo-6'), { fx: 0.5 });
-  await p.panelClick('[aria-label="Cor do selo #FFFFFF"]');
-  await p.panelClick('[data-text-color="#536778"]');
+  // Onda 4 (P): "Destacar este modelo" no painel do selo faz os três num passo de Desfazer (antes: 4 cores + arrastar a seta).
   await p.clickObj(oid('modelo-5'), { fx: 0.5 });
-  await p.panelClick('[aria-label="Cor do selo #8A642B"]');
-  await p.panelClick('[data-text-color="#FFFFFF"]');
-  await p.drag(oid('modelo-atual-seta'), -30.58, 0, 0.5);
+  await p.panelClick('[data-family-bar-highlight]');
   const highlight = p.n;
   const m5 = await p.obj(oid('modelo-5')), m6 = await p.obj(oid('modelo-6')), seta = await p.obj(oid('modelo-atual-seta'));
   const centered = Math.abs(seta.frame.xMm + seta.frame.widthMm / 2 - (m5.frame.xMm + m5.frame.widthMm / 2)) < 1;

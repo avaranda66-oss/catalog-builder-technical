@@ -17,6 +17,9 @@
  *   "M20x1,5", "M12x1,5"                  → "M20x1.5", "M12x1.5"          (rosca métrica / prensa-cabo)
  *   "1.500,5 Pa"                          → "1,500.5 Pa"                  (milhar + decimal: não é ambíguo)
  *   "1.000.000 Pa"                        → "1,000,000 Pa"                (dois pontos de milhar: não é ambíguo)
+ *   "-25,5 a 140,5 °C", "−0,5 °C"         → "-25.5 a 140.5 °C", "−0.5 °C" (o sinal fica igual)
+ *   "Ø25,4 mm × 124 mm"                   → "Ø25.4 mm × 124 mm"           (diâmetro: o símbolo não é código)
+ *   "24 Vcc", "230 Vca"                   → "24 Vdc", "230 Vac"           (mesma unidade, sigla do inglês)
  *   "-25 a 140 °C", "4–20 mA", "ISO 9001" → iguais                        (inteiros não mudam)
  *   "TA-25N", "06.04.0121-00/IN1P"        → iguais                        (códigos nunca mudam)
  *   "15/10/2026", "10:30"                 → iguais                        (datas e horários nunca mudam)
@@ -137,6 +140,8 @@ const METRIC_THREAD = /\bM(\d+)x(\d+),(\d+)(?![\p{L}\p{N}_])/gu;
 const DECIMAL_BEFORE_SLASH = /(?:\d,\d+|%)\s*\/$/u;
 const DECIMAL_AFTER_SLASH = /^\/\s*[+−-]?\d+,\d+(?!\d)/u;
 const LABEL_COLON = /\p{L}:$/u;
+/** Símbolos de diâmetro antes do número: "Ø25,4 mm", "ø6,35 mm", "⌀3,2 mm". */
+const DIAMETER = /^[Øø⌀]$/u;
 /** " e 3", " and 3", " y 3", ", 5": o que vem depois de "1,2" numa enumeração. */
 const ENUMERATION_TAIL = /^(?:\s+(?:e|and|y)\s+|,\s+)\d+(?!\d|[.,]\d)/iu;
 /** "itens ", "páginas ", "see items ": o que vem antes de "1,2" numa enumeração. */
@@ -171,7 +176,8 @@ function gluedToCode(text: string, coreIndex: number, sign: string, core: string
   if (sign) {
     // Traço depois de dígito (faixa ou código) já foi decidido em analyzeNumbers.
     if (/[\p{L}\p{N}_.,/:]/u.test(characterAt(text, coreIndex - sign.length - 1))) return true;
-  } else if (GLUED_BEFORE.test(beforeCore)) {
+  } else if (GLUED_BEFORE.test(beforeCore) && !(DIAMETER.test(beforeCore) && !GLUED_BEFORE.test(characterAt(text, coreIndex - 2)))) {
+    // "Ø25,4 mm" é diâmetro (o símbolo não faz do número um código); "AØ25,4" continua colado.
     const before = text.slice(0, coreIndex);
     // "0,1 %/0,2 %" e "0,5/1,0 bar": barra entre dois decimais é separador; "Exatidão:0,02" é rótulo sem espaço.
     const slashBetweenDecimals = hasComma && beforeCore === '/' && DECIMAL_BEFORE_SLASH.test(before);
@@ -219,12 +225,14 @@ function analyzeNumbers(text: string, options: LocaleFormatOptions): Analysis {
       index += 1; token = core; sign = '';
     }
     if (keep.has(core) || keep.has(token)) continue;
-    if (gluedToCode(text, index, sign, core, hasComma)) continue;
+    // Posição do núcleo, depois do sinal: "-25,5 °C" e "−0,5 °C" também são decimais (o sinal fica igual).
+    const coreIndex = index + sign.length;
+    if (gluedToCode(text, coreIndex, sign, core, hasComma)) continue;
     const protectedReading = sourceReadings.has(core) || sourceReadings.has(token);
     if (hasComma) {
       const [integerPart, fractionPart] = core.split(',');
       if (fractionPart.includes('.')) continue;
-      if (fractionPart.length === 1 && isEnumeration(text, index, core)) continue;
+      if (fractionPart.length === 1 && isEnumeration(text, coreIndex, core)) continue;
       if (protectedReading) continue;
       if (integerPart.includes('.')) {
         if (!thousandsShape(integerPart.split('.'))) continue;
@@ -260,6 +268,8 @@ const EN_RULES: readonly AbbreviationRule[] = [
   { pattern: new RegExp(PERCENT_READING, 'giu'),
     replace: match => (/^rdg$/iu.test(match[0].slice(match[1].length)) ? undefined : `${match[1]}RDG`) },
   { pattern: new RegExp(PERCENT_FULL_SCALE, 'giu'), replace: match => `${match[1]}FS` },
+  // Mesma unidade, sigla do inglês: "24 Vcc" → "24 Vdc", "230 Vca" → "230 Vac" (nada é convertido).
+  { pattern: /(?<![\p{L}\p{N}])V(cc|ca)(?![\p{L}\p{N}])/gu, replace: match => (match[1] === 'cc' ? 'Vdc' : 'Vac') },
 ];
 
 const ES_RULES: readonly AbbreviationRule[] = [

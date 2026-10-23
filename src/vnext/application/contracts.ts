@@ -9,6 +9,7 @@ import {
   DocumentStyleSchema,
   ImageFocalPointSchema,
   PageBackgroundSchema,
+  PageFooterSchema,
   PolygonPointSchema,
   PolygonStyleSchema,
   RichTextSchema,
@@ -379,6 +380,16 @@ export const SetPageBackgroundActionSchema = z.object({
   pageId: applicationId,
   expectedBackground: PageBackgroundSchema.nullable(),
   background: PageBackgroundSchema.nullable(),
+}).strict();
+
+/**
+ * Onda 4 (FR-55): "Rodapé de todas as páginas" — code, revision, date and cover choice of the control footer, one
+ * place for the whole catalog (null = no automatic footer). One command = one undo step.
+ */
+export const SetPageFooterActionSchema = z.object({
+  type: z.literal('document.setPageFooter'),
+  expectedFooter: PageFooterSchema.nullable(),
+  footer: PageFooterSchema.nullable(),
 }).strict();
 
 export const CreateGroupActionSchema = z.object({
@@ -1024,6 +1035,7 @@ export const ApplicationActionSchema = z.union([
   SetTextBoxActionSchema,
   SetTextLeaderActionSchema,
   SetPageBackgroundActionSchema,
+  SetPageFooterActionSchema,
   CreateGroupActionSchema,
   UngroupActionSchema,
   TableAxisInsertActionSchema,

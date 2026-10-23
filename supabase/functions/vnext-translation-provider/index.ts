@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 
 // Bundle this pure local dependency with the Edge Function; VM tests resolve the same source.
 import { VNEXT_TRANSLATION_MODEL_ID, VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
+// FR-87: the versioned PRESYS glossary (pure, no imports) shared with the review screen.
+import { PRESYS_GLOSSARY_VERSION, glossaryEntriesForTexts, protectKeepTerms, restoreKeepTerms, type KeepTermProtection } from '../../../src/vnext/translation/presys-glossary.ts';
 
 const CONTRACT_VERSION = VNEXT_TRANSLATION_PROFILES[0].contractVersion;
 
@@ -218,7 +220,74 @@ interface ProviderUnit {
   runs: ProviderRun[];
 }
 
-function validateProviderPayload(value: unknown, request: GatewayRequest): ProviderUnit[] | null {
+const KEEP_PLACEHOLDER_RULE = 'Preserve every [[VNEXT_KEEP...]] placeholder exactly once and byte-for-byte: each one is a PRESYS brand or model name, which is never translated.';
+const GLOSSARY_RULE = 'When protectedText contains a glossary source term (singular or plural, any capitalization), translate it with exactly its glossary target term (PRESYS official terminology), keeping the number and the capitalization style of the sentence.';
+
+/** Brand/model placeholders of one run, keyed like the client review (unitId NUL runId). */
+type KeepProtections = ReadonlyMap<string, KeepTermProtection>;
+
+function runKey(unitId: string, runId: string): string {
+  return `${unitId}\u0000${runId}`;
+}
+
+/**
+ * FR-87: PRESYS brands and model names never reach the model as words. Each one becomes a
+ * [[VNEXT_KEEP_nnn]] placeholder here and is restored byte for byte after validation.
+ * `enabled: false` (old canonical Spanish bridge) keeps every run exactly as received.
+ */
+function protectBrandsAndModels(request: GatewayRequest, enabled: boolean): KeepProtections {
+  const protections = new Map<string, KeepTermProtection>();
+  for (const unit of request.units) {
+    for (const run of unit.runs) {
+      protections.set(runKey(unit.unitId, run.runId), enabled ? protectKeepTerms(run.protectedText) : { text: run.protectedText, terms: [] });
+    }
+  }
+  return protections;
+}
+
+/**
+ * Bounded Gemini answer: the exact unit count, the request's run count and identifier sizes,
+ * and translated text at most three times the longest input run (never above maxCharsPerRun).
+ */
+function providerResponseSchema(request: GatewayRequest, protections: KeepProtections) {
+  const runs = request.units.flatMap((unit) => unit.runs.map((run) => ({ unit, run })));
+  const longestInput = Math.max(...runs.map(({ unit, run }) => protections.get(runKey(unit.unitId, run.runId))!.text.length));
+  return {
+    type: 'OBJECT',
+    properties: {
+      units: {
+        type: 'ARRAY',
+        minItems: request.units.length,
+        maxItems: request.units.length,
+        items: {
+          type: 'OBJECT',
+          properties: {
+            unitId: { type: 'STRING', maxLength: Math.max(...request.units.map((unit) => unit.unitId.length)) },
+            runs: {
+              type: 'ARRAY',
+              minItems: 1,
+              maxItems: Math.max(...request.units.map((unit) => unit.runs.length)),
+              items: {
+                type: 'OBJECT',
+                properties: {
+                  runId: { type: 'STRING', maxLength: Math.max(...runs.map(({ run }) => run.runId.length)) },
+                  translatedText: { type: 'STRING', maxLength: Math.min(LIMITS.maxCharsPerRun, Math.max(200, longestInput * 3)) },
+                },
+                required: ['runId', 'translatedText'],
+                propertyOrdering: ['runId', 'translatedText'],
+              },
+            },
+          },
+          required: ['unitId', 'runs'],
+          propertyOrdering: ['unitId', 'runs'],
+        },
+      },
+    },
+    required: ['units'],
+  };
+}
+
+function validateProviderPayload(value: unknown, request: GatewayRequest, protections: KeepProtections): ProviderUnit[] | null {
   if (!isRecord(value) || !exactKeys(value, ['units']) || !Array.isArray(value.units)) return null;
   const rawUnits = value.units;
   if (rawUnits.length !== request.units.length) return null;
@@ -240,7 +309,6 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
     for (const rawRun of rawUnit.runs) {
       if (!isRecord(rawRun) || !exactKeys(rawRun, ['runId', 'translatedText'])) return null;
       if (!nonempty(rawRun.runId) || !nonempty(rawRun.translatedText) || !rawRun.translatedText.trim()
-        || rawRun.translatedText.length > LIMITS.maxCharsPerRun
         || /<\/?[A-Za-z][^>]*>/.test(rawRun.translatedText)
         || Array.from(rawRun.translatedText).some(character => {
           const code = character.charCodeAt(0);
@@ -249,12 +317,16 @@ function validateProviderPayload(value: unknown, request: GatewayRequest): Provi
       const expectedRun = expectedByRun.get(rawRun.runId);
       if (!expectedRun) return null;
       returnedRunIds.push(rawRun.runId);
+      // Every brand/model placeholder exactly once; lost, repeated or invented ones reject the answer.
+      const protection = protections.get(runKey(expectedUnit.unitId, expectedRun.runId));
+      const translatedText = protection ? restoreKeepTerms(rawRun.translatedText, protection) : undefined;
+      if (translatedText === undefined || translatedText.length > LIMITS.maxCharsPerRun) return null;
       if (
         JSON.stringify(placeholderMultiset(expectedRun.protectedText)) !==
-        JSON.stringify(placeholderMultiset(rawRun.translatedText))
+        JSON.stringify(placeholderMultiset(translatedText))
       ) return null;
-      if (rawRun.translatedText.replace(PLACEHOLDER, '').includes('[[VNEXT_TECH_')) return null;
-      runs.push({ runId: rawRun.runId, translatedText: rawRun.translatedText });
+      if (translatedText.replace(PLACEHOLDER, '').includes('[[VNEXT_TECH_')) return null;
+      runs.push({ runId: rawRun.runId, translatedText });
     }
     if (!exactStringSet(expectedUnit.runs.map((run) => run.runId), returnedRunIds)) return null;
     units.push({ unitId: rawUnit.unitId, runs });
@@ -336,6 +408,13 @@ serve(async (request: Request) => {
 
     const translationProfile = resolveGatewayProfile(body.sourceLocale, body.targetLocale, body.profileVersion)!;
     const canonicalSpanish = translationProfile.profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion;
+    // FR-87: the old canonical Spanish bridge keeps its original prompt; current profiles get the glossary.
+    const keepProtections = protectBrandsAndModels(body, !canonicalSpanish);
+    const keepsBrands = [...keepProtections.values()].some((protection) => protection.terms.length > 0);
+    const glossary = canonicalSpanish ? [] : glossaryEntriesForTexts(
+      body.units.flatMap((unit) => unit.runs.map((run) => run.protectedText)),
+      translationProfile.targetLocale,
+    );
     const promptContract = {
       contractVersion: CONTRACT_VERSION,
       profileVersion: translationProfile.profileVersion,
@@ -353,14 +432,21 @@ serve(async (request: Request) => {
           'Preserve all numbers, decimal separators, signs, ranges, uncertainty, units, product/model codes, standards, protocols and symbols exactly; preserve the meaning of technical qualifiers.',
         ]),
         'Preserve every [[VNEXT_TECH...]] placeholder exactly once and byte-for-byte.',
+        ...(keepsBrands ? [KEEP_PLACEHOLDER_RULE] : []),
+        ...(glossary.length > 0 ? [GLOSSARY_RULE] : []),
         'Return the same unitId and runId identities. Do not add or remove units or runs.',
         'Return plain text only; do not emit HTML or Markdown formatting.',
       ],
+      ...(canonicalSpanish ? {} : { glossaryVersion: PRESYS_GLOSSARY_VERSION }),
+      ...(glossary.length > 0 ? { glossary } : {}),
       units: body.units.map((unit) => ({
         unitId: unit.unitId,
         kind: unit.kind,
         context: unit.context,
-        runs: unit.runs,
+        runs: unit.runs.map((run) => ({
+          runId: run.runId,
+          protectedText: keepProtections.get(runKey(unit.unitId, run.runId))!.text,
+        })),
       })),
       responseShape: {
         units: [{ unitId: 'same unitId', runs: [{ runId: 'same runId', translatedText: 'plain translated text' }] }],
@@ -372,6 +458,7 @@ serve(async (request: Request) => {
       contents: [{ role: 'user', parts: [{ text: JSON.stringify(promptContract) }] }],
       generationConfig: {
         responseMimeType: 'application/json',
+        responseSchema: providerResponseSchema(body, keepProtections),
         temperature: 0.1,
         candidateCount: 1,
         maxOutputTokens: boundedAcceptance ? BOUNDED_ACCEPTANCE_MAX_OUTPUT_TOKENS : PRODUCTION_MAX_OUTPUT_TOKENS,
@@ -451,7 +538,7 @@ serve(async (request: Request) => {
       providerJson = null;
     }
 
-    const units = validateProviderPayload(providerJson, body);
+    const units = validateProviderPayload(providerJson, body, keepProtections);
     if (!units) {
       return json(cors, 502, 'INVALID_PROVIDER_RESPONSE', 'Resposta do provedor não satisfaz o contrato W5.A.');
     }

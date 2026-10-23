@@ -8,12 +8,17 @@ import {
 } from '../../../src/vnext/ai-catalog/draft-contract.ts';
 import { isObj } from '../../../src/vnext/ai-catalog/composer-contract.ts';
 import type { DraftErrorCode, DraftErrorReason } from '../../../src/vnext/ai-catalog/draft-codes.ts';
+import { runSketchInterpretation } from '../../../src/vnext/ai-catalog/sketch-contract.ts';
+import { PLAN_LIMITS, parsePlanDraftRequest, runCatalogPlan } from '../../../src/vnext/ai-catalog/catalog-plan-contract.ts';
 
 // FR-66: Gemini reads one private PDF or photo and proposes specification
 // values. Never authoritative: the browser verifies every value against the
 // file's own text. Same guards as the composer: origin, JWT, active
 // admin/editor profile, payload size and a budget reservation (00028) before
 // any billed provider call. Server key only (no personal key here).
+// FR-70 (plan_draft): the same guards for the catalog plan; only that task
+// may carry the page texts (PLAN_LIMITS.maxBodyChars), every other task keeps
+// the small DRAFT_LIMITS.maxBodyChars.
 // Credentials, prompts, file names and model text are never logged.
 type Obj = Record<string, unknown>;
 type Db = ReturnType<typeof createClient>;
@@ -106,27 +111,48 @@ serve(async req => {
   const { data: profile, error: roleError } = await db.from('profiles').select('id,role,is_active')
     .eq('id', user.id).maybeSingle();
   if (roleError || !profile?.is_active || !['admin', 'editor'].includes(profile.role)) return fail(c, 403, 'FORBIDDEN');
-  if (Number(req.headers.get('content-length') ?? 0) > DRAFT_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
-  let body: unknown;
+  if (Number(req.headers.get('content-length') ?? 0) > PLAN_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
+  let body: unknown, size: number;
   try {
     const raw = await req.text();
-    if (raw.length > DRAFT_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
+    size = raw.length;
+    if (size > PLAN_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
     body = JSON.parse(raw);
   } catch { return fail(c, 400, 'INVALID_REQUEST'); }
-  const request = parseDraftRequest(body);
-  if (!request) return fail(c, 400, 'INVALID_REQUEST');
+  const planning = isObj(body) && body.task === 'plan_draft';
+  if (!planning && size > DRAFT_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
+  const plan = planning ? parsePlanDraftRequest(body) : null;
+  const request = planning ? null : parseDraftRequest(body);
+  if (!plan && !request) return fail(c, 400, 'INVALID_REQUEST');
   // Draft-specific secret first, so the shared keys never have to be overwritten.
   const key = Deno.env.get('VNEXT_DRAFT_GEMINI_API_KEY') || Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') ||
     Deno.env.get('GEMINI_API_KEY') || '';
   const ledger = budgetLedger(db);
+  if (plan) {
+    if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+    const result = await runCatalogPlan({ request: plan, key, ledger, fetcher: (input, init) => fetch(input, init) });
+    return result.ok
+      ? json(c, 200, 'OK', { plan: result.plan })
+      : fail(c, result.status, result.code, result.reason);
+  }
+  if (!request) return fail(c, 400, 'INVALID_REQUEST');
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether reading files can start.
     const budget = await ledger.remaining();
+    // `tasks` lets a newer screen know what this deployed version can do before it spends anything.
     return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, model: EXTRACTION_MODEL,
+      tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'],
       promptVersion: EXTRACTION_PROMPT_VERSION, budget: budget.ledger, remainingMicrousd: budget.remainingMicrousd,
       callReserveMicrousd: extractionReservationMicrousd() } });
   }
   if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+  if (request.task === 'interpret_sketch') {
+    const result = await runSketchInterpretation({ request, key, ledger, source: privateSource(db),
+      fetcher: (input, init) => fetch(input, init) });
+    return result.ok
+      ? json(c, 200, 'OK', { sketch: result.sketch })
+      : fail(c, result.status, result.code, result.reason);
+  }
   const result = await runFactExtraction({ request, key, ledger, cache: extractionCache(db), source: privateSource(db),
     fetcher: (input, init) => fetch(input, init) });
   return result.ok

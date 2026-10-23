@@ -999,13 +999,13 @@ describe('W3.F Duplicate and Starter creation', () => {
       category: 'Ficha técnica',
     }, expect.objectContaining({
       starterId: 'presys-ficha-tecnica-a4',
-      revision: 1,
+      revision: 2,
       label: 'Ficha técnica (4 a 6 páginas)',
       category: 'PRESYS',
       recommended: true,
     }), expect.objectContaining({
       starterId: 'presys-folder-a4',
-      revision: 1,
+      revision: 2,
       label: 'Folder (8 a 12 páginas)',
       category: 'PRESYS',
     }), {

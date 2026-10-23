@@ -21,6 +21,10 @@ node tests/vnext/proof/father-journeys/j09-idiomas.mjs
 # sem ela o harness responde como hoje em produção: a leitura de PDFs ainda não está implantada.
 node tests/vnext/proof/father-journeys/j02l-tabela-do-pdf.mjs
 
+# J14 (Onda 4): páginas a partir de fotos de um rascunho em papel, no chat. A resposta da IA é a gravada pela fatia R
+# com o Gemini real (docs/ai-catalog/rascunho-servidor/rodada-1/raw), servida pelo harness em window.__FATHER_DRAFT__.sketches.
+node tests/vnext/proof/father-journeys/j14-rascunho.mjs
+
 # Janela menor; remover a variável para voltar ao padrão.
 $env:VP='1280'
 node tests/vnext/proof/father-journeys/run-all.mjs
