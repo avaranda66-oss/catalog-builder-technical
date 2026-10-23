@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { sha256 } from '../asset/integrity';
+import { PLAN_LIMITS, PLAN_PAGE_KIND_IDS, type PlanPageKindId } from './catalog-plan-contract';
 import {
   MAX_EVIDENCE_PAGE_TEXT, MAX_EVIDENCE_RUN_TEXT, MAX_EVIDENCE_RUNS, checkPdfValueOnPage,
 } from './pdf-layout-evidence';
@@ -204,3 +205,44 @@ export function selectedValue(input: TechnicalInput, sectionIndex: number, rowIn
   if (typeof choice !== 'number' || !Number.isInteger(choice) || !fact.candidates[choice]) return { value: 'Revisar conflito', status: 'conflict' as const };
   return { value: fact.candidates[choice].value, source: fact.candidates[choice].source, status: 'resolved' as const };
 }
+
+/* ---------------------------------------------------------------------------------------------------------- */
+/* FR-70 — catalog plan                                                                                       */
+/* ---------------------------------------------------------------------------------------------------------- */
+
+const planText = (max: number) => z.string().max(max).refine(value => !CONTROL_IN_TEXT.test(value), 'Unsupported control character');
+// eslint-disable-next-line no-control-regex
+const CONTROL_IN_TEXT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
+const planPageNumber = z.number().int().min(0).max(1000);
+/**
+ * The catalog plan proposed by the AI (task `plan_draft`, catalog-plan-contract.ts), as the browser accepts it
+ * from the server: the same bounded shape the server already enforced, checked again here. Still UNTRUSTED:
+ * every `[[VNEXT_TECH_n]]` token of its texts is checked against the files' own text and the checked facts
+ * (catalog-plan.ts) before anything reaches a page, and the specification table is never taken from it.
+ */
+export const CatalogDraftPlanSchema = z.object({
+  title: planText(PLAN_LIMITS.titleChars),
+  pages: z.array(z.object({
+    kind: z.enum(PLAN_PAGE_KIND_IDS as unknown as [PlanPageKindId, ...PlanPageKindId[]]),
+    purpose: planText(PLAN_LIMITS.purposeChars),
+    sourcePages: z.array(z.object({ file: planText(PLAN_LIMITS.fileIdChars), page: planPageNumber.min(1) }).strict())
+      .max(PLAN_LIMITS.maxSourcePages),
+    texts: z.array(z.object({ slot: planText(PLAN_LIMITS.slotChars), text: planText(PLAN_LIMITS.textChars) }).strict())
+      .max(PLAN_LIMITS.maxTexts),
+    tables: z.array(z.object({
+      slot: planText(PLAN_LIMITS.slotChars),
+      header: z.array(planText(60)).max(PLAN_LIMITS.maxCells),
+      rows: z.array(z.object({ section: planText(80), cells: z.array(planText(PLAN_LIMITS.cellChars)).max(PLAN_LIMITS.maxCells) }).strict())
+        .max(PLAN_LIMITS.maxRows),
+      notes: z.array(planText(200)).max(PLAN_LIMITS.maxNotes),
+    }).strict()).max(PLAN_LIMITS.maxTables),
+  }).strict()).min(1).max(PLAN_LIMITS.maxPages),
+  literals: z.array(z.object({
+    id: z.number().int().min(0).max(999), text: planText(PLAN_LIMITS.literalChars),
+    file: planText(PLAN_LIMITS.fileIdChars), page: planPageNumber, fact: planText(PLAN_LIMITS.factIdChars),
+  }).strict()).max(PLAN_LIMITS.maxLiterals),
+  questions: z.array(planText(PLAN_LIMITS.questionChars)).max(PLAN_LIMITS.maxQuestions),
+}).strict();
+export type CatalogDraftPlan = z.infer<typeof CatalogDraftPlanSchema>;
+export type CatalogDraftPlanPage = CatalogDraftPlan['pages'][number];
+export type CatalogDraftPlanLiteral = CatalogDraftPlan['literals'][number];

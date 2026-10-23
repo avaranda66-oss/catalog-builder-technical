@@ -1,0 +1,369 @@
+{
+  "image": {
+    "fileName": "acessorios_foto.jpg",
+    "width": 1131,
+    "height": 1600,
+    "originalWidth": 1240,
+    "originalHeight": 1754
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/7b6037a7c6ec7bb67a2d3868271d13a591171d35786d7c7867dc9900160d504d.jpg",
+    "sha256": "7b6037a7c6ec7bb67a2d3868271d13a591171d35786d7c7867dc9900160d504d",
+    "mimeType": "image/jpeg",
+    "fileName": "acessorios_foto.jpg",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "fornecimento_acessorios",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "title",
+              "bbox": [
+                80,
+                155,
+                142,
+                450
+              ],
+              "normalizedBox": [
+                0.08,
+                0.155,
+                0.142,
+                0.45
+              ],
+              "text": "Acessórios",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "callout",
+              "bbox": [
+                123,
+                400,
+                195,
+                870
+              ],
+              "normalizedBox": [
+                0.123,
+                0.4,
+                0.195,
+                0.87
+              ],
+              "text": "fotos pequenas à esquerda",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-3",
+              "kind": "image",
+              "bbox": [
+                188,
+                137,
+                317,
+                315
+              ],
+              "normalizedBox": [
+                0.188,
+                0.137,
+                0.317,
+                0.315
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-4",
+              "kind": "subtitle",
+              "bbox": [
+                207,
+                335,
+                248,
+                440
+              ],
+              "normalizedBox": [
+                0.207,
+                0.335,
+                0.248,
+                0.44
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-5",
+              "kind": "paragraph",
+              "bbox": [
+                253,
+                327,
+                328,
+                885
+              ],
+              "normalizedBox": [
+                0.253,
+                0.327,
+                0.328,
+                0.885
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-6",
+              "kind": "image",
+              "bbox": [
+                351,
+                118,
+                480,
+                294
+              ],
+              "normalizedBox": [
+                0.351,
+                0.118,
+                0.48,
+                0.294
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-7",
+              "kind": "subtitle",
+              "bbox": [
+                370,
+                316,
+                411,
+                420
+              ],
+              "normalizedBox": [
+                0.37,
+                0.316,
+                0.411,
+                0.42
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-8",
+              "kind": "paragraph",
+              "bbox": [
+                418,
+                307,
+                492,
+                882
+              ],
+              "normalizedBox": [
+                0.418,
+                0.307,
+                0.492,
+                0.882
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-9",
+              "kind": "image",
+              "bbox": [
+                516,
+                97,
+                642,
+                274
+              ],
+              "normalizedBox": [
+                0.516,
+                0.097,
+                0.642,
+                0.274
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-10",
+              "kind": "subtitle",
+              "bbox": [
+                533,
+                297,
+                572,
+                400
+              ],
+              "normalizedBox": [
+                0.533,
+                0.297,
+                0.572,
+                0.4
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-11",
+              "kind": "paragraph",
+              "bbox": [
+                578,
+                287,
+                652,
+                845
+              ],
+              "normalizedBox": [
+                0.578,
+                0.287,
+                0.652,
+                0.845
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-12",
+              "kind": "image",
+              "bbox": [
+                677,
+                78,
+                804,
+                255
+              ],
+              "normalizedBox": [
+                0.677,
+                0.078,
+                0.804,
+                0.255
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-13",
+              "kind": "subtitle",
+              "bbox": [
+                693,
+                277,
+                732,
+                380
+              ],
+              "normalizedBox": [
+                0.693,
+                0.277,
+                0.732,
+                0.38
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-14",
+              "kind": "paragraph",
+              "bbox": [
+                737,
+                267,
+                810,
+                825
+              ],
+              "normalizedBox": [
+                0.737,
+                0.267,
+                0.81,
+                0.825
+              ],
+              "text": "",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": []
+        },
+        "dimensions": {
+          "width": 1131,
+          "height": 1600
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 1601,
+          "estimatedUsd": 0.014597
+        },
+        "ms": 16740
+      }
+    },
+    "ms": 17430
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1350
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2732
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 527
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 12130,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"fornecimento_acessorios\",\n  \"regions\": [\n    {\n      \"kind\": \"title\",\n      \"bbox\": [80, 155, 142, 450],\n      \"text\": \"Acessórios\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"callout\",\n      \"bbox\": [123, 400, 195, 870],\n      \"text\": \"fotos pequenas à esquerda\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [188, 137, 317, 315],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [207, 335, 248, 440],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [253, 327, 328, 885],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [351, 118, 480, 294],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [370, 316, 411, 420],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [418, 307, 492, 882],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [516, 97, 642, 274],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [533, 297, 572, 400],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [578, 287, 652, 845],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [677, 78, 804, 255],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [693, 277, 732, 380],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [737, 267, 810, 825],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "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"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 791,
+          "totalTokenCount": 3327,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 810,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "Z7LaavyzCajeytMP5JCmyQs"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 1601
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 690
+    }
+  ]
+}

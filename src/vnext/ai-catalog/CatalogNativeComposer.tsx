@@ -40,6 +40,11 @@ import type { ChatMenuSection } from './chat/ChatMenu';
 import type { SpecTableGateway } from './spec-table/spec-table-gateway';
 import { specTableActionLabel, specTablePdfs, useSpecTableDraft } from './spec-table/useSpecTableDraft';
 import { SpecTableMessages } from './spec-table/SpecTableMessages';
+import { CATALOG_DRAFT_ACTION, useCatalogDraft } from './useCatalogDraft';
+import { CatalogDraftMessages } from './DraftPreview';
+import { SKETCH_ACCEPT, SKETCH_ACTION, useSketchDraft } from './useSketchDraft';
+import { SketchDraftMessages } from './SketchDraft';
+import { factSetSketchSource, spreadsheetSketchSources, type SketchTableSource } from './sketch-review';
 import './chat/assistant-chat.css';
 
 interface Props {
@@ -56,6 +61,8 @@ interface Props {
   activePageId?: string;
   /** Shows a table inserted from a file in the editor. */
   onShowTable?: (pageId: string, objectId: string) => void;
+  /** FR-70: opens a page in the editor (the first page of a catalog built from files). */
+  onShowPage?: (pageId: string) => void;
   /**
    * FR-03: the technical review with a hand-written JSON manifest is not on the father's screen. It stays for
    * development and the browser proofs only (the dev server), never in the published app.
@@ -76,6 +83,13 @@ interface Props {
    * assistant never sends a file anywhere. Injectable so a proof harness can answer with a controlled provider.
    */
   factExtraction?: SpecTableGateway;
+  /**
+   * Modo rascunho from outside the conversation ("Página a partir de rascunho…" under "Adicionar página"): photos the
+   * person chose there; each new `at` starts reading them here.
+   */
+  sketchRequest?: { readonly at: number; readonly files: readonly File[] };
+  /** The request was taken here (so a later remount does not read the same photos again). */
+  onSketchRequestTaken?: () => void;
 }
 interface Pending {
   plan: NativeComposePlan;
@@ -117,6 +131,9 @@ const FOOTNOTE = 'Os arquivos são lidos aqui no computador e não vão para a I
 /** With J2-lite a PDF goes to the AI only after “Ler estas páginas”. */
 const FOOTNOTE_WITH_PDF_READING = 'Os arquivos são lidos aqui no computador. Só vai para a IA o PDF que você mandar ler para '
   + 'montar uma tabela. A IA não inventa valores técnicos.';
+/** Modo rascunho: a photo of a sketch goes to the AI only after “Ler o rascunho”. */
+const FOOTNOTE_WITH_SKETCH = 'Os arquivos são lidos aqui no computador. Só vai para a IA o PDF que você mandar ler para '
+  + 'montar uma tabela, ou a foto de rascunho que você mandar ler. A IA não inventa valores técnicos.';
 
 /** C-05: the server already said today's AI budget is used up (when the panel opened, or on the last request). */
 function dailyLimitKnown(readiness: ComposerReadiness | undefined): boolean {
@@ -147,7 +164,8 @@ const bump = (value: number) => value + 1;
  */
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
-  canPublish, onPublication, selectionLabel, factExtraction }: Props) {
+  canPublish, onPublication, selectionLabel, factExtraction, onShowPage, sketchRequest,
+  onSketchRequestTaken }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -189,6 +207,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   const focusNotice = React.useRef(false);
   const input = React.useRef<HTMLTextAreaElement>(null);
   const filePicker = React.useRef<HTMLInputElement>(null);
+  const sketchPicker = React.useRef<HTMLInputElement>(null);
   const conversationFull = turns.length > CONVERSATION_MESSAGE_LIMIT - 2;
   const setError = (text: string, conversationId = activeIdRef.current) =>
     setErrorState(text ? { text, conversationId } : undefined);
@@ -399,6 +418,45 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
     },
   });
+  // FR-70: the whole catalog from the files of one message, as cards in this conversation.
+  const catalogDraft = useCatalogDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowPage,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'catalog-draft');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
+  // Modo rascunho: photos of pages drawn on paper → the areas the AI understood → the same Aplicar as above.
+  const sketch = useSketchDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowPage,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'catalog-draft');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
+  const sketchRequestAt = React.useRef<number>();
+  React.useEffect(() => {
+    if (!sketchRequest || sketchRequest.at === sketchRequestAt.current) return;
+    sketchRequestAt.current = sketchRequest.at;
+    sketch.start(sketchRequest.files, activeIdRef.current);
+    onSketchRequestTaken?.();
+    setFollow(bump);
+    // Only a new request starts reading; the controller itself changes on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sketchRequest?.at]);
+  // Files already checked in this conversation that can fill a drawn table (spreadsheets; the PDF table read and checked).
+  const sketchSources = React.useMemo<SketchTableSource[]>(() => {
+    const sets: SketchTableSource[] = [];
+    const spec = specTable.flow?.stage;
+    if (spec && (spec.kind === 'review' || spec.kind === 'applied')) sets.push(factSetSketchSource(`pdf:tabela:${specTable.flow!.at}`, spec.set));
+    const draft = catalogDraft.flow?.stage;
+    const draftSet = draft?.kind === 'preview' ? draft.set : draft?.kind === 'applied' ? draft.planned.set : undefined;
+    if (draftSet) sets.push(factSetSketchSource(`pdf:catalogo:${catalogDraft.flow!.at}`, draftSet));
+    return [...spreadsheetSketchSources(files.entries), ...sets];
+  }, [files.entries, specTable.flow, catalogDraft.flow]);
+  const sketchBusy = sketch.flow?.stage.kind === 'working' || sketch.flow?.stage.kind === 'checking';
   const undoFromConversation = (entryId: string) => {
     if (undoable.get(entryId) !== session.getSnapshot().localSequence || !session.getSnapshot().canUndo) return;
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -446,16 +504,47 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     const entries = batchEntries(batch, files.entries);
     if (!entries.length) continue;
     const pdfs = specTable.available ? specTablePdfs(entries) : [];
-    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking';
+    const catalogPdfs = catalogDraft.available ? specTablePdfs(entries) : [];
+    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking'
+      || catalogDraft.flow?.stage.kind === 'working' || catalogDraft.flow?.stage.kind === 'checking' || sketchBusy;
+    const sketchPhotos = sketch.available
+      ? entries.filter(entry => entry.kind === 'photo' && entry.state !== 'duplicate' && entry.state !== 'skipped') : [];
     items.push({
-      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text + pdfs.length,
+      key: batch.id, at: batch.at, order: 1,
+      tail: batch.id + intakeBatchSummary(entries).text + pdfs.length + catalogPdfs.length + sketchPhotos.length,
       node: <IntakeBatchMessage key={batch.id} batch={batch} entries={entries} working={working}
         onInsert={insertion.insert} onReread={files.reread} onBeforeChange={insertion.dismissNotice}
         onInserted={() => { focusNotice.current = true; }}
-        actions={pdfs.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
-          <button type="button" data-spec-table-start="" disabled={working || specBusy}
-            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>
+        actions={pdfs.length > 0 || catalogPdfs.length > 0 || sketchPhotos.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
+          {catalogPdfs.length > 0 && <button type="button" data-catalog-draft-start="" disabled={working || specBusy}
+            onClick={() => catalogDraft.start(batch.id, entries, active.id)}>{CATALOG_DRAFT_ACTION}</button>}
+          {pdfs.length > 0 && <button type="button" data-spec-table-start="" disabled={working || specBusy}
+            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>}
+          {sketchPhotos.length > 0 && <button type="button" data-sketch-start="" disabled={working || specBusy}
+            onClick={() => sketch.start(sketchPhotos.map(entry => entry.file), active.id)}>
+            {sketchPhotos.length === 1 ? 'Esta foto é um rascunho: criar a página' : 'Estas fotos são rascunhos: criar as páginas'}</button>}
         </div> : undefined} />,
+    });
+  }
+  const shownCatalogDraft = inActive(catalogDraft.flow) ? catalogDraft.flow : undefined;
+  if (shownCatalogDraft) {
+    items.push({
+      key: `catalog-draft:${shownCatalogDraft.at}`, at: shownCatalogDraft.at, order: 2,
+      tail: `catalog-draft:${shownCatalogDraft.id}:${shownCatalogDraft.stage.kind}`
+        + (shownCatalogDraft.stage.kind === 'working' ? `:${shownCatalogDraft.stage.step}` : ''),
+      node: <CatalogDraftMessages key={`catalog-draft:${shownCatalogDraft.at}`} controller={catalogDraft} document={snapshot.document}
+        activePageId={activePageId} />,
+    });
+  }
+  const shownSketch = inActive(sketch.flow) ? sketch.flow : undefined;
+  if (shownSketch) {
+    const sketchStage = shownSketch.stage;
+    items.push({
+      key: `sketch:${shownSketch.at}`, at: shownSketch.at, order: 2,
+      tail: `sketch:${shownSketch.id}:${sketchStage.kind}` + (sketchStage.kind === 'working'
+        ? `:${sketchStage.pages.map(page => `${page.state}${page.step ?? ''}`).join(',')}` : ''),
+      node: <SketchDraftMessages key={`sketch:${shownSketch.at}`} controller={sketch} document={snapshot.document}
+        activePageId={activePageId} sources={sketchSources} />,
     });
   }
   const shownSpecTable = inActive(specTable.flow) ? specTable.flow : undefined;
@@ -637,7 +726,10 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       {empty && <div className="ai-chat-welcome">
         <p className="ai-chat-welcome-title">O que vamos fazer neste catálogo?</p>
         <div className="ai-chat-suggestions">
+          {catalogDraft.available && <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar um catálogo inteiro a partir de PDFs</button>}
           <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar uma ficha técnica a partir de um PDF</button>
+          {sketch.available && <button type="button" data-sketch-welcome="" disabled={working || sketchBusy}
+            onClick={() => sketchPicker.current?.click()}>{`${SKETCH_ACTION} em papel (fotos)`}</button>}
           <button type="button" onClick={() => fill(SUGGESTIONS.compare)}>Comparar modelos</button>
           <button type="button" onClick={() => fill(SUGGESTIONS.cover)}>Criar uma capa e uma apresentação</button>
           {editableSelectedText && <button type="button" disabled={!!busy}
@@ -664,7 +756,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       busy={Boolean(busy)} onCancel={cancel}
       onAttach={() => filePicker.current?.click()} attachDisabled={working}
       files={files.entries} onRemoveFile={files.remove}
-      context={selectionContext} footnote={factExtraction ? FOOTNOTE_WITH_PDF_READING : FOOTNOTE} />
+      context={selectionContext} footnote={sketch.available ? FOOTNOTE_WITH_SKETCH : factExtraction ? FOOTNOTE_WITH_PDF_READING : FOOTNOTE} />
     <input ref={filePicker} type="file" multiple accept={INTAKE_ACCEPT} hidden aria-label="Escolher arquivos" tabIndex={-1}
       disabled={working}
       onChange={(event) => {
@@ -672,6 +764,13 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
         // The same file can be chosen again after it was taken out of the list.
         event.target.value = '';
         if (list.length) addFiles(list);
+      }} />
+    <input ref={sketchPicker} type="file" multiple accept={SKETCH_ACCEPT} hidden aria-label="Escolher fotos do rascunho" tabIndex={-1}
+      disabled={working || sketchBusy}
+      onChange={(event) => {
+        const list = Array.from(event.target.files ?? []);
+        event.target.value = '';
+        if (list.length) { sketch.start(list, active.id); setFollow(bump); }
       }} />
     {drop.dragging && <div className="ai-chat-drop-overlay" aria-hidden="true">Solte aqui para ler os arquivos</div>}
   </section>;

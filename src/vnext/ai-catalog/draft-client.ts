@@ -3,6 +3,8 @@ import {
   DRAFT_LIMITS, SOURCE_FILES_BUCKET, SOURCE_MIME_TYPES, sourceStoragePath, type SourceMimeType,
 } from './draft-contract';
 import { reviewExtraction, type ExtractionReview } from './extraction-review';
+import { PLAN_LIMITS, parsePlanDraftRequest, type PlanBrief } from './catalog-plan-contract';
+import { CatalogDraftPlanSchema, type CatalogDraftPlan } from './contracts';
 import type { ExtractedPdf } from './pdf-intake';
 
 /**
@@ -212,8 +214,54 @@ export async function extractFactsFromFile(client: DraftClient, input: {
   return { review, extraction };
 }
 
+/** The catalog plan as the server returned it, parsed again here; still UNTRUSTED (catalog-plan.ts checks it). */
+export interface ServerCatalogPlan {
+  readonly plan: CatalogDraftPlan;
+  readonly trimmed: number;
+  readonly model: string;
+  readonly modelVersion: string | null;
+  readonly promptVersion: string;
+  readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly estimatedUsd: number };
+  readonly ms: number;
+}
+function readCatalogPlan(data: unknown): ServerCatalogPlan | null {
+  if (!isRecord(data) || data.code !== 'OK' || !isRecord(data.plan)) return null;
+  const value = data.plan;
+  const parsed = CatalogDraftPlanSchema.safeParse(value.plan);
+  if (!parsed.success || typeof value.promptVersion !== 'string' || typeof value.model !== 'string') return null;
+  const usage = isRecord(value.usage) ? value.usage : {};
+  return {
+    plan: parsed.data, trimmed: Math.trunc(finite(value.trimmed)), model: value.model, promptVersion: value.promptVersion,
+    modelVersion: typeof value.modelVersion === 'string' ? value.modelVersion : null,
+    usage: { inputTokens: finite(usage.inputTokens), outputTokens: finite(usage.outputTokens), estimatedUsd: finite(usage.estimatedUsd) },
+    ms: finite(value.ms),
+  };
+}
+
+/**
+ * FR-70: asks the server for a catalog plan from the page texts read here and the checked facts. Never sends a
+ * credential or a file: only the bounded brief, checked with the server's own parser before it leaves.
+ */
+export async function requestCatalogPlan(client: DraftClient, brief: PlanBrief): Promise<ServerCatalogPlan> {
+  const body = { version: 1, task: 'plan_draft', brief };
+  if (!parsePlanDraftRequest(body) || JSON.stringify(body).length > PLAN_LIMITS.maxBodyChars) {
+    throw new DraftRequestError('PAYLOAD_TOO_LARGE');
+  }
+  let result: Awaited<ReturnType<DraftClient['functions']['invoke']>>;
+  try { result = await client.functions.invoke(DRAFT_FUNCTION_NAME, { body }); }
+  catch { throw new DraftRequestError('DRAFT_UNAVAILABLE'); }
+  if (result.error) throw await draftFailure(result);
+  const plan = readCatalogPlan(result.data);
+  if (!plan) throw new DraftRequestError('INVALID_REPLY');
+  return plan;
+}
+
 export type DraftReadiness =
-  | { readonly kind: 'ready'; readonly remainingMicrousd: number | null; readonly callReserveMicrousd: number | null }
+  | { readonly kind: 'ready'; readonly remainingMicrousd: number | null; readonly callReserveMicrousd: number | null;
+      /** FR-70: the deployed function knows `plan_draft` (absent: an older deploy that does not). */
+      readonly planning?: boolean;
+      /** Modo rascunho: the deployed function knows `interpret_sketch` (absent: an older deploy that does not). */
+      readonly sketching?: boolean }
   | { readonly kind: 'blocked'; readonly code: DraftClientCode };
 /** Free check (no provider call, no budget): can reading files start now? */
 export async function readDraftReadiness(client: DraftClient): Promise<DraftReadiness> {
@@ -228,7 +276,9 @@ export async function readDraftReadiness(client: DraftClient): Promise<DraftRead
   const remaining = typeof status.remainingMicrousd === 'number' ? status.remainingMicrousd : null;
   const reserve = typeof status.callReserveMicrousd === 'number' ? status.callReserveMicrousd : null;
   if (remaining !== null && reserve !== null && remaining < reserve) return { kind: 'blocked', code: 'AGENT_DAILY_BUDGET_EXCEEDED' };
-  return { kind: 'ready', remainingMicrousd: remaining, callReserveMicrousd: reserve };
+  return { kind: 'ready', remainingMicrousd: remaining, callReserveMicrousd: reserve,
+    ...(Array.isArray(status.tasks)
+      ? { planning: status.tasks.includes('plan_draft'), sketching: status.tasks.includes('interpret_sketch') } : {}) };
 }
 
 /** Plain Portuguese for every outcome, each with what to do next. No codes, no provider text. */

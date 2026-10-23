@@ -1,0 +1,196 @@
+{
+  "image": {
+    "fileName": "especificacoes.png",
+    "width": 1131,
+    "height": 1600,
+    "originalWidth": 1240,
+    "originalHeight": 1754
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/316735f8d66a812050e2c4fe4482659d4a3937265c0f6cbc9bb558852b959335.png",
+    "sha256": "316735f8d66a812050e2c4fe4482659d4a3937265c0f6cbc9bb558852b959335",
+    "mimeType": "image/png",
+    "fileName": "especificacoes.png",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "especificacoes",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "title",
+              "bbox": [
+                50,
+                62,
+                95,
+                715
+              ],
+              "normalizedBox": [
+                0.05,
+                0.062,
+                0.095,
+                0.715
+              ],
+              "text": "Especificações técnicas",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "table",
+              "bbox": [
+                151,
+                60,
+                658,
+                938
+              ],
+              "normalizedBox": [
+                0.151,
+                0.06,
+                0.658,
+                0.938
+              ],
+              "text": "característica TA-25N TA-35N TA-50N",
+              "instruction": "do PDF"
+            },
+            {
+              "id": "region-3",
+              "kind": "note",
+              "bbox": [
+                693,
+                60,
+                736,
+                935
+              ],
+              "normalizedBox": [
+                0.693,
+                0.06,
+                0.736,
+                0.935
+              ],
+              "text": "notas embaixo",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": [
+            {
+              "id": "region-2-text",
+              "source": "text",
+              "regionId": "region-2",
+              "text": "característica TA-25N TA-35N TA-50N",
+              "matches": [
+                {
+                  "value": "25",
+                  "start": 18,
+                  "end": 20
+                },
+                {
+                  "value": "35",
+                  "start": 25,
+                  "end": 27
+                },
+                {
+                  "value": "50",
+                  "start": 32,
+                  "end": 34
+                }
+              ],
+              "status": "confirmar"
+            }
+          ]
+        },
+        "dimensions": {
+          "width": 1131,
+          "height": 1600
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 463,
+          "estimatedUsd": 0.006062
+        },
+        "ms": 13287
+      }
+    },
+    "ms": 14010
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1381
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 3057
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 523
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 8323,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"especificacoes\",\n  \"regions\": [\n    {\n      \"kind\": \"title\",\n      \"bbox\": [50, 62, 95, 715],\n      \"text\": \"Especificações técnicas\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"table\",\n      \"bbox\": [151, 60, 658, 938],\n      \"text\": \"característica TA-25N TA-35N TA-50N\",\n      \"instruction\": \"do PDF\"\n    },\n    {\n      \"kind\": \"note\",\n      \"bbox\": [693, 60, 736, 935],\n      \"text\": \"notas embaixo\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "ErgGCrUGAWkUfRPz49QZVMWfdhb06Ep/05UjSxIIpWsZrBhCiIR1KtokblsZMXOWriwhdE0tzJOTlLlcubdNaO3IiEKuRRFhALuCxLeilVrW7oVxnxYfdN41OhMVTAPmVX3VroN8rKxvBug8xXTHKPWC3vmo9BvPcfC341RNrmZLhN7hRr9yaC8+dVo02mTqEwWeiDUUBKZfoZKr6SrgL+TtgOTQ5IPF6gU/3OMd3HnwT9iW/uNGRdxCcY8CNzzmmZqK9PCT8xwH0c/c510PhM7XASnDT9kgVVv1XuIggVhrRz8l9H8qTZMde3DfbX1p+74XzFKYZtl2Mroeok9DQmneVkbq/YfzY+r7QBUwXv0mf5sNxvTz83nN5s13kuMzxDzq5RMKBLS742l7cvVYOv/OmzNjNCDeoXc4aF2X2CsPni2tLJPDdMVWyG4Pa7LScDOTeRd6/7y3Qc1EpA94lRdFCjOUlXFNhoKLEkFjkwoBPgohT32INJTEzc+5g28GWtCGU4X35juBwBeT8coTfadkttUTK8Jiaa5xtaS2dF+O32t6ix9m445OHoXBUGsuKXrhHcFQOzQILH4ZNX2HoLIIargvnAytoPgQR3QoAlvSJuePWR37SnuAeseL6Sd76QDu79Hcj2i759bnTu6+C0SW3BZHZJ09pIWRs7o/cjmxycK/7C7bev+H4m18yY5QaWLmdJUAa7rAFThWU1VaxrFUvdghFDwf1uowovFG1zn4DXjHAh7Y2bIfh6wdpjeZe4TvW/EcxTFQ60V1nWf8cwBTTlxyYRy58C+3ZPIYNcr5Yc2wAOJsjGzcYCiy2xIfxC1drONP8QTysbjpwOj1mH1gwryVgeneKk8m60RUQtCvAMNypepIwh2Zto66TFSWU/gLVXnxP87cSB33Ms9QUobc+hk9K30JhkcyD+fpih03Fw/hK9BEege5fx0eD0p1z7jJxfFXIACiJqNjAVeCkBltTzvPF8Ldb5CiMaednVnE46e7uhdcysLW94TtV9PWt5fbgYXvOLy57gE/UWrL+5Vl/tjb6m90WtnKHXqvqicsdrpbCbCnA5wwPR8tTZoD49rXmG5eGmugbbw="
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 206,
+          "totalTokenCount": 2189,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 257,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "OrLaat7SDsuPytMP0IDPoAs"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 463
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 723
+    }
+  ]
+}

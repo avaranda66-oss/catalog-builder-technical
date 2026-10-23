@@ -23,6 +23,8 @@
 // Leitura de PDF pela IA (J2-lite): window.__FATHER_DRAFT__ = { answers: { "<arquivo.pdf>": <sheet> } }, definido pela
 // prova ANTES de a página carregar (addInitScript), faz o papel da função vnext-catalog-draft com um provedor
 // controlado. Sem ele, a função "não está implantada" (404), como hoje em produção.
+// Modo rascunho (j14): window.__FATHER_DRAFT__.sketches = { "<foto.jpg>": <resposta gravada de interpret_sketch> } e
+// tasks = ["extract_facts", "interpret_sketch", ...] (o que a função publicada diz saber no status).
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {
@@ -449,7 +451,13 @@ const composerClient = {
 // Leitura de PDF pela IA (J2-lite, FR-66): vnext-catalog-draft CONTROLADA. Só a resposta da IA (sheet) é da
 // prova; guardar o arquivo, conferir cada valor com o texto do próprio PDF, pendências e compilador são o código real.
 // ---------------------------------------------------------------------------------------------
-interface FatherDraftConfig { readonly answers: Readonly<Record<string, unknown>> }
+interface FatherDraftConfig {
+  readonly answers: Readonly<Record<string, unknown>>;
+  /** interpret_sketch: the recorded answer of the server for each photo (by file name). */
+  readonly sketches?: Readonly<Record<string, unknown>>;
+  /** Tasks the deployed function says it knows (status); absent: an older deploy without the list. */
+  readonly tasks?: readonly string[];
+}
 declare global { interface Window { __FATHER_DRAFT__?: FatherDraftConfig } }
 const HARNESS_USER_ID = user === 'B' ? '7c9e6679-7425-40de-944b-e07fc1f90ae7' : '0f8fad5b-d9cb-469f-a165-70867728950e';
 const draftCalls: Array<{ task: string; fileName?: string; firstPage?: number; lastPage?: number; outcome: string }> = [];
@@ -480,7 +488,15 @@ const draftClient: DraftClient = {
       }
       if (task === 'status') {
         record('OK');
-        return { data: { code: 'OK', status: { serverKey: true, budget: 'ok', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880 } }, error: null };
+        return { data: { code: 'OK', status: { serverKey: true, budget: 'ok', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880,
+          ...(config.tasks ? { tasks: [...config.tasks] } : {}) } }, error: null };
+      }
+      if (task === 'interpret_sketch' && config.sketches && request.source?.fileName) {
+        if (!request.source.path || !draftUploads.includes(request.source.path)) { record('SOURCE_NOT_FOUND'); return draftHttpFailure(404, { code: 'SOURCE_NOT_FOUND' }); }
+        const reply = config.sketches[request.source.fileName];
+        if (!reply) { record('INVALID_PROVIDER_RESPONSE'); return draftHttpFailure(502, { code: 'INVALID_PROVIDER_RESPONSE' }); }
+        record('OK');
+        return { data: reply, error: null };
       }
       if (task !== 'extract_facts' || !request.source?.fileName) { record('INVALID_REQUEST'); return draftHttpFailure(400, { code: 'INVALID_REQUEST' }); }
       if (!request.source.path || !draftUploads.includes(request.source.path)) { record('SOURCE_NOT_FOUND'); return draftHttpFailure(404, { code: 'SOURCE_NOT_FOUND' }); }

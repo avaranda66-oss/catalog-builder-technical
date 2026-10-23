@@ -1,6 +1,9 @@
 import {
-  extractFactsFromFile, readDraftReadiness, type DraftClient, type DraftClientCode, type DraftReadiness,
+  extractFactsFromFile, readDraftReadiness, requestCatalogPlan,
+  type DraftClient, type DraftClientCode, type DraftReadiness, type ServerCatalogPlan,
 } from '../draft-client';
+import type { PlanBrief } from '../catalog-plan-contract';
+import { interpretSketchFromFile, type SketchInterpretation } from '../sketch-client';
 import { DRAFT_LIMITS } from '../draft-contract';
 import type { ExtractionReview } from '../extraction-review';
 import { extractPdfText, type ExtractedPdf } from '../pdf-intake';
@@ -32,6 +35,22 @@ export interface SpecTableGateway {
   readPdf(file: File): Promise<ExtractedPdf>;
   /** Reads the chosen pages with the AI and checks every value against `pdf`. */
   extract(input: SpecTableExtractInput): Promise<ExtractionReview>;
+  /**
+   * FR-70: the AI proposes the plan of the whole catalog from the page texts and the checked facts (task
+   * `plan_draft`). Untrusted: catalog-plan.ts checks every literal. Without it the assistant offers no catalog plan.
+   */
+  plan?(brief: PlanBrief): Promise<ServerCatalogPlan>;
+  /**
+   * Modo rascunho: the AI reads one photo of a page drawn on paper (task `interpret_sketch`). The image was already
+   * made upright and at most 1600 px on its longest side here (sketch-image.ts). Untrusted: the plan is validated
+   * again and fitted to the PRESYS models (sketch-client.ts); every digit of the drawing stays "to confirm".
+   */
+  sketch?(image: SketchImageUpload): Promise<SketchInterpretation>;
+}
+export interface SketchImageUpload {
+  readonly name: string;
+  readonly type: string;
+  readonly bytes: Uint8Array;
 }
 
 /** The file's bytes (older browsers have no Blob.arrayBuffer; source-intake reads files the same way). */
@@ -74,6 +93,8 @@ export function serverSpecTableGateway(client: DraftClient, userId: string,
       });
       return review;
     },
+    plan: brief => requestCatalogPlan(client, brief),
+    sketch: image => interpretSketchFromFile(client, { userId, file: image }),
   };
 }
 

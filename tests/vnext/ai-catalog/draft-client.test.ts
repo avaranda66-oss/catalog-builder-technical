@@ -126,6 +126,11 @@ describe('readiness and plain Portuguese', () => {
     const status = (value: Record<string, unknown>) => client({ invoke: () => ({ data: { code: 'OK', status: { enabled: true,
       serverKey: true, budget: 'settled', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880, ...value } }, error: null }) });
     expect(await readDraftReadiness(status({}).value)).toEqual({ kind: 'ready', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880 });
+    // The tasks the deployed function knows: an older deploy without the list plans and reads sketches nowhere.
+    expect(await readDraftReadiness(status({ tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'] }).value))
+      .toMatchObject({ kind: 'ready', planning: true, sketching: true });
+    expect(await readDraftReadiness(status({ tasks: ['extract_facts', 'plan_draft'] }).value))
+      .toMatchObject({ kind: 'ready', planning: true, sketching: false });
     expect(await readDraftReadiness(status({ serverKey: false }).value)).toEqual({ kind: 'blocked', code: 'PROVIDER_NOT_CONFIGURED' });
     expect(await readDraftReadiness(status({ budget: 'missing' }).value)).toEqual({ kind: 'blocked', code: 'BUDGET_NOT_READY' });
     expect(await readDraftReadiness(status({ remainingMicrousd: 1 }).value)).toEqual({ kind: 'blocked', code: 'AGENT_DAILY_BUDGET_EXCEEDED' });

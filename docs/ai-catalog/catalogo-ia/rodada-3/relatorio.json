@@ -1,0 +1,1433 @@
+{
+  "generatedAt": "2026-10-23T03:45:33.976Z",
+  "file": "presys-ta-folder (4).pdf",
+  "pageCount": 20,
+  "specPages": [
+    9,
+    9
+  ],
+  "models": [
+    "TA-25N",
+    "TA-35N",
+    "TA-50N"
+  ],
+  "extraction": {
+    "summary": "Li a página 9 de presys-ta-folder (4).pdf: 36 valores conferidos no texto.",
+    "counts": {
+      "verified": 36,
+      "toCheck": 0,
+      "unverified": 0,
+      "missing": 6
+    },
+    "tokens": {
+      "input": 11841,
+      "output": 4586
+    },
+    "costUsdNow": 0.02608,
+    "pendingFacts": 0
+  },
+  "plan": {
+    "model": "gemini-3.8-flash",
+    "modelVersion": "gemini-3.8-flash",
+    "promptVersion": "catalog-plan-v3",
+    "trimmed": 1,
+    "briefChars": 36960,
+    "briefFacts": 36,
+    "shortenedPages": 0,
+    "tokens": {
+      "input": 16879,
+      "output": 10076
+    },
+    "costUsdNow": 0.05044,
+    "costUsdReserved2027": 0.100889,
+    "ms": 58894,
+    "questions": [],
+    "counts": {
+      "checked": 125,
+      "notFound": 1,
+      "rejected": 0
+    }
+  },
+  "application": {
+    "pagesCreated": 8,
+    "documentValid": true,
+    "ms": 1452,
+    "message": "Catálogo montado: 8 páginas nas páginas 1 a 8. Os campos com “A COMPLETAR” ficam para você. Use Desfazer se precisar.",
+    "oneUndoRestoresBlankCatalog": true
+  },
+  "audit": {
+    "digitRuns": 210,
+    "inPdf": 210,
+    "fixedText": 0,
+    "notInPdf": []
+  },
+  "totalCostUsdNow": 0.07652,
+  "ledger": {
+    "reserved": [
+      218880,
+      182880
+    ],
+    "settled": [
+      52157,
+      100889
+    ]
+  },
+  "steps": [
+    {
+      "step": "extract_facts",
+      "httpStatus": 200,
+      "code": "OK",
+      "ms": 31699,
+      "providerCalls": [
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 1394
+        },
+        {
+          "step": "upload-start",
+          "status": 200,
+          "ms": 2115
+        },
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 535
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 26987,
+          "usage": {
+            "promptTokenCount": 11841,
+            "candidatesTokenCount": 4586,
+            "totalTokenCount": 16427,
+            "promptTokensDetails": [
+              {
+                "modality": "IMAGE",
+                "tokenCount": 10640
+              },
+              {
+                "modality": "TEXT",
+                "tokenCount": 1201
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        },
+        {
+          "step": "delete",
+          "status": 200,
+          "ms": 653
+        }
+      ]
+    },
+    {
+      "step": "plan_draft",
+      "httpStatus": 200,
+      "code": "OK",
+      "ms": 58896,
+      "providerCalls": [
+        {
+          "step": "count",
+          "status": 200,
+          "ms": 496
+        },
+        {
+          "step": "generate",
+          "status": 200,
+          "ms": 58388,
+          "usage": {
+            "promptTokenCount": 16879,
+            "candidatesTokenCount": 10076,
+            "totalTokenCount": 26955,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16879
+              }
+            ],
+            "serviceTier": "standard"
+          },
+          "finishReason": "STOP"
+        }
+      ],
+      "requestChars": 36960
+    }
+  ],
+  "pages": [
+    {
+      "n": 1,
+      "kind": "capa",
+      "model": "P1",
+      "addedByApp": false,
+      "purpose": "Apresentação da família, série e modelos de calibradores de temperatura.",
+      "sources": [
+        "presys-ta-folder (4).pdf · páginas 1 e 9"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P1.family",
+          "status": "ok",
+          "text": "Calibradores de Temperatura",
+          "literals": []
+        },
+        {
+          "slot": "P1.series",
+          "status": "ok",
+          "text": "Série TA Avançada",
+          "literals": []
+        },
+        {
+          "slot": "P1.tagline",
+          "status": "ok",
+          "text": "Pronto para a Indústria 4.0 e DCC",
+          "literals": [
+            {
+              "text": "4.0",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 1"
+            }
+          ]
+        },
+        {
+          "slot": "P1.model",
+          "status": "ok",
+          "text": "TA-25N / TA-35N / TA-50N",
+          "literals": []
+        }
+      ],
+      "key": "pagina-1",
+      "toComplete": [],
+      "photos": [
+        "Logotipo da PRESYS",
+        "Foto principal do produto"
+      ],
+      "mayOverflow": [
+        "Modelo"
+      ]
+    },
+    {
+      "n": 2,
+      "kind": "visao_geral",
+      "model": "P2",
+      "addedByApp": false,
+      "purpose": "Visão geral sobre os calibradores de temperatura e principais características.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 2"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P2.title",
+          "status": "ok",
+          "text": "Visão Geral",
+          "literals": []
+        },
+        {
+          "slot": "P2.intro",
+          "status": "pending",
+          "text": "Os novos calibradores de temperatura TA Advanced são resultado de 20 anos de experiência na fabricação de calibradores de bloco seco. Possuem padrão interno de temperatura, calibrador para medições do dispositivo sob teste e processador interno para controle de ciclos automáticos e geração de relatórios de calibração, dispensando a instalação de software específico. Conectam-se facilmente a sistemas de metrologia ou gerenciamento de manutenção por meio de protocolo aberto e interfaces Ethernet, Wi-Fi ou USB, atendendo às diretrizes EURAMET/cg-A COMPLETAR.",
+          "message": "“EURAMET/cg-EURAMET/cg-13/V03” não foi achado em presys-ta-folder (4).pdf: ficou “A COMPLETAR” para você conferir.",
+          "literals": [
+            {
+              "text": "20",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "EURAMET/cg-EURAMET/cg-13/V03",
+              "ok": false,
+              "where": "presys-ta-folder (4).pdf"
+            }
+          ]
+        },
+        {
+          "slot": "P2.highlights-title",
+          "status": "ok",
+          "text": "Principais Características",
+          "literals": []
+        },
+        {
+          "slot": "P2.highlights",
+          "status": "ok",
+          "text": "▸ Display colorido sensível ao toque de 5.7\" polegadas.\n▸ Processador Dual Core de 1 GHz e memória Flash de 16 GB.\n▸ Alimentação elétrica em 115 ou 230 Vac, 50/60 Hz.\n▸ Comunicação Ethernet, Wi-Fi via adaptador e USB serial com protocolo SCPI.\n▸ Porta USB Host e Device integrada.\n▸ Entrada para sensor de referência externo.\n▸ Auto-calibração automática utilizando sonda de referência externa.\n▸ Configuração de rampas de temperatura.\n▸ Teste e relatório automáticos de termostatos.\n▸ Fonte de alimentação regulada para transmissores de 24 Vdc.",
+          "literals": [
+            {
+              "text": "5.7\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "1 GHz",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "16 GB",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "115",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "230 Vac",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "50/60 Hz",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "24 Vdc",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-2",
+      "toComplete": [
+        "Texto de apresentação"
+      ],
+      "photos": [
+        "Foto de detalhe"
+      ],
+      "mayOverflow": []
+    },
+    {
+      "n": 3,
+      "kind": "especificacoes",
+      "model": "P4",
+      "addedByApp": false,
+      "purpose": "Especificações técnicas dos modelos TA-25N, TA-35N e TA-50N.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 9"
+      ],
+      "specTable": true,
+      "fields": [],
+      "key": "pagina-3",
+      "toComplete": [],
+      "photos": [],
+      "mayOverflow": []
+    },
+    {
+      "n": 4,
+      "kind": "faixas_entradas",
+      "model": "P5",
+      "addedByApp": false,
+      "purpose": "Faixas elétricas, exatidões de entrada e dados gerais de operação.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 2"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P5.title",
+          "status": "ok",
+          "text": "Entradas e Sinais Elétricos",
+          "literals": []
+        },
+        {
+          "slot": "P5.general-title",
+          "status": "ok",
+          "text": "Dados Gerais",
+          "literals": []
+        },
+        {
+          "slot": "P5.ranges",
+          "status": "ok",
+          "table": {
+            "header": [
+              "Entrada ou função",
+              "Faixa",
+              "Resolução",
+              "Exatidão",
+              "Observações"
+            ],
+            "rows": [
+              {
+                "section": "Termopares"
+              },
+              [
+                "Termopar J, K, T, N, L",
+                "-",
+                "-",
+                "± 0.2 °C",
+                "Em 660 °C"
+              ],
+              [
+                "Termopar E",
+                "-",
+                "-",
+                "± 0.1 °C",
+                "Em 660 °C"
+              ],
+              [
+                "Termopar R, S, C",
+                "-",
+                "-",
+                "± 0.7 °C",
+                "Em 660 °C"
+              ],
+              [
+                "Compensação de junta fria (CJC)",
+                "-",
+                "-",
+                "± 0.2 °C",
+                "-"
+              ],
+              {
+                "section": "Termorresistências e Corrente"
+              },
+              [
+                "RTD (Pt-100, Pt-1000)",
+                "-",
+                "-",
+                "± 0.1 °C",
+                "Ligação a 2, 3 ou 4 fios"
+              ],
+              [
+                "Corrente",
+                "-1 to 24.5 mA",
+                "-",
+                "± 0.01% FS",
+                "-"
+              ]
+            ]
+          },
+          "message": "Confira se cada código está na linha certa.",
+          "literals": [
+            {
+              "text": "± 0.2 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "660 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "± 0.1 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "660 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "± 0.7 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "660 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "± 0.2 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "100",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "1000",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "± 0.1 °C",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "2",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "3",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "4",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "-1 to 24.5 mA",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "± 0.01% FS",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            }
+          ]
+        },
+        {
+          "slot": "P5.general",
+          "status": "ok",
+          "table": {
+            "header": [
+              "Característica",
+              "Valor"
+            ],
+            "rows": [
+              [
+                "Alimentação elétrica",
+                "115 ou 230 Vac, 50/60 Hz"
+              ],
+              [
+                "Display",
+                "5.7\" colorido sensível ao toque"
+              ],
+              [
+                "Processador e memória",
+                "Dual Core 1 GHz, Flash 16 GB"
+              ],
+              [
+                "Alimentação do transmissor",
+                "24 Vdc regulada"
+              ]
+            ]
+          },
+          "message": "Confira se cada código está na linha certa.",
+          "literals": [
+            {
+              "text": "115",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "230 Vac",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "50/60 Hz",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "5.7\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "1 GHz",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "16 GB",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            },
+            {
+              "text": "24 Vdc",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 2"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-4",
+      "toComplete": [],
+      "photos": [],
+      "mayOverflow": [
+        "Tabela de faixas e entradas"
+      ]
+    },
+    {
+      "n": 5,
+      "kind": "codigo_pedido",
+      "model": "P6",
+      "addedByApp": false,
+      "purpose": "Estrutura do código de pedido e opções para os calibradores.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 9"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P6.title",
+          "status": "ok",
+          "text": "Código de Pedido",
+          "literals": []
+        },
+        {
+          "slot": "P6.skeleton",
+          "status": "ok",
+          "text": "[ ] - [ ] - [ ] - [ ] - [ ]",
+          "literals": []
+        },
+        {
+          "slot": "P6.example",
+          "status": "ok",
+          "text": "TA-25N - 1 - IN01 - NH - NP",
+          "literals": [
+            {
+              "text": "1",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 9"
+            },
+            {
+              "text": "IN01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "NH",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "NP",
+              "ok": true,
+              "where": "texto sem números"
+            }
+          ]
+        },
+        {
+          "slot": "P6.options",
+          "status": "ok",
+          "table": {
+            "header": [
+              "Código",
+              "Significado"
+            ],
+            "rows": [
+              {
+                "section": "Modelo"
+              },
+              [
+                "TA-25N",
+                "Faixa de -25 °C to +155 °C"
+              ],
+              [
+                "TA-35N",
+                "Faixa de -35 °C to +155 °C"
+              ],
+              [
+                "TA-50N",
+                "Faixa de -50 °C to +155 °C"
+              ],
+              {
+                "section": "Alimentação"
+              },
+              [
+                "1",
+                "115 Vac"
+              ],
+              [
+                "2",
+                "230 Vac"
+              ],
+              {
+                "section": "Inserto Incluso"
+              },
+              [
+                "IN[ ]",
+                "Escolher da tabela de insertos"
+              ],
+              {
+                "section": "Comunicação HART"
+              },
+              [
+                "NH",
+                "Sem comunicação HART"
+              ],
+              [
+                "CH",
+                "Calibrador HART"
+              ],
+              [
+                "FH",
+                "Configurador Full-HART"
+              ],
+              {
+                "section": "Comunicação Profibus"
+              },
+              [
+                "NP",
+                "Sem comunicação Profibus"
+              ],
+              [
+                "PB",
+                "Comunicação Profibus PA"
+              ]
+            ]
+          },
+          "message": "Confira se cada código está na linha certa.",
+          "literals": [
+            {
+              "text": "-25 °C to +155 °C",
+              "ok": true,
+              "where": "valor conferido da tabela: Operating Range · TA-25N"
+            },
+            {
+              "text": "-35 °C to +155 °C",
+              "ok": true,
+              "where": "valor conferido da tabela: Operating Range · TA-35N"
+            },
+            {
+              "text": "-50 °C to +155 °C",
+              "ok": true,
+              "where": "valor conferido da tabela: Operating Range · TA-50N"
+            },
+            {
+              "text": "1",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 9"
+            },
+            {
+              "text": "115 Vac",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 9"
+            },
+            {
+              "text": "2",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 9"
+            },
+            {
+              "text": "230 Vac",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 9"
+            },
+            {
+              "text": "NH",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "CH",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "FH",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "NP",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "PB",
+              "ok": true,
+              "where": "texto sem números"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-5",
+      "toComplete": [],
+      "photos": [],
+      "mayOverflow": [
+        "Opções do código"
+      ]
+    },
+    {
+      "n": 6,
+      "kind": "fornecimento_acessorios",
+      "model": "P7",
+      "addedByApp": false,
+      "purpose": "Itens inclusos no fornecimento e acessórios sobressalentes.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 19"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P7.title",
+          "status": "ok",
+          "text": "Fornecimento e Acessórios",
+          "literals": []
+        },
+        {
+          "slot": "P7.delivery",
+          "status": "ok",
+          "text": "– 01 bolsa flexível de transporte\n– 01 extrator de inserto\n– 01 inserto escolhido\n– 01 inserto tipo copo\n– 01 frasco de esferas de aço\n– 01 cabo de alimentação\n– 01 kit de cabos de ligação\n– 01 manual técnico\n– 01 certificado de calibração rastreável",
+          "literals": [
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            }
+          ]
+        },
+        {
+          "slot": "P7.accessories-title",
+          "status": "ok",
+          "text": "Acessórios",
+          "literals": []
+        },
+        {
+          "slot": "P7.accessories",
+          "status": "ok",
+          "table": {
+            "header": [
+              "Descrição",
+              "Código de pedido"
+            ],
+            "rows": [
+              [
+                "Bolsa flexível para TA-25N e TA-35N",
+                "06.01.1031-00"
+              ],
+              [
+                "Bolsa flexível para TA-50N",
+                "06.01.1032-00"
+              ],
+              [
+                "Extrator de inserto",
+                "02.06.0085-00"
+              ],
+              [
+                "Frasco de esferas de aço",
+                "03.03.0144-00"
+              ],
+              [
+                "Kit de cabos de ligação",
+                "06.07.0025-00"
+              ],
+              [
+                "Cabo de alimentação padrão US tipo B",
+                "01.14.0100-10"
+              ],
+              [
+                "Cabo de alimentação padrão Europa universal tipo F",
+                "01.14.0089-10"
+              ]
+            ]
+          },
+          "message": "Confira se cada código está na linha certa.",
+          "literals": [
+            {
+              "text": "06.01.1031-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "06.01.1032-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "02.06.0085-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "03.03.0144-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "06.07.0025-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01.14.0100-10",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "01.14.0089-10",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-6",
+      "toComplete": [],
+      "photos": [
+        "Foto do kit fornecido"
+      ],
+      "mayOverflow": []
+    },
+    {
+      "n": 7,
+      "kind": "insertos",
+      "model": "P8",
+      "addedByApp": false,
+      "purpose": "Insertos disponíveis para TA-25N, TA-35N e TA-50N com furações e códigos.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 14"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P8.title",
+          "status": "ok",
+          "text": "Insertos de Calibração",
+          "literals": []
+        },
+        {
+          "slot": "P8.insert-1-code",
+          "status": "ok",
+          "text": "Código: IN1P",
+          "literals": [
+            {
+              "text": "IN1P",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            }
+          ]
+        },
+        {
+          "slot": "P8.insert-2-code",
+          "status": "ok",
+          "text": "Código: IN1A",
+          "literals": [
+            {
+              "text": "IN1A",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            }
+          ]
+        },
+        {
+          "slot": "P8.insert-3-code",
+          "status": "ok",
+          "text": "Código: IN1E",
+          "literals": [
+            {
+              "text": "IN1E",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            }
+          ]
+        },
+        {
+          "slot": "P8.insert-4-code",
+          "status": "ok",
+          "text": "Código: IN01",
+          "literals": [
+            {
+              "text": "IN01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            }
+          ]
+        },
+        {
+          "slot": "P8.inserts",
+          "status": "ok",
+          "table": {
+            "header": [
+              "Código",
+              "Furos",
+              "Código de pedido"
+            ],
+            "rows": [
+              [
+                "IN1P",
+                "01 x 3mm, 01 x 6mm, 01 x 1/4\", 01 x 8mm",
+                "06.04.0121-00"
+              ],
+              [
+                "IN1A",
+                "01 x 1/8\", 01 x 3/16\", 2 x 1/4\", 01 x 3/8\"",
+                "06.04.0122-00"
+              ],
+              [
+                "IN1E",
+                "06.04.0123-00",
+                ""
+              ],
+              [
+                "IN01",
+                "01 x 3/4\"",
+                "06.04.0011-00"
+              ],
+              [
+                "IN02",
+                "01 x 1/2\"",
+                "06.04.0012-00"
+              ],
+              [
+                "IN03",
+                "01 x 6.0mm e 3 x 1/4\"",
+                "06.04.0013-00"
+              ],
+              [
+                "IN04",
+                "3 x 6.0mm e 01 x 1/4\"",
+                "06.04.0014-00"
+              ],
+              [
+                "IN05",
+                "4 x 6.0mm",
+                "06.04.0015-00"
+              ],
+              [
+                "IN06",
+                "2 x 6.0mm e 2 x 1/4\"",
+                "06.04.0016-00"
+              ],
+              [
+                "IN07",
+                "01 x 6.0mm, 01 x 8.0mm e 01 x 3/8\"",
+                "06.04.0017-00"
+              ],
+              [
+                "IN09",
+                "Sem furos, para usinagem pelo cliente",
+                "06.04.0019-00"
+              ],
+              [
+                "INCL",
+                "Inserto tipo copo (para uso com microesferas de aço)",
+                "06.04.0086-00"
+              ]
+            ],
+            "notes": [
+              "Um inserto está incluso no fornecimento padrão, selecionado entre os modelos disponíveis."
+            ]
+          },
+          "message": "Confira se cada código está na linha certa.",
+          "literals": [
+            {
+              "text": "IN1P",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "3mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "6mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "1/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "8mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0121-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN1A",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "1/8\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "3/16\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "2",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "1/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "3/8\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0122-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN1E",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0123-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "3/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0011-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN02",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "1/2\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0012-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN03",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "6.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "3",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "1/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0013-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN04",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "3",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "6.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "1/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0014-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN05",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "4",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "6.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0015-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN06",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "2",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "6.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "2",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "1/4\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0016-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN07",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "6.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "8.0mm",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "01",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 19"
+            },
+            {
+              "text": "3/8\"",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0017-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "IN09",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "06.04.0019-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            },
+            {
+              "text": "INCL",
+              "ok": true,
+              "where": "texto sem números"
+            },
+            {
+              "text": "06.04.0086-00",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 14"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-7",
+      "toComplete": [],
+      "photos": [
+        "Desenho do inserto 1",
+        "Desenho do inserto 2",
+        "Desenho do inserto 3",
+        "Desenho do inserto 4"
+      ],
+      "mayOverflow": [
+        "Tabela de insertos"
+      ]
+    },
+    {
+      "n": 8,
+      "kind": "contracapa",
+      "model": "P9",
+      "addedByApp": false,
+      "purpose": "Informações institucionais da PRESYS e código do documento.",
+      "sources": [
+        "presys-ta-folder (4).pdf · página 20"
+      ],
+      "specTable": false,
+      "fields": [
+        {
+          "slot": "P9.about",
+          "status": "ok",
+          "text": "A Presys é líder em desenvolvimento e fabricação de calibradores para temperatura, pressão e sinais de processo, além de softwares de calibração, oferecendo uma solução completa para necessidades de calibração de processos. Possui laboratório acreditado conforme ISO/IEC 17025, emitindo certificados acreditados de acordo com normas internacionais.",
+          "literals": [
+            {
+              "text": "17025",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 20"
+            }
+          ]
+        },
+        {
+          "slot": "P9.document-code",
+          "status": "ok",
+          "text": "EF0585-13",
+          "literals": [
+            {
+              "text": "EF0585-13",
+              "ok": true,
+              "where": "presys-ta-folder (4).pdf · página 20"
+            }
+          ]
+        }
+      ],
+      "key": "pagina-8",
+      "toComplete": [],
+      "photos": [
+        "Logotipo da PRESYS"
+      ],
+      "mayOverflow": []
+    }
+  ]
+}

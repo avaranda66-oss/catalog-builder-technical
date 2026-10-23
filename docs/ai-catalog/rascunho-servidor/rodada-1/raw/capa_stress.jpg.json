@@ -1,0 +1,371 @@
+{
+  "image": {
+    "fileName": "capa_stress.jpg",
+    "width": 900,
+    "height": 1273,
+    "originalWidth": 900,
+    "originalHeight": 1273
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/e3c8b719ffb93602933a0beb8b67bc9b8ed6c623db54fad14327ce110295a94d.jpg",
+    "sha256": "e3c8b719ffb93602933a0beb8b67bc9b8ed6c623db54fad14327ce110295a94d",
+    "mimeType": "image/jpeg",
+    "fileName": "capa_stress.jpg",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "capa",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "logo",
+              "bbox": [
+                83,
+                144,
+                165,
+                396
+              ],
+              "normalizedBox": [
+                0.083,
+                0.144,
+                0.165,
+                0.396
+              ],
+              "text": "PRESYS",
+              "instruction": "logo PRESYS"
+            },
+            {
+              "id": "region-2",
+              "kind": "image",
+              "bbox": [
+                180,
+                116,
+                563,
+                908
+              ],
+              "normalizedBox": [
+                0.18,
+                0.116,
+                0.563,
+                0.908
+              ],
+              "text": "",
+              "instruction": "Foto do PCON-Y17"
+            },
+            {
+              "id": "region-3",
+              "kind": "callout",
+              "bbox": [
+                487,
+                574,
+                615,
+                856
+              ],
+              "normalizedBox": [
+                0.487,
+                0.574,
+                0.615,
+                0.856
+              ],
+              "text": "saída pneumática",
+              "instruction": ""
+            },
+            {
+              "id": "region-4",
+              "kind": "title",
+              "bbox": [
+                549,
+                114,
+                608,
+                477
+              ],
+              "normalizedBox": [
+                0.549,
+                0.114,
+                0.608,
+                0.477
+              ],
+              "text": "PCON-Y17",
+              "instruction": ""
+            },
+            {
+              "id": "region-5",
+              "kind": "subtitle",
+              "bbox": [
+                622,
+                110,
+                668,
+                540
+              ],
+              "normalizedBox": [
+                0.622,
+                0.11,
+                0.668,
+                0.54
+              ],
+              "text": "Controlador de pressão",
+              "instruction": ""
+            },
+            {
+              "id": "region-6",
+              "kind": "pill",
+              "bbox": [
+                681,
+                102,
+                729,
+                314
+              ],
+              "normalizedBox": [
+                0.681,
+                0.102,
+                0.729,
+                0.314
+              ],
+              "text": "0 a 200 psi",
+              "instruction": ""
+            },
+            {
+              "id": "region-7",
+              "kind": "pill",
+              "bbox": [
+                694,
+                338,
+                740,
+                547
+              ],
+              "normalizedBox": [
+                0.694,
+                0.338,
+                0.74,
+                0.547
+              ],
+              "text": "hidráulico",
+              "instruction": ""
+            },
+            {
+              "id": "region-8",
+              "kind": "pill",
+              "bbox": [
+                705,
+                569,
+                755,
+                781
+              ],
+              "normalizedBox": [
+                0.705,
+                0.569,
+                0.755,
+                0.781
+              ],
+              "text": "pneumático",
+              "instruction": ""
+            },
+            {
+              "id": "region-9",
+              "kind": "band",
+              "bbox": [
+                769,
+                78,
+                836,
+                861
+              ],
+              "normalizedBox": [
+                0.769,
+                0.078,
+                0.836,
+                0.861
+              ],
+              "text": "",
+              "instruction": "faixa azul"
+            },
+            {
+              "id": "region-10",
+              "kind": "bar",
+              "bbox": [
+                855,
+                88,
+                933,
+                833
+              ],
+              "normalizedBox": [
+                0.855,
+                0.088,
+                0.933,
+                0.833
+              ],
+              "text": "Y17 · Y18-LP · Y18-BP",
+              "instruction": ""
+            }
+          ],
+          "questions": [
+            "O elemento apontado como 'saída pneumática' deve ser mantido como callout sobre a imagem na capa final?"
+          ],
+          "confirmations": [
+            {
+              "id": "region-2-instruction",
+              "source": "instruction",
+              "regionId": "region-2",
+              "text": "Foto do PCON-Y17",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 14,
+                  "end": 16
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-4-text",
+              "source": "text",
+              "regionId": "region-4",
+              "text": "PCON-Y17",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 6,
+                  "end": 8
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-6-text",
+              "source": "text",
+              "regionId": "region-6",
+              "text": "0 a 200 psi",
+              "matches": [
+                {
+                  "value": "0",
+                  "start": 0,
+                  "end": 1
+                },
+                {
+                  "value": "200",
+                  "start": 4,
+                  "end": 7
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-10-text",
+              "source": "text",
+              "regionId": "region-10",
+              "text": "Y17 · Y18-LP · Y18-BP",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 1,
+                  "end": 3
+                },
+                {
+                  "value": "18",
+                  "start": 7,
+                  "end": 9
+                },
+                {
+                  "value": "18",
+                  "start": 16,
+                  "end": 18
+                }
+              ],
+              "status": "confirmar"
+            }
+          ]
+        },
+        "dimensions": {
+          "width": 900,
+          "height": 1273
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 2116,
+          "estimatedUsd": 0.018459
+        },
+        "ms": 20530
+      }
+    },
+    "ms": 21219
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1190
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2307
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 604
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 16425,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"capa\",\n  \"regions\": [\n    {\n      \"kind\": \"logo\",\n      \"bbox\": [83, 144, 165, 396],\n      \"text\": \"PRESYS\",\n      \"instruction\": \"logo PRESYS\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [180, 116, 563, 908],\n      \"text\": \"\",\n      \"instruction\": \"Foto do PCON-Y17\"\n    },\n    {\n      \"kind\": \"callout\",\n      \"bbox\": [487, 574, 615, 856],\n      \"text\": \"saída pneumática\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"title\",\n      \"bbox\": [549, 114, 608, 477],\n      \"text\": \"PCON-Y17\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [622, 110, 668, 540],\n      \"text\": \"Controlador de pressão\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [681, 102, 729, 314],\n      \"text\": \"0 a 200 psi\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [694, 338, 740, 547],\n      \"text\": \"hidráulico\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [705, 569, 755, 781],\n      \"text\": \"pneumático\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"band\",\n      \"bbox\": [769, 78, 836, 861],\n      \"text\": \"\",\n      \"instruction\": \"faixa azul\"\n    },\n    {\n      \"kind\": \"bar\",\n      \"bbox\": [855, 88, 933, 833],\n      \"text\": \"Y17 · Y18-LP · Y18-BP\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": [\n    \"O elemento apontado como 'saída pneumática' deve ser mantido como callout sobre a imagem na capa final?\"\n  ]\n}",
+                  "thoughtSignature": "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"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 635,
+          "totalTokenCount": 3842,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 1481,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "eLLaaqWhAaW2uMYPoa__mAQ"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 2116
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 688
+    }
+  ]
+}

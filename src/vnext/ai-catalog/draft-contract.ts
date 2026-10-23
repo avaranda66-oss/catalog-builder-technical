@@ -23,6 +23,7 @@ import {
 import { GEMINI_EXTRACTION_MODEL, geminiCostMicrousd } from './gemini-models.ts';
 import { isObj, providerFailureCode, readProviderUsage, type ComposerUsage, type Obj } from './composer-contract.ts';
 import type { DraftErrorCode, DraftErrorReason } from './draft-codes.ts';
+import type { InterpretSketchRequest } from './sketch-contract.ts';
 
 export const EXTRACTION_MODEL = GEMINI_EXTRACTION_MODEL;
 export const EXTRACTION_PROMPT_VERSION = FACT_EXTRACTION_PROMPT_VERSION_V3;
@@ -90,7 +91,7 @@ export interface ExtractFactsRequest {
   /** Products to extract, exactly as printed (empty: the model lists them, at most 6). */
   readonly models: readonly string[];
 }
-export type DraftRequest = ExtractFactsRequest | { readonly task: 'status' };
+export type DraftRequest = ExtractFactsRequest | InterpretSketchRequest | { readonly task: 'status' };
 
 /**
  * Strict request parser: exact key sets, no credential (extraction always
@@ -100,7 +101,9 @@ export type DraftRequest = ExtractFactsRequest | { readonly task: 'status' };
 export function parseDraftRequest(value: unknown): DraftRequest | null {
   if (!isObj(value) || value.version !== 1) return null;
   if (value.task === 'status') return sortedKeys(value) === 'task|version' ? { task: 'status' } : null;
-  if (value.task !== 'extract_facts' || sortedKeys(value) !== 'models|source|task|version') return null;
+  const sketch = value.task === 'interpret_sketch';
+  if (sketch ? sortedKeys(value) !== 'source|task|version'
+    : value.task !== 'extract_facts' || sortedKeys(value) !== 'models|source|task|version') return null;
   const source = value.source;
   if (!isObj(source) || sortedKeys(source) !== 'fileName|firstPage|lastPage|mimeType|pageCount|path|sha256') return null;
   const mimeType = source.mimeType;
@@ -113,6 +116,13 @@ export function parseDraftRequest(value: unknown): DraftRequest | null {
   if (!pageNumber(pageCount, DRAFT_LIMITS.maxPdfPages) || !pageNumber(firstPage, pageCount) ||
     !pageNumber(lastPage, pageCount) || firstPage > lastPage || lastPage - firstPage + 1 > DRAFT_LIMITS.maxRangePages) return null;
   if (mimeType !== 'application/pdf' && pageCount !== 1) return null;
+  if (sketch) {
+    if (mimeType === 'application/pdf' || firstPage !== 1 || lastPage !== 1) return null;
+    return { task: 'interpret_sketch', source: {
+      path: source.path, sha256: source.sha256, mimeType: mimeType as InterpretSketchRequest['source']['mimeType'],
+      fileName: source.fileName, pageCount: 1, firstPage: 1, lastPage: 1,
+    } };
+  }
   const models = value.models;
   if (!Array.isArray(models) || models.length > DRAFT_LIMITS.maxModels ||
     models.some(model => !boundedText(model, DRAFT_LIMITS.modelChars)) || new Set(models).size !== models.length) return null;
