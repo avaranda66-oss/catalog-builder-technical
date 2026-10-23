@@ -5118,6 +5118,7 @@ export function EditorWorkspace({
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
               measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
               onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
+              onShowPage={setActivePage}
               onClose={() => setAssistantOpen(false)} wide={assistantWide} onWideChange={setAssistantWide}
               canPublish={Boolean(onRequestPublication) && (!persistence || (!persistence.runtime.workspace.getSnapshot().dirty &&
                 persistence.save.phase === 'idle' && !conflictResolutionBusy))}

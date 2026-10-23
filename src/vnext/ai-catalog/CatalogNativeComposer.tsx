@@ -40,6 +40,8 @@ import type { ChatMenuSection } from './chat/ChatMenu';
 import type { SpecTableGateway } from './spec-table/spec-table-gateway';
 import { specTableActionLabel, specTablePdfs, useSpecTableDraft } from './spec-table/useSpecTableDraft';
 import { SpecTableMessages } from './spec-table/SpecTableMessages';
+import { CATALOG_DRAFT_ACTION, useCatalogDraft } from './useCatalogDraft';
+import { CatalogDraftMessages } from './DraftPreview';
 import './chat/assistant-chat.css';
 
 interface Props {
@@ -56,6 +58,8 @@ interface Props {
   activePageId?: string;
   /** Shows a table inserted from a file in the editor. */
   onShowTable?: (pageId: string, objectId: string) => void;
+  /** FR-70: opens a page in the editor (the first page of a catalog built from files). */
+  onShowPage?: (pageId: string) => void;
   /**
    * FR-03: the technical review with a hand-written JSON manifest is not on the father's screen. It stays for
    * development and the browser proofs only (the dev server), never in the published app.
@@ -147,7 +151,7 @@ const bump = (value: number) => value + 1;
  */
 export function CatalogNativeComposer({ session, documentId, ownerScope, client, onBeforeMutation, selected, selectedTable,
   measurement, activePageId, onShowTable, technicalPdfReview = import.meta.env.DEV, onClose, wide, onWideChange,
-  canPublish, onPublication, selectionLabel, factExtraction }: Props) {
+  canPublish, onPublication, selectionLabel, factExtraction, onShowPage }: Props) {
   const store = React.useMemo(() => assistantConversationStore(localStorage, documentId, ownerScope), [documentId, ownerScope]);
   const [conversations, setConversations] = React.useState<AssistantConversations>(() => store.load());
   const conversationsRef = React.useRef(conversations);
@@ -399,6 +403,15 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       setFollow(bump);
     },
   });
+  // FR-70: the whole catalog from the files of one message, as cards in this conversation.
+  const catalogDraft = useCatalogDraft({
+    gateway: factExtraction, session, activePageId, onBeforeMutation, onShowPage,
+    say: (conversationId, role, text, canUndo) => {
+      const entry = saveTurn(conversationId, role, text, 'catalog-draft');
+      if (canUndo) rememberUndo(entry);
+      setFollow(bump);
+    },
+  });
   const undoFromConversation = (entryId: string) => {
     if (undoable.get(entryId) !== session.getSnapshot().localSequence || !session.getSnapshot().canUndo) return;
     if (onBeforeMutation && !onBeforeMutation()) {
@@ -446,16 +459,30 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     const entries = batchEntries(batch, files.entries);
     if (!entries.length) continue;
     const pdfs = specTable.available ? specTablePdfs(entries) : [];
-    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking';
+    const catalogPdfs = catalogDraft.available ? specTablePdfs(entries) : [];
+    const specBusy = specTable.flow?.stage.kind === 'reading' || specTable.flow?.stage.kind === 'checking'
+      || catalogDraft.flow?.stage.kind === 'working' || catalogDraft.flow?.stage.kind === 'checking';
     items.push({
-      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text + pdfs.length,
+      key: batch.id, at: batch.at, order: 1, tail: batch.id + intakeBatchSummary(entries).text + pdfs.length + catalogPdfs.length,
       node: <IntakeBatchMessage key={batch.id} batch={batch} entries={entries} working={working}
         onInsert={insertion.insert} onReread={files.reread} onBeforeChange={insertion.dismissNotice}
         onInserted={() => { focusNotice.current = true; }}
-        actions={pdfs.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
-          <button type="button" data-spec-table-start="" disabled={working || specBusy}
-            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>
+        actions={pdfs.length > 0 || catalogPdfs.length > 0 ? <div className="ai-chat-suggestions ai-spec-start">
+          {catalogPdfs.length > 0 && <button type="button" data-catalog-draft-start="" disabled={working || specBusy}
+            onClick={() => catalogDraft.start(batch.id, entries, active.id)}>{CATALOG_DRAFT_ACTION}</button>}
+          {pdfs.length > 0 && <button type="button" data-spec-table-start="" disabled={working || specBusy}
+            onClick={() => specTable.start(batch.id, entries, active.id)}>{specTableActionLabel(pdfs.length)}</button>}
         </div> : undefined} />,
+    });
+  }
+  const shownCatalogDraft = inActive(catalogDraft.flow) ? catalogDraft.flow : undefined;
+  if (shownCatalogDraft) {
+    items.push({
+      key: `catalog-draft:${shownCatalogDraft.at}`, at: shownCatalogDraft.at, order: 2,
+      tail: `catalog-draft:${shownCatalogDraft.id}:${shownCatalogDraft.stage.kind}`
+        + (shownCatalogDraft.stage.kind === 'working' ? `:${shownCatalogDraft.stage.step}` : ''),
+      node: <CatalogDraftMessages key={`catalog-draft:${shownCatalogDraft.at}`} controller={catalogDraft} document={snapshot.document}
+        activePageId={activePageId} />,
     });
   }
   const shownSpecTable = inActive(specTable.flow) ? specTable.flow : undefined;
@@ -637,6 +664,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       {empty && <div className="ai-chat-welcome">
         <p className="ai-chat-welcome-title">O que vamos fazer neste catálogo?</p>
         <div className="ai-chat-suggestions">
+          {catalogDraft.available && <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar um catálogo inteiro a partir de PDFs</button>}
           <button type="button" disabled={working} onClick={() => filePicker.current?.click()}>Montar uma ficha técnica a partir de um PDF</button>
           <button type="button" onClick={() => fill(SUGGESTIONS.compare)}>Comparar modelos</button>
           <button type="button" onClick={() => fill(SUGGESTIONS.cover)}>Criar uma capa e uma apresentação</button>

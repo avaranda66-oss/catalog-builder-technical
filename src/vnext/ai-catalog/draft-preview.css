@@ -1,0 +1,43 @@
+/* FR-70 catalog preview in the conversation: same navy/white look and 60+ text scale as the chat (assistant-chat.css). */
+.ai-plan-steps { margin: 8px 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 15px; }
+.ai-plan-steps li { display: flex; align-items: center; gap: 8px; color: #6b7c8f; }
+.ai-plan-steps li span {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid #b9cce3; font-size: 13px; font-weight: 700;
+}
+.ai-plan-steps li[data-step-state="done"] { color: #1d5f2f; }
+.ai-plan-steps li[data-step-state="done"] span { background: #e3f3e6; border-color: #9cc9a6; }
+.ai-plan-steps li[data-step-state="current"] { color: #122c49; font-weight: 700; }
+.ai-plan-steps li[data-step-state="current"] span { background: #003f78; border-color: #003f78; color: #fff; }
+.ai-plan-pages { margin: 8px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.ai-plan-page { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 8px; border: 1px solid #e1e9f0; border-radius: 8px; }
+.ai-plan-page[data-plan-kept="nao"] { grid-template-columns: minmax(0, 1fr); opacity: 0.75; }
+.ai-plan-thumb-wrap:empty { display: none; }
+.ai-plan-thumb { width: 92px; height: 130px; border: 1px solid #c9d6e3; border-radius: 3px; background: #fff; box-shadow: 0 1px 2px rgba(18, 44, 73, 0.12); }
+.ai-plan-page h5 { margin: 0 0 2px; color: #122c49; font-size: 16px; }
+.ai-plan-purpose { margin: 0 0 4px; color: #35516e; font-size: 14px; }
+.ai-plan-source { margin: 0 0 4px; color: #5f7287; font-size: 13px; overflow-wrap: anywhere; }
+.ai-plan-fields { margin: 4px 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.ai-plan-fields > li { display: grid; gap: 2px; padding-left: 8px; border-left: 3px solid #cfe0f0; }
+.ai-plan-fields > li[data-field-status="pending"] { border-left-color: #e3b341; }
+.ai-plan-fields > li[data-field-status="rejected"] { border-left-color: #c9483f; }
+.ai-plan-field-label { color: #122c49; font-weight: 700; }
+.ai-plan-chip { justify-self: start; padding: 0 6px; border-radius: 10px; background: #e3f3e6; color: #1d5f2f; font-size: 12px; font-weight: 700; }
+.ai-plan-chip[data-field-status="pending"] { background: #fff1c9; color: #7a5a00; }
+.ai-plan-chip[data-field-status="rejected"] { background: #fbe3e1; color: #8c1d18; }
+.ai-plan-field-text { color: #1d2d3d; white-space: pre-line; overflow-wrap: anywhere; }
+.ai-plan-field-message { color: #7a5a00; }
+.ai-plan-values { font-size: 13px; color: #35516e; }
+.ai-plan-values summary { min-height: 32px; cursor: pointer; color: #003f78; }
+.ai-plan-values ul { margin: 2px 0 0; padding-left: 18px; }
+.ai-plan-values li[data-value-ok="nao"] { color: #8c1d18; }
+.ai-plan-stays { margin: 4px 0; padding-left: 18px; color: #7a5a00; font-size: 14px; }
+.ai-plan-page-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ai-plan-page-actions button { min-height: 40px; padding: 4px 12px; font-size: 14px; }
+.ai-plan-left-title { margin: 10px 0 0; color: #5f7287; font-weight: 700; }
+.ai-plan-adjust { display: grid; gap: 4px; margin-top: 10px; }
+.ai-plan-adjust textarea { min-height: 64px; padding: 6px 10px; border: 1px solid #b9cce3; border-radius: 7px; font: inherit; font-size: 16px; }
+@media (max-width: 420px) {
+  .ai-plan-page { grid-template-columns: 64px minmax(0, 1fr); }
+  .ai-plan-thumb { width: 64px; height: 90px; }
+}

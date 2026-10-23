@@ -1,6 +1,8 @@
 import {
-  extractFactsFromFile, readDraftReadiness, type DraftClient, type DraftClientCode, type DraftReadiness,
+  extractFactsFromFile, readDraftReadiness, requestCatalogPlan,
+  type DraftClient, type DraftClientCode, type DraftReadiness, type ServerCatalogPlan,
 } from '../draft-client';
+import type { PlanBrief } from '../catalog-plan-contract';
 import { DRAFT_LIMITS } from '../draft-contract';
 import type { ExtractionReview } from '../extraction-review';
 import { extractPdfText, type ExtractedPdf } from '../pdf-intake';
@@ -32,6 +34,11 @@ export interface SpecTableGateway {
   readPdf(file: File): Promise<ExtractedPdf>;
   /** Reads the chosen pages with the AI and checks every value against `pdf`. */
   extract(input: SpecTableExtractInput): Promise<ExtractionReview>;
+  /**
+   * FR-70: the AI proposes the plan of the whole catalog from the page texts and the checked facts (task
+   * `plan_draft`). Untrusted: catalog-plan.ts checks every literal. Without it the assistant offers no catalog plan.
+   */
+  plan?(brief: PlanBrief): Promise<ServerCatalogPlan>;
 }
 
 /** The file's bytes (older browsers have no Blob.arrayBuffer; source-intake reads files the same way). */
@@ -74,6 +81,7 @@ export function serverSpecTableGateway(client: DraftClient, userId: string,
       });
       return review;
     },
+    plan: brief => requestCatalogPlan(client, brief),
   };
 }
 
