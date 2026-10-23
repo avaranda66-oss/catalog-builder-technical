@@ -44,11 +44,13 @@ const PLAN: CatalogDraftPlan = {
   questions: ['Qual modelo destacar na capa?'],
 };
 
-function draftClient() {
+function draftClient(planning = true) {
   const answers = controlledAnswers().answers;
   const uploads: string[] = [];
   const invoke = vi.fn(async (_name: string, { body }: { body: { task: string; source?: { path: string; fileName: string } } }) => {
-    if (body.task === 'status') return { data: { code: 'OK', status: { serverKey: true, budget: 'ok' } }, error: null };
+    if (body.task === 'status') {
+      return { data: { code: 'OK', status: { serverKey: true, budget: 'ok', ...(planning ? { tasks: ['extract_facts', 'plan_draft'] } : {}) } }, error: null };
+    }
     if (body.task === 'plan_draft') {
       return { data: { code: 'OK', plan: { plan: PLAN, trimmed: 0, model: 'controlado', modelVersion: null, promptVersion: 'p',
         usage: { inputTokens: 1, outputTokens: 1, estimatedUsd: 0.04 }, ms: 1 } }, error: null };
@@ -60,12 +62,12 @@ function draftClient() {
   return { client: { functions: { invoke }, storage: { from: () => ({ upload }) } } as unknown as DraftClient, invoke };
 }
 
-function make() {
+function make(planning = true) {
   // Conversations are kept by catalog id, which is a UUID in the app.
   const createId = () => crypto.randomUUID();
   const doc = createCatalogDocument(createId, 'TA');
   const session = createDocumentSession(doc, { createId, templateRegistry: createPresysPageTemplateRegistry() });
-  const draft = draftClient();
+  const draft = draftClient(planning);
   const onShowPage = vi.fn();
   render(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01" client={composerClient}
     onBeforeMutation={() => true} activePageId={doc.pages[0].id} onShowPage={onShowPage}
@@ -90,6 +92,15 @@ async function openPreview() {
 }
 
 describe('"Montar catálogo a partir destes arquivos" in the chat (FR-70)', () => {
+  it('says plainly when the deployed function cannot plan yet, before sending or paying anything', async () => {
+    const { doc, session, draft } = make(false);
+    fireEvent.change(screen.getByLabelText('Escolher arquivos'), { target: { files: [new File([folderPdfBytes().slice().buffer as ArrayBuffer], FOLDER_FILE, { type: 'application/pdf' })] } });
+    fireEvent.click(await screen.findByRole('button', { name: CATALOG_DRAFT_ACTION }, { timeout: 20000 }));
+    expect(await screen.findByText(/A montagem do catálogo inteiro pela IA ainda não chegou ao servidor/)).toBeInTheDocument();
+    expect(tasks(draft.invoke)).toEqual(['status']);
+    expect(session.getSnapshot().document).toEqual(doc);
+  }, 40000);
+
   it('reads the spec pages, plans, and shows every page with where each value came from — nothing changes yet', async () => {
     const { doc, session, draft, preview } = await openPreview();
     expect(tasks(draft.invoke)).toEqual(['status', 'extract_facts', 'plan_draft']);

@@ -228,7 +228,8 @@ describe('vnext-catalog-draft tasks', () => {
     const box = sandbox();
     const result = await box.call({ version: 1, task: 'status' });
     expect(result).toMatchObject({ status: 200, json: { code: 'OK', status: { enabled: true, serverKey: true,
-      model: 'gemini-3.8-flash', budget: 'settled', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880 } } });
+      model: 'gemini-3.8-flash', budget: 'settled', remainingMicrousd: 2_500_000, callReserveMicrousd: 218_880,
+      tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'] } } });
     expect(box.fetch).not.toHaveBeenCalled();
     expect(box.rpcCalls.map(item => item.name)).toEqual(['vnext_agent_budget_status_v1']);
     const old = sandbox({ settled: false, serverKey: null });

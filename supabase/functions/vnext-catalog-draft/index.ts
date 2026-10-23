@@ -139,7 +139,9 @@ serve(async req => {
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether reading files can start.
     const budget = await ledger.remaining();
+    // `tasks` lets a newer screen know what this deployed version can do before it spends anything.
     return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, model: EXTRACTION_MODEL,
+      tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'],
       promptVersion: EXTRACTION_PROMPT_VERSION, budget: budget.ledger, remainingMicrousd: budget.remainingMicrousd,
       callReserveMicrousd: extractionReservationMicrousd() } });
   }

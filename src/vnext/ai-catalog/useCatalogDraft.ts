@@ -34,6 +34,8 @@ export type CatalogDraftStep = typeof CATALOG_DRAFT_STEPS[number]['id'];
 /** "Desfazer" stays on the card this long after Aplicar (it stays in the conversation and in the editor after). */
 export const UNDO_WINDOW_MS = 30_000;
 const UNCHANGED = ' Nada foi alterado no catálogo.';
+export const NOT_DEPLOYED = 'A montagem do catálogo inteiro pela IA ainda não chegou ao servidor. Por enquanto, use '
+  + '“Montar tabela de especificações” ou monte as páginas à mão; o administrador pode atualizar o servidor.' + UNCHANGED;
 
 export interface CatalogDraftPlanned {
   readonly files: readonly SpecTableFile[];
@@ -120,6 +122,8 @@ export function useCatalogDraft({ gateway, session, activePageId, onBeforeMutati
       update(id, { kind: 'blocked', message: draftErrorMessage(new DraftRequestError(readiness.code)) });
       return;
     }
+    // An older deployed function reads PDFs but cannot plan: say so before anything is sent or paid.
+    if (readiness.planning !== true) { update(id, { kind: 'blocked', message: NOT_DEPLOYED }); return; }
     const files: SpecTableFile[] = [];
     for (const [index, entry] of specTablePdfs(entries).entries()) {
       let pdf: ExtractedPdf;

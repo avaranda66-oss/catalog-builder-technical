@@ -3,10 +3,10 @@ import { webcrypto } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCatalogDocument, createDocumentSession, type DocumentSession } from '@/vnext/application';
 import { CatalogDocumentSchema, type CatalogDocument, type Page, type TableObject } from '@/vnext/domain';
-import { TO_FILL } from '@/vnext/library/presys-archetypes';
+import { PRESYS_FOLDER_SEQUENCE, TO_FILL, presysArchetype } from '@/vnext/library/presys-archetypes';
 import { createPresysPageTemplateRegistry } from '@/vnext/library/presys-ta25n-starter';
 import { createStaticPageTemplateRegistry } from '@/vnext/application/template-registry';
-import { parsePlanDraftRequest, planToken } from '@/vnext/ai-catalog/catalog-plan-contract';
+import { PLAN_PAGE_KINDS, parsePlanDraftRequest, planToken } from '@/vnext/ai-catalog/catalog-plan-contract';
 import { CatalogDraftPlanSchema, type CatalogDraftPlan } from '@/vnext/ai-catalog/contracts';
 import {
   buildPlanBrief, catalogPlanEntries, checkCatalogPlan, defaultSelection, reviewPlanPages, type PlanSourceFile,
@@ -53,6 +53,17 @@ async function setAndFacts() {
 function planOf(pages: CatalogDraftPlan['pages'], literals: CatalogDraftPlan['literals'], questions: string[] = []): CatalogDraftPlan {
   return CatalogDraftPlanSchema.parse({ title: 'Série TA', pages, literals, questions });
 }
+
+describe('PLAN_PAGE_KINDS (the Edge copy of the PRESYS models)', () => {
+  it('names only slots the archetypes declare, with the same kind, in the folder order', () => {
+    for (const kind of PLAN_PAGE_KINDS) {
+      const slots = new Map(presysArchetype(kind.archetype).slots.map(slot => [slot.id, slot.kind]));
+      for (const text of kind.texts) expect([kind.kind, text.slot, slots.get(text.slot)]).toEqual([kind.kind, text.slot, 'text']);
+      for (const table of kind.tables) expect([kind.kind, table.slot, slots.get(table.slot)]).toEqual([kind.kind, table.slot, 'table']);
+    }
+    expect([...new Set(PLAN_PAGE_KINDS.map(kind => kind.archetype))]).toEqual([...new Set(PRESYS_FOLDER_SEQUENCE)]);
+  });
+});
 
 describe('buildPlanBrief: what goes to plan_draft', () => {
   it('sends the page texts and only the facts checked against the PDF, in the shape the server accepts', async () => {
@@ -298,6 +309,26 @@ describe('aplicar plano de páginas: the whole catalog in ONE Desfazer', () => {
     session.execute({ type: 'document.rename', title: 'Outro nome' });
     expect(undoPagePlan(session, outcome.applied)).toBe(false);
     expect(session.getSnapshot().document.pages).toEqual(document.pages);
+  });
+
+  it('is the door the Modo rascunho screen uses too: the PCON cover (C1) and a filled table on a model page', () => {
+    const session = blankSession();
+    const before = session.getSnapshot().document;
+    const compiled = compilePagePlan(before, [
+      { kind: 'template', key: 'capa', template: 'C1', fills: { 'C1.titulo': { kind: 'text', text: 'Controlador de pressão' },
+        'C1.modelo-1': { kind: 'text', text: 'PCON-Y17' } } },
+      { kind: 'template', key: 'acessorios', template: 'P7', fills: { 'P7.accessories': { kind: 'table', header: ['Descrição', 'Código de pedido'],
+        rows: [['Kit de cabos', '06.07.0025-00']] } } },
+    ], { transactionId: 'rascunho-1' });
+    const outcome = applyPagePlan(session, compiled);
+    expect(outcome.ok).toBe(true);
+    const [cover, accessories] = session.getSnapshot().document.pages;
+    expect(plainTexts(cover)).toEqual(expect.arrayContaining(['Controlador de pressão', 'PCON-Y17']));
+    const table = accessories.objects.find((object): object is TableObject => object.type === 'table')!;
+    expect(table.table.rows).toHaveLength(2);
+    expect(outcome.ok && outcome.applied.pagesByKey).toEqual({ capa: [cover.id], acessorios: [accessories.id] });
+    expect(session.undo().ok).toBe(true);
+    expect(session.getSnapshot().document).toEqual(before);
   });
 
   it('reads each page as it will be applied: fields to complete, photos to choose, text that may not fit', async () => {
