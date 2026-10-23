@@ -34,7 +34,12 @@
 .ai-sketch-confirm { display: grid; gap: 4px; padding: 6px 8px; border-radius: 7px; background: #fff8e1; }
 .ai-sketch-confirm[data-sketch-confirm="conferido"] { background: #e9f5ec; }
 .ai-sketch-confirm p { margin: 0; color: #1d2d3d; }
-.ai-sketch-confirm button { justify-self: start; min-height: 40px; padding: 4px 12px; font-size: 15px; }
+.ai-sketch-confirm button {
+  justify-self: start; min-height: 40px; padding: 4px 14px; border: 1px solid var(--vnext-primary, #003f78); border-radius: 8px;
+  background: #fff; color: var(--vnext-primary, #003f78); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.ai-sketch-confirm button:hover { background: var(--vnext-accent-surface, #eef6fc); }
+.ai-sketch-confirm button[aria-pressed="true"] { border-color: #9cc9a6; color: #1d5f2f; font-weight: 600; }
 .ai-sketch-confirm small { color: #7a5a00; font-size: 13px; }
 .ai-sketch-digit { padding: 0 2px; border-radius: 3px; background: #ffd54f; color: #3d2c00; font-weight: 700; }
 .ai-sketch-help { margin: 0; color: #35516e; font-size: 14px; }

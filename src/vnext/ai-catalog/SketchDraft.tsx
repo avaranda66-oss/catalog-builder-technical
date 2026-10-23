@@ -84,7 +84,7 @@ function SketchPhoto({ page, active }: { readonly page: ReadySketchPage; readonl
         </span>;
       })}
     </div>
-    <figcaption>{`${plan.regions.length} áreas entendidas pela IA. Os números da foto são os da lista ao lado.`}</figcaption>
+    <figcaption>{`${plan.regions.length} áreas entendidas pela IA. Os números na foto são os mesmos da lista abaixo.`}</figcaption>
   </figure>;
 }
 
