@@ -6,7 +6,7 @@ import { LibraryNavigationNotice } from './editor/LibraryNavigationNotice';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import type { SpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
 import { SKETCH_ACCEPT } from '../ai-catalog/useSketchDraft';
-import { FolderOpen, Layers, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
+import { BookmarkPlus, FolderOpen, Layers, Plus, Redo2, Save as SaveIcon, Undo2 } from 'lucide-react';
 import { projectEditableRichText, projectImageExpectedState, type ApplicationAction, type CellPropertyPatch, type CellStylePatch, type DocumentSession, type FrameU, type ImageExpectedState } from '../application';
 import {
   mmToU,
@@ -168,6 +168,11 @@ import { TextEditToolbar } from './editor/TextEditToolbar';
 import { SIDE_PROPERTIES_PANEL_ID, SidePanelColumn } from './editor/SidePanelTabs';
 import { AssistantDock, assistantSelectionLabel, useAssistantWide } from './editor/AssistantDock';
 import { LIBRARY_BUTTON_LABEL } from './catalog-navigation';
+import { ARSENAL_PANEL_ID, ArsenalPanel, type ArsenalInsertedEvent } from './editor/arsenal/ArsenalPanel';
+import { ArsenalSaveDialog } from './editor/arsenal/ArsenalSaveDialog';
+import {
+  arsenalSaveRequestForSelection, createSessionInsertionPort, type ArsenalEditorRuntime, type ArsenalSaveRequest,
+} from './editor/arsenal/arsenal-runtime';
 
 type EditorSelectionState = { activePageId: string; selectedObjectIds: readonly string[]; mode: 'select' | 'text-edit' | 'table-grid' | 'cell-edit' };
 type InspectorDraft = { x: string; y: string; width: string; height: string };
@@ -335,6 +340,7 @@ export function EditorWorkspace({
   locateRequest,
   demoAssets = false,
   simpleByDefault = false,
+  arsenal,
 }: {
   session: DocumentSession;
   composerClient?: NativeComposeFunctionsClient;
@@ -348,6 +354,8 @@ export function EditorWorkspace({
   onRequestPublication?: () => void;
   /** "Corrigir este item" from the publication review: go to the page and select the object or cell. */
   locateRequest?: EditorLocateRequest;
+  /** Onda 4.5: the team's saved models ("Arsenal"); without it the arsenal buttons are not shown. */
+  arsenal?: ArsenalEditorRuntime;
 }) {
   const snapshot = useDocumentSession(session);
   const conflictResolutionCoordinator = persistence?.runtime.conflictResolutionCoordinator;
@@ -412,6 +420,13 @@ export function EditorWorkspace({
   const [inspectorDetailsOpen, setInspectorDetailsOpen] = React.useState(!simpleByDefault);
   const [tableInspectorAdvancedOpen, setTableInspectorAdvancedOpen] = React.useState(!simpleByDefault);
   const [pageReuseOpen, setPageReuseOpen] = React.useState(!simpleByDefault);
+  // Onda 4.5: the "Arsenal" takes the place of "Propriedades" while it is open; "Guardar no arsenal…" opens a dialog.
+  const [arsenalOpen, setArsenalOpen] = React.useState(false);
+  const [arsenalSave, setArsenalSave] = React.useState<{
+    readonly request: ArsenalSaveRequest; readonly document: CatalogDocument; readonly returnFocus: HTMLElement | null;
+  } | null>(null);
+  const [arsenalRefresh, setArsenalRefresh] = React.useState(0);
+  React.useEffect(() => { if (assistantOpen) setArsenalOpen(false); }, [assistantOpen]);
   // Modo rascunho: photos chosen under "Adicionar página" go to the assistant, which reads them there.
   const [sketchRequest, setSketchRequest] = React.useState<{ readonly at: number; readonly files: readonly File[] }>();
   const sketchPhotos = React.useRef<HTMLInputElement>(null);
@@ -2828,7 +2843,33 @@ export function EditorWorkspace({
     controller.cancel('superseded');
     runReorder(objectId, targetIndex);
   };
+  const prepareForArsenal = () => {
+    if (!prepareAuthoringForContextChangeRef.current()) return false;
+    controller.cancel('superseded');
+    return true;
+  };
+  const toggleArsenal = () => {
+    if (arsenalOpen) { setArsenalOpen(false); return; }
+    if (!prepareForArsenal()) return;
+    setAssistantOpen(false);
+    setArsenalOpen(true);
+  };
+  const requestArsenalSave = (request: ArsenalSaveRequest | undefined, trigger: HTMLElement | null) => {
+    if (!arsenal || !request || !prepareForArsenal()) return;
+    setArsenalSave({ request, document: session.getSnapshot().document, returnFocus: trigger });
+  };
+  /** After "Usar": show the page that received the model and select what entered (blocks and tables). */
+  const showArsenalInsertion = ({ preset, result, message }: ArsenalInsertedEvent) => {
+    if (result.pageId !== activePageIdRef.current) setActivePage(result.pageId);
+    if (preset.kind === 'block' || preset.kind === 'table') {
+      const page = session.getSnapshot().document.pages.find((entry) => entry.id === result.pageId);
+      const ids = result.objectIds.filter((objectId) => page?.objects.some((object) => object.id === objectId));
+      if (ids.length > 0) setEditorState((current) => ({ ...current, activePageId: result.pageId, selectedObjectIds: ids, mode: 'select' }));
+    }
+    setStatusMessage(successNotice(message));
+  };
   const showLayers = () => {
+    setArsenalOpen(false);
     setAssistantOpen(false);
     setLayersOpen(true);
     queueMicrotask(() => {
@@ -4215,7 +4256,7 @@ export function EditorWorkspace({
   };
   const goToIssue = useIssueNavigation({ document, request: locateRequest, prepare: () => prepareAuthoringForContextChangeRef.current(),
     // FR-17: a problem chosen on purpose shows "Propriedades", where its list opens (the assistant stays mounted).
-    locate: (target) => { setAssistantOpen(false); locateLayoutDiagnostic(target); },
+    locate: (target) => { setAssistantOpen(false); setArsenalOpen(false); locateLayoutDiagnostic(target); },
     showPage: setActivePage, openDiagnostics: () => setDiagnosticsOpen(true), announce: setStatusMessage,
     selectedObjectId, selectedHasProblems: projectedSelectedDiagnostics.length > 0 });
 
@@ -4227,6 +4268,7 @@ export function EditorWorkspace({
       data-simple-by-default={simpleByDefault ? 'true' : undefined}
       data-assistant-open={assistantOpen ? 'true' : undefined}
       data-assistant-wide={assistantOpen && assistantWide ? 'true' : undefined}
+      data-arsenal-open={arsenalOpen ? 'true' : undefined}
       data-active-page-id={selectedPage.id}
       data-editor-mode={editorState.mode}
       onPointerDownCapture={handleTextEditPointerDownCapture}
@@ -4294,7 +4336,8 @@ export function EditorWorkspace({
         <PagePanel pages={document.pages} currentPageId={selectedPage.id} session={session}
           prepareForChange={() => { if (!prepareAuthoringForContextChangeRef.current()) return false; controller.cancel('superseded'); return true; }}
           onSelectPage={setActivePage} onAddPage={addPage} onStatus={(message) => setStatusMessage(withSettleNotice(message))}
-          thumbnails={{ document, assetUrls: persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS }}>
+          thumbnails={{ document, assetUrls: persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS }}
+          onSaveToArsenal={arsenal ? (pageId, trigger) => requestArsenalSave({ source: { kind: 'page', pageId } }, trigger) : undefined}>
           {simpleByDefault && (
             <button
               type="button"
@@ -4306,6 +4349,12 @@ export function EditorWorkspace({
             >
               {pageReuseOpen ? 'Ocultar modelos' : 'Usar modelo…'}
             </button>
+          )}
+          {arsenal && (
+            <button type="button" className="vnext-page-reuse-toggle" data-editor-action="open-arsenal"
+              aria-controls={ARSENAL_PANEL_ID} aria-expanded={arsenalOpen}
+              title="Capas, tabelas, cabeçalhos, rodapés, páginas e estilos guardados pela equipe (usar não gasta IA)"
+              onClick={toggleArsenal}>{arsenalOpen ? 'Ocultar arsenal' : 'Arsenal…'}</button>
           )}
           {simpleByDefault && factExtraction?.sketch && <>
             <button type="button" className="vnext-page-reuse-toggle" data-editor-action="page-from-sketch"
@@ -4344,6 +4393,8 @@ export function EditorWorkspace({
               <button type="button" data-editor-action="add-table" onClick={() => insertObject('table')}>{simpleByDefault ? 'Tabela' : 'Adicionar tabela'}</button>
               <button type="button" className="vnext-more-options" data-editor-action="new-table-size" aria-expanded={newTableSizeOpen} aria-controls="vnext-new-table-size" onClick={() => setNewTableSizeOpen((open) => !open)}>Tamanho da nova tabela</button>
               <button type="button" data-editor-action="paste-table-from-excel" aria-expanded={pasteTableAreaOpen} aria-controls="vnext-paste-table-area" onClick={() => setPasteTableAreaOpen((open) => !open)}>Colar tabela do Excel</button>
+              {arsenal && <button type="button" data-editor-action="open-arsenal-toolbar" aria-controls={ARSENAL_PANEL_ID} aria-expanded={arsenalOpen}
+                onClick={toggleArsenal}>Arsenal</button>}
               {(!simpleByDefault || selectedObjects.length > 0) && (
                 <>
                   <button type="button" data-editor-action="duplicate" disabled={selectedObjects.length === 0 || selectedHasLockedClosure} onClick={duplicateSelected}>Duplicar</button>
@@ -4606,6 +4657,11 @@ export function EditorWorkspace({
                                 onGridCommand={(command) => {
                                   if (editorState.mode === 'table-grid') runGridCommand(command);
                                 }}
+                                menuExtras={arsenal ? [{
+                                  id: 'save-to-arsenal', label: 'Guardar tabela no arsenal…',
+                                  onSelect: () => requestArsenalSave({ source: { kind: 'table', objectId: object.id }, styleObjectId: object.id },
+                                    globalThis.document.querySelector<HTMLElement>('[data-table-grid-overlay]')),
+                                }] : undefined}
                                 renderCellEditor={(cell) => cellDraft && (
                                   <CellInlineEditor draft={cellDraft} draftRef={cellDraftRef} fieldRef={cellEditorFieldRef} cell={cell}
                                     onDraftChange={notifyCellDraftChanged} onCommit={commitCellEditAndMove} onCancel={() => cancelCellEdit()} />
@@ -4647,8 +4703,8 @@ export function EditorWorkspace({
         </main>
 
         {/* FR-17: the right column shows "Propriedades" or "Assistente", chosen by the tabs on top. */}
-        <SidePanelColumn showTabs={simpleByDefault} active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')}>
-        <aside className="vnext-info" id={SIDE_PROPERTIES_PANEL_ID} aria-label="Propriedades do objeto" hidden={simpleByDefault && assistantOpen}>
+        <SidePanelColumn showTabs={simpleByDefault && !arsenalOpen} active={assistantOpen ? 'assistant' : 'properties'} onChange={(panel) => setAssistantOpen(panel === 'assistant')}>
+        <aside className="vnext-info" id={SIDE_PROPERTIES_PANEL_ID} aria-label="Propriedades do objeto" hidden={(simpleByDefault && assistantOpen) || arsenalOpen}>
           <span className="vnext-info-kicker">{simpleByDefault ? 'Propriedades' : 'Inspector'}</span>
           <h2>{selectedObject
             ? simpleByDefault
@@ -4671,6 +4727,16 @@ export function EditorWorkspace({
                   : selectedObject.type === 'table' ? 'Use Editar tabela para alterar células, linhas e colunas. O título e a aparência ficam aqui.'
                     : 'Arraste na página para mover. Use as alças para mudar o tamanho.'}
             </p>
+          )}
+          {arsenal && selectedObjects.length > 0 && editorState.mode === 'select' && (
+            <div className="vnext-arsenal-save-action" data-arsenal-save-selection="">
+              <button type="button" data-editor-action="save-selection-to-arsenal"
+                title="Guarda o que está selecionado para a equipe usar de novo em qualquer catálogo"
+                onClick={(event) => requestArsenalSave(arsenalSaveRequestForSelection(selectedPage.id, selectedObjects), event.currentTarget)}>
+                <BookmarkPlus size={16} aria-hidden="true" />
+                {selectedTableObject ? 'Guardar tabela no arsenal…' : 'Guardar no arsenal…'}
+              </button>
+            </div>
           )}
           {simpleByDefault && persistence && (persistence.save.phase === 'unavailable' || persistence.save.phase === 'ambiguous') && (
             <p className="vnext-status" data-tone="warning" role="alert" data-save-guidance="">
@@ -5154,6 +5220,15 @@ export function EditorWorkspace({
             />
           </AssistantDock>
         )}
+        {arsenal && (
+          <ArsenalPanel open={arsenalOpen} runtime={arsenal} document={document}
+            assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS}
+            currentPageId={selectedPage.id} selectedObjects={selectedObjects}
+            createPort={() => createSessionInsertionPort(session, arsenal)}
+            prepare={prepareForArsenal} refreshKey={arsenalRefresh}
+            onInserted={showArsenalInsertion} onMessage={setStatusMessage}
+            onClose={() => setArsenalOpen(false)} />
+        )}
         </SidePanelColumn>
       </div>
       <EditorDiagnosticsProbe
@@ -5166,6 +5241,17 @@ export function EditorWorkspace({
     {/* FR-43: next to the shell, not inside it, so the shell's key and pointer handlers never act on the dialog. */}
     <SaveConflictDialog save={persistence?.save} documentTitle={document.title} state={conflictResolutionState}
       resolution={persistence?.runtime.conflictResolutionCoordinator} />
+    {/* Onda 4.5: next to the shell, like the conflict dialog, so the editor's keys never act behind it. */}
+    {arsenal && arsenalSave && (
+      <ArsenalSaveDialog runtime={arsenal} document={arsenalSave.document} request={arsenalSave.request}
+        assetUrls={persistence?.assetUrls ?? W2C_DEMO_ASSET_URLS} returnFocus={arsenalSave.returnFocus}
+        onClose={() => setArsenalSave(null)}
+        onSaved={(_preset, message) => {
+          setArsenalSave(null);
+          setArsenalRefresh((value) => value + 1);
+          setStatusMessage(successNotice(message));
+        }} />
+    )}
     {persistence && <PhotoLoadingAnnouncer runtime={persistence.runtime} />}
     </>
   );

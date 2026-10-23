@@ -15,6 +15,7 @@ import { PublicationReview } from './PublicationReview';
 import type { PublicationSource } from '../publication/review';
 import type { EditorLocateRequest } from './editor/use-issue-navigation';
 import { publicationWaitingMessage } from './publication-diagnostic-presentation';
+import type { ArsenalEditorRuntime } from './editor/arsenal/arsenal-runtime';
 
 function createBrowserId(): string {
   if (!globalThis.crypto?.randomUUID) throw new Error('Secure UUID generation is unavailable');
@@ -33,6 +34,8 @@ export interface VNextAppProps {
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
   getPublicationSource?: () => PublicationSource | undefined;
+  /** Onda 4.5: the team's saved models; the editor shows "Arsenal" only when it is given. */
+  arsenal?: ArsenalEditorRuntime;
 }
 
 function RuntimeWorkspace({
@@ -45,6 +48,7 @@ function RuntimeWorkspace({
   translation,
   onOpenTranslatedCopy,
   getPublicationSource,
+  arsenal,
 }: {
   runtime: VNextPersistenceRuntime;
   assetBridge?: AssetPersistenceBridge;
@@ -56,6 +60,7 @@ function RuntimeWorkspace({
   translation?: TranslationReviewCoordinator;
   onOpenTranslatedCopy?: (catalogId: string) => void;
   getPublicationSource?: () => PublicationSource | undefined;
+  arsenal?: ArsenalEditorRuntime;
 }) {
   const [translationOpen, setTranslationOpen] = React.useState(false);
   const [publicationOpen, setPublicationOpen] = React.useState(false);
@@ -99,6 +104,7 @@ function RuntimeWorkspace({
           composerClient={composerClient}
           factExtraction={factExtraction}
           simpleByDefault={simpleByDefault}
+          arsenal={arsenal}
           onRequestLibrary={onRequestLibrary}
           onRequestTranslation={translation ? () => setTranslationOpen(true) : undefined}
           onRequestPublication={getPublicationSource ? () => setPublicationOpen(true) : undefined}
@@ -144,18 +150,18 @@ function RuntimeWorkspace({
   );
 }
 
-function InMemoryWorkspace({ suppliedSession, simpleByDefault }: { suppliedSession?: DocumentSession; simpleByDefault?: boolean }) {
+function InMemoryWorkspace({ suppliedSession, simpleByDefault, arsenal }: { suppliedSession?: DocumentSession; simpleByDefault?: boolean; arsenal?: ArsenalEditorRuntime }) {
   const sessionRef = React.useRef<DocumentSession | null>(null);
   if (!suppliedSession && !sessionRef.current) {
     sessionRef.current = createDocumentSession(createW2CDemoDocument(createBrowserId), { createId: createBrowserId, templateRegistry: createStaticPageTemplateRegistry([W2E_PAGE_TEMPLATE]) });
   }
   const session = suppliedSession ?? sessionRef.current;
   if (!session) throw new Error('VNext document session unavailable');
-  return <EditorWorkspace session={session} demoAssets simpleByDefault={simpleByDefault} />;
+  return <EditorWorkspace session={session} demoAssets simpleByDefault={simpleByDefault} arsenal={arsenal} />;
 }
 
-export function VNextApp({ session: suppliedSession, runtime, assetBridge, composerClient, factExtraction, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource }: VNextAppProps = {}) {
+export function VNextApp({ session: suppliedSession, runtime, assetBridge, composerClient, factExtraction, simpleByDefault, onRequestLibrary, translation, onOpenTranslatedCopy, getPublicationSource, arsenal }: VNextAppProps = {}) {
   return runtime
-    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} composerClient={composerClient} factExtraction={factExtraction} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} />
-    : <InMemoryWorkspace suppliedSession={suppliedSession} simpleByDefault={simpleByDefault} />;
+    ? <RuntimeWorkspace runtime={runtime} assetBridge={assetBridge} composerClient={composerClient} factExtraction={factExtraction} simpleByDefault={simpleByDefault} onRequestLibrary={onRequestLibrary} translation={translation} onOpenTranslatedCopy={onOpenTranslatedCopy} getPublicationSource={getPublicationSource} arsenal={arsenal} />
+    : <InMemoryWorkspace suppliedSession={suppliedSession} simpleByDefault={simpleByDefault} arsenal={arsenal} />;
 }

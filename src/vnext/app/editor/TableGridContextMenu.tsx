@@ -3,12 +3,20 @@ import { createPortal } from 'react-dom';
 import type { TableGridCommand, TableGridMenuModel } from '../../editor/table-grid-commands';
 import './TableGridContextMenu.css';
 
+/** Onda 4.5: an entry that acts on the whole table, shown after the grid commands ("Guardar tabela no arsenal…"). */
+export interface TableGridMenuExtra {
+  readonly id: string;
+  readonly label: string;
+  onSelect(): void;
+}
+
 export interface TableGridContextMenuProps {
   /** Where the menu opens, in viewport px (the right-click point). */
   readonly x: number;
   readonly y: number;
   readonly model: TableGridMenuModel;
   onCommand(command: TableGridCommand): void;
+  readonly extras?: readonly TableGridMenuExtra[];
   /** `restoreFocus` is true when the person closed it from the keyboard. */
   onClose(restoreFocus: boolean): void;
 }
@@ -54,7 +62,7 @@ const MENU_MARGIN_PX = 8;
  * FR-34 (slice 2A) — right-click menu of the table grid. It is drawn on the page body, outside the zoomed page, so
  * it always has the same readable size. Arrow keys move, Enter chooses, Esc closes.
  */
-export function TableGridContextMenu({ x, y, model, onCommand, onClose }: TableGridContextMenuProps) {
+export function TableGridContextMenu({ x, y, model, onCommand, extras = [], onClose }: TableGridContextMenuProps) {
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = React.useState({ left: x, top: y });
   const entries = menuEntries(model);
@@ -145,6 +153,23 @@ export function TableGridContextMenu({ x, y, model, onCommand, onClose }: TableG
             }}
           >
             {entry.label}
+          </button>
+        </React.Fragment>
+      ))}
+      {extras.map((extra, index) => (
+        <React.Fragment key={extra.id}>
+          {index === 0 && entries.length > 0 && <div role="separator" className="vnext-table-grid-menu-separator" />}
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            data-table-grid-extra={extra.id}
+            onClick={() => {
+              onClose(false);
+              extra.onSelect();
+            }}
+          >
+            {extra.label}
           </button>
         </React.Fragment>
       ))}
