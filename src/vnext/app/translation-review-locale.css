@@ -35,3 +35,12 @@
 }
 .vnext-translation-center .vnext-translation-languages-compact > strong { color: var(--vnext-text); overflow-wrap: anywhere; }
 .vnext-translation-center .vnext-translation-review-suggestions-summary { display: block; font-size: 13px; color: var(--vnext-text-muted, var(--vnext-text)); }
+
+/* FR-85/FR-87 · no original, o que fica igual na tradução aparece destacado; atalho para o próximo trecho com aviso. */
+.vnext-translation-center .vnext-translation-keep {
+  border-radius: 3px; background: var(--vnext-accent-surface, var(--vnext-surface)); color: inherit; font-weight: 600; padding: 0 2px;
+}
+.vnext-translation-center .vnext-translation-next-attention { flex: none; align-self: center; min-height: 44px; font-size: 15px; }
+@media (max-width: 640px) {
+  .vnext-translation-center .vnext-translation-next-attention { align-self: stretch; }
+}

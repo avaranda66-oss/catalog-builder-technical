@@ -12,16 +12,14 @@
  */
 
 import type { LocaleFormatTargetLocale } from './locale-number-format';
+import {
+  PRESYS_GLOSSARY_TERMS, PRESYS_KNOWN_MISSPELLINGS, escapeGlossaryRegExp, glossaryTermPattern, normalizeGlossaryText,
+  type PresysGlossaryTerm,
+} from './presys-glossary';
 
 export type GlossaryLocale = 'pt-BR' | LocaleFormatTargetLocale;
 
-export interface GlossaryTerm {
-  readonly 'pt-BR': string;
-  readonly 'en-US': string;
-  readonly 'es-ES': string;
-  /** Formas que a tradução costuma usar no lugar do termo esperado (para oferecer a troca). */
-  readonly alternates?: Partial<Record<LocaleFormatTargetLocale, readonly string[]>>;
-}
+export type GlossaryTerm = PresysGlossaryTerm;
 
 export interface GlossaryHint {
   readonly sourceTerm: string;
@@ -38,56 +36,9 @@ export interface KnownMisspelling {
   readonly index: number;
 }
 
-const TERMS: readonly GlossaryTerm[] = Object.freeze([
-  { 'pt-BR': 'Faixa de Operação', 'en-US': 'Operating Range', 'es-ES': 'Rango de Operación',
-    alternates: { 'en-US': ['Operation Range', 'Operational Range', 'Working Range'], 'es-ES': ['Rango Operativo', 'Rango de Funcionamiento', 'Rango de Trabajo', 'Gama de Operación'] } },
-  { 'pt-BR': 'Código de Encomenda', 'en-US': 'Order Code', 'es-ES': 'Código de Pedido',
-    alternates: { 'en-US': ['Ordering Code', 'Order Number', 'Ordering Number', 'Part Number'], 'es-ES': ['Código de Orden', 'Código de Encargo', 'Código de Encomienda', 'Número de Pedido'] } },
-  { 'pt-BR': 'Fornecimento Padrão', 'en-US': 'Standard Delivery', 'es-ES': 'Suministro Estándar',
-    alternates: { 'en-US': ['Standard Supply', 'Standard Scope of Supply', 'Scope of Delivery', 'Standard Shipment'], 'es-ES': ['Entrega Estándar', 'Suministro Standard', 'Alcance del Suministro'] } },
-  { 'pt-BR': 'Exatidão', 'en-US': 'Accuracy', 'es-ES': 'Exactitud',
-    alternates: { 'en-US': ['Precision', 'Exactness', 'Exactitude'], 'es-ES': ['Precisión'] } },
-  { 'pt-BR': 'Resolução', 'en-US': 'Resolution', 'es-ES': 'Resolución' },
-  { 'pt-BR': 'Estabilidade', 'en-US': 'Stability', 'es-ES': 'Estabilidad', alternates: { 'en-US': ['Steadiness'] } },
-  { 'pt-BR': 'Faixa de Medição', 'en-US': 'Measuring Range', 'es-ES': 'Rango de Medición',
-    alternates: { 'en-US': ['Measurement Range', 'Measure Range'], 'es-ES': ['Rango de Medida', 'Gama de Medición'] } },
-  { 'pt-BR': 'Especificações Técnicas', 'en-US': 'Technical Specifications', 'es-ES': 'Especificaciones Técnicas',
-    alternates: { 'en-US': ['Technical Data', 'Technical Specs', 'Specifications'], 'es-ES': ['Datos Técnicos', 'Especificaciones'] } },
-  { 'pt-BR': 'Acessórios', 'en-US': 'Accessories', 'es-ES': 'Accesorios' },
-  { 'pt-BR': 'Opcionais', 'en-US': 'Options', 'es-ES': 'Opcionales', alternates: { 'en-US': ['Optionals'], 'es-ES': ['Opciones'] } },
-  { 'pt-BR': 'Alimentação', 'en-US': 'Power Supply', 'es-ES': 'Alimentación',
-    alternates: { 'en-US': ['Power Source', 'Electrical Supply', 'Supply Voltage', 'Feeding'], 'es-ES': ['Fuente de Poder', 'Suministro Eléctrico'] } },
-  { 'pt-BR': 'Dimensões', 'en-US': 'Dimensions', 'es-ES': 'Dimensiones', alternates: { 'en-US': ['Size'], 'es-ES': ['Tamaño', 'Medidas'] } },
-  { 'pt-BR': 'Peso', 'en-US': 'Weight', 'es-ES': 'Peso', alternates: { 'en-US': ['Mass'] } },
-  { 'pt-BR': 'Temperatura Ambiente', 'en-US': 'Ambient Temperature', 'es-ES': 'Temperatura Ambiente',
-    alternates: { 'en-US': ['Environment Temperature', 'Environmental Temperature', 'Room Temperature'], 'es-ES': ['Temperatura Ambiental', 'Temperatura del Ambiente'] } },
-  { 'pt-BR': 'Garantia', 'en-US': 'Warranty', 'es-ES': 'Garantía', alternates: { 'en-US': ['Guarantee', 'Guaranty'] } },
-  { 'pt-BR': 'Insertos', 'en-US': 'Inserts', 'es-ES': 'Insertos', alternates: { 'en-US': ['Insertions'], 'es-ES': ['Inserciones', 'Insertores'] } },
-  { 'pt-BR': 'Comunicação', 'en-US': 'Communication', 'es-ES': 'Comunicación' },
-  { 'pt-BR': 'Tempo de Estabilização', 'en-US': 'Stabilization Time', 'es-ES': 'Tiempo de Estabilización',
-    alternates: { 'en-US': ['Stabilisation Time', 'Settling Time', 'Stabilizing Time'], 'es-ES': ['Tiempo de Asentamiento', 'Tiempo de Estabilizado'] } },
-  { 'pt-BR': 'Uniformidade', 'en-US': 'Uniformity', 'es-ES': 'Uniformidad', alternates: { 'en-US': ['Homogeneity'], 'es-ES': ['Homogeneidad'] } },
-  { 'pt-BR': 'Entrada', 'en-US': 'Input', 'es-ES': 'Entrada', alternates: { 'en-US': ['Entry'] } },
-  { 'pt-BR': 'Saída', 'en-US': 'Output', 'es-ES': 'Salida', alternates: { 'en-US': ['Exit'] } },
-  { 'pt-BR': 'Poço Seco', 'en-US': 'Dry Block', 'es-ES': 'Bloque Seco',
-    alternates: { 'en-US': ['Dry-Block', 'Dry Well', 'Dry-Well', 'Dry Bath'], 'es-ES': ['Pozo Seco', 'Bloque-Seco', 'Baño Seco'] } },
-  { 'pt-BR': 'Incerteza', 'en-US': 'Uncertainty', 'es-ES': 'Incertidumbre' },
-  { 'pt-BR': 'Repetibilidade', 'en-US': 'Repeatability', 'es-ES': 'Repetibilidad', alternates: { 'en-US': ['Repetibility'] } },
-].map(term => Object.freeze(term)));
-
-/** Pares [errado, certo] vistos nos folders EN da PRESYS e outros erros óbvios do mesmo tipo. */
-const MISSPELLINGS: readonly (readonly [string, string])[] = Object.freeze([
-  ['secundary', 'secondary'], ['acuracy', 'accuracy'], ['acurate', 'accurate'], ['choosen', 'chosen'], ['availables', 'available'],
-  ['pression', 'pressure'], ['presure', 'pressure'], ['ressolution', 'resolution'], ['temperture', 'temperature'],
-  ['mantainance', 'maintenance'], ['maintainance', 'maintenance'], ['maintenence', 'maintenance'], ['conection', 'connection'],
-  ['conector', 'connector'], ['comunication', 'communication'], ['standart', 'standard'], ['aplication', 'application'],
-  ['equipament', 'equipment'], ['lenght', 'length'], ['enviroment', 'environment'], ['termocouple', 'thermocouple'],
-  ['tranducer', 'transducer'], ['transmiter', 'transmitter'], ['acessories', 'accessories'], ['accesories', 'accessories'],
-  ['acessory', 'accessory'], ['dimentions', 'dimensions'], ['stabilty', 'stability'], ['programable', 'programmable'],
-  ['rechargable', 'rechargeable'], ['batery', 'battery'], ['suply', 'supply'], ['adress', 'address'], ['aquisition', 'acquisition'],
-  ['wich', 'which'], ['recieve', 'receive'], ['garanty', 'warranty'], ['ambiental', 'ambient'], ['usefull', 'useful'],
-  ['sucessfully', 'successfully'], ['occurence', 'occurrence'], ['independant', 'independent'], ['resistence', 'resistance'],
-]);
+// Fonte única dos termos, marcas e grafias: `presys-glossary.ts` (versionado e usado também pelo servidor).
+const TERMS: readonly GlossaryTerm[] = PRESYS_GLOSSARY_TERMS;
+const MISSPELLINGS: readonly (readonly [string, string])[] = PRESYS_KNOWN_MISSPELLINGS;
 
 export function glossaryTerms(): readonly GlossaryTerm[] {
   return TERMS;
@@ -97,35 +48,9 @@ export function knownMisspellings(): readonly (readonly [string, string])[] {
   return MISSPELLINGS;
 }
 
-/** Sem acento, sem caixa e com espaços simples, para comparar termos. */
-export function normalizeGlossaryText(text: string): string {
-  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('en-US').replace(/\s+/g, ' ').trim();
-}
-
-/** Escape válido com a flag `u` (hífen não precisa, e `\-` fora de classe é erro). */
-function escapeRegExp(text: string): string {
-  return text.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&');
-}
-
-/**
- * Singular e plural de uma palavra normalizada: o "s" simples e os irregulares dos termos
- * (accessory/accessories, dimensão/dimensões, opcional/opcionais, dimensión/dimensiones).
- */
-function wordForms(word: string): string {
-  if (word.endsWith('ies')) return `${escapeRegExp(word.slice(0, -3))}(?:y|ies)`;
-  if (word.endsWith('oes')) return `${escapeRegExp(word.slice(0, -3))}(?:ao|oes)`;
-  if (word.endsWith('ones')) return `${escapeRegExp(word.slice(0, -4))}(?:on|ones)`;
-  if (word.endsWith('ais')) return `${escapeRegExp(word.slice(0, -3))}(?:al|ais)`;
-  return `${escapeRegExp(word.endsWith('s') ? word.slice(0, -1) : word)}s?`;
-}
-
-/** Expressão para o termo normalizado como palavras inteiras; a última palavra aceita singular/plural. */
-function termPattern(term: string): RegExp {
-  const words = normalizeGlossaryText(term).split(' ');
-  const last = words.length - 1;
-  const parts = words.map((word, index) => (index === last ? wordForms(word) : escapeRegExp(word)));
-  return new RegExp(`(?<![\\p{L}\\p{N}])${parts.join('\\s+')}(?![\\p{L}\\p{N}])`, 'iu');
-}
+export { normalizeGlossaryText };
+const escapeRegExp = escapeGlossaryRegExp;
+const termPattern = glossaryTermPattern;
 
 interface CompiledTerm {
   readonly term: GlossaryTerm;

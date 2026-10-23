@@ -5,6 +5,7 @@ import { translationReviewKey, type TranslationReviewRun } from '../translation/
 import { getTranslationLanguage, VNEXT_TRANSLATION_PROFILES, type VNextTranslationTargetLocale } from '../translation/language-registry';
 import { protectTechnicalTokens } from '../translation/technical-token-protector';
 import { reviewSuggestions, type NumberReadingQuestion, type ReviewSuggestions } from '../translation/review-suggestions';
+import { sourceHighlightSegments } from '../translation/review-highlights';
 import type { LocaleFormatConfirmationOption } from '../translation/locale-number-format';
 import type { ManualSaveResult } from '../persistence/save-coordinator';
 import { trapReviewTab, useReviewDialog } from './review-dialog';
@@ -41,6 +42,27 @@ function groupReviewRuns(runs: readonly TranslationReviewRun[]) {
     group.runs.push({ run, index });
   });
   return [...pages.values()].map(page => ({ pageLabel: page.pageLabel, groups: [...page.groups.values()] }));
+}
+
+/** FR-85/FR-87: no original, o que mantém o valor na tradução (números, unidades, códigos, marcas e modelos) aparece destacado. */
+function SourceText({ text }: { text: string }) {
+  const segments = React.useMemo(() => sourceHighlightSegments(text), [text]);
+  return <span className="vnext-translation-source-text" data-translation-source-text="">
+    {segments.map((segment, index) => segment.keep
+      ? <mark key={index} className="vnext-translation-keep">{segment.text}</mark>
+      : <React.Fragment key={index}>{segment.text}</React.Fragment>)}
+  </span>;
+}
+
+/** Frase curta com os avisos que ainda faltam conferir; só cita o que existe. */
+export function reviewSuggestionSummary(totals: { numbers: number; questions: number; glossary: number; spelling: number }): string {
+  const parts = [
+    totals.numbers > 0 ? `${totals.numbers} ${totals.numbers === 1 ? 'ajuste' : 'ajustes'} de números` : '',
+    totals.questions > 0 ? `${totals.questions} ${totals.questions === 1 ? 'número' : 'números'} para confirmar` : '',
+    totals.glossary > 0 ? `${totals.glossary} ${totals.glossary === 1 ? 'termo' : 'termos'} do glossário` : '',
+    totals.spelling > 0 ? `${totals.spelling} ${totals.spelling === 1 ? 'grafia' : 'grafias'} a corrigir` : '',
+  ].filter(Boolean);
+  return parts.length === 0 ? 'Nenhum aviso de números, glossário ou grafia.' : `Para conferir: ${parts.join(' · ')}.`;
 }
 
 /** FR-85/FR-87: avisos com botão. Nada muda no texto até a pessoa clicar. */
@@ -127,11 +149,11 @@ const ReviewRun = React.memo(function ReviewRun({ run, coordinator, index, disab
     <div className="vnext-translation-run-heading">
       <h5>{run.typeLabel} · trecho {index + 1}</h5>
       <span className="vnext-translation-run-status" aria-live="polite" data-tone={invalid ? 'error' : reviewed && !hasDraft ? 'success' : 'muted'}>
-        {invalid ? 'Correção necessária' : hasDraft ? 'Em edição' : corrected ? 'Corrigido e revisado' : reviewed ? 'Revisado' : 'Gerado'}
+        {invalid ? 'Correção necessária' : hasDraft ? 'Em edição' : corrected ? 'Corrigido e revisado' : reviewed ? 'Revisado' : 'A revisar'}
       </span>
     </div>
     <div className="vnext-translation-columns">
-      <p className="vnext-translation-source"><span>Original · {sourceLanguage}</span>{run.sourceText}</p>
+      <p className="vnext-translation-source"><span>Original · {sourceLanguage}</span><SourceText text={run.sourceText} /></p>
       <div className="vnext-translation-target">
         <label htmlFor={textareaId}>Tradução · {targetLanguage}</label>
         <textarea id={textareaId} data-translation-run={index} aria-label={`Tradução ${index + 1}`}
@@ -245,25 +267,37 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
   // diz quantos avisos existem dentro dela (os mesmos que cada trecho mostra; o texto em edição conta como está).
   const compact = snapshot.runs.length > 0;
   const suggestionTotals = React.useMemo(() => {
-    const totals = { numbers: 0, questions: 0, glossary: 0 };
-    for (const run of snapshot.runs) {
+    const totals = { numbers: 0, questions: 0, glossary: 0, spelling: 0 };
+    /** Trechos que pedem atenção (aviso ou correção necessária), na ordem da tela. */
+    const attention: number[] = [];
+    const invalid = new Set(snapshot.invalidRunKeys);
+    snapshot.runs.forEach((run, index) => {
       const key = translationReviewKey(run.unitId, run.runId);
       const suggestions = reviewSuggestions(run.sourceText, drafts.current.get(key)?.text ?? run.translatedText, sourceLocale, targetLocale,
         snapshot.confirmedReadings[key] ?? NO_READINGS);
-      if (!suggestions) continue;
+      if (invalid.has(key) || (suggestions?.total ?? 0) > 0) attention.push(index);
+      if (!suggestions) return;
       if (suggestions.numberFix !== undefined) totals.numbers += 1;
       totals.questions += suggestions.questions.length;
       totals.glossary += suggestions.glossary.length;
-    }
-    return totals;
+      totals.spelling += suggestions.spelling.length;
+    });
+    return { ...totals, attention };
   // editingKeys muda a cada rascunho e é o que torna os rascunhos (em ref) visíveis a este cálculo.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot.runs, snapshot.confirmedReadings, editingKeys, sourceLocale, targetLocale]);
-  const suggestionSummary = [
-    `${suggestionTotals.numbers} ${suggestionTotals.numbers === 1 ? 'ajuste' : 'ajustes'} de números`,
-    `${suggestionTotals.questions} ${suggestionTotals.questions === 1 ? 'pergunta' : 'perguntas'}`,
-    `${suggestionTotals.glossary} ${suggestionTotals.glossary === 1 ? 'termo' : 'termos'} do glossário`,
-  ].join(' · ');
+  }, [snapshot.runs, snapshot.confirmedReadings, snapshot.invalidRunKeys, editingKeys, sourceLocale, targetLocale]);
+  const suggestionSummary = reviewSuggestionSummary(suggestionTotals);
+  /** Último trecho visitado pelo botão "Próximo trecho com aviso" (o seguinte vem depois dele, em ciclo). */
+  const lastAttention = React.useRef(-1);
+  const goToNextAttention = () => {
+    const { attention } = suggestionTotals;
+    if (attention.length === 0) return;
+    const next = attention.find(index => index > lastAttention.current) ?? attention[0];
+    lastAttention.current = next;
+    const target = document.getElementById(`translation-run-${next}`);
+    target?.closest('.vnext-translation-run')?.scrollIntoView?.({ block: 'center' });
+    target?.focus();
+  };
   const accept = () => {
     // Pending verification reconciles the already dispatched copy and cannot change its candidate.
     if (snapshot.pending) { void coordinator.accept(); return; }
@@ -323,10 +357,14 @@ export function TranslationReview({ coordinator, sourceLocale, sourceTitle, onCl
       {snapshot.phase === 'creating' && <p role="status" className="vnext-status" data-tone="pending">Salvando e verificando a cópia… Aguarde a confirmação para abrir o catálogo traduzido.</p>}
       {snapshot.runs.length > 0 && <>
         <div className="vnext-translation-review-intro"><div><h3>Revise a tradução</h3>
-          <p>Compare com o original e corrija os textos se necessário. Os dados técnicos devem permanecer iguais.</p></div>
+          <p>Compare com o original e corrija se precisar. Os destaques no original (números, unidades, códigos, marcas e modelos) mantêm o mesmo valor na tradução.</p></div>
           <div className="vnext-translation-review-progress" role="status"><strong>{reviewedCount} de {snapshot.runs.length} trechos revisados</strong>
             <span>{snapshot.correctionCount} {snapshot.correctionCount === 1 ? 'correção' : 'correções'}</span>
             <span className="vnext-translation-review-suggestions-summary" data-translation-suggestions-summary="">{suggestionSummary}</span></div>
+          {suggestionTotals.attention.length > 0 && <button type="button" className="vnext-btn-secondary vnext-translation-next-attention"
+            data-translation-action="next-attention" disabled={busy || snapshot.pending} onClick={goToNextAttention}>
+            Próximo trecho com aviso ({suggestionTotals.attention.length})
+          </button>}
         </div>
         <div className="vnext-translation-runs" role="region" aria-label="Textos para revisão" tabIndex={0}>{groups.map(page => <section className="vnext-translation-page" key={page.pageLabel}>
           <h4>{page.pageLabel}</h4>

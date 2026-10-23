@@ -59,7 +59,9 @@ function setup() {
   const mount = () => render(<TranslationReview coordinator={review} sourceLocale="pt-BR" sourceTitle="PRESYS TA-25N" onClose={vi.fn()} onOpenCopy={vi.fn()} />);
   let view = mount();
   const runFor = (sourceText: string) => {
-    const run = view.getByText(sourceText).closest<HTMLElement>('.vnext-translation-run');
+    // O original é dividido em pedaços (destaques FR-85/87): procura pelo texto inteiro do original.
+    const run = view.getAllByText((_, element) => element?.hasAttribute('data-translation-source-text') === true && element.textContent === sourceText)[0]
+      ?.closest<HTMLElement>('.vnext-translation-run');
     if (!run) throw new Error(`Run not rendered: ${sourceText}`);
     return within(run);
   };
@@ -215,8 +217,8 @@ describe('FR-85/FR-87 Translation Center · locale numbers, glossary and spellin
     expect(pressure.getByRole('textbox')).toHaveValue('EN: Pressão máxima 1.500 mbar');
     expect(pressure.queryByText(/Confirme:/)).toBeNull();
     expect(pressure.queryByRole('group', { name: /Sugestões/ })).toBeNull();
-    // Escolher "um vírgula cinco" não muda o texto, então o trecho segue "Gerado" até a pessoa marcar como revisado.
-    expect(pressure.getByText('Gerado')).toBeInTheDocument();
+    // Escolher "um vírgula cinco" não muda o texto, então o trecho segue "A revisar" até a pessoa marcar como revisado.
+    expect(pressure.getByText('A revisar')).toBeInTheDocument();
     const decimal = f.runFor(DECIMAL);
     expect(decimal.getByRole('textbox')).toHaveValue('EN: Faixa: 0 a 1.500 mm');
     expect(decimal.queryByRole('group', { name: /Sugestões/ })).toBeNull();

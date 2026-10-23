@@ -96,14 +96,17 @@ describe('P2 Translation Center presentation and safety guards', () => {
     expect(view.getByRole('heading', { name: 'Página 1' })).toBeInTheDocument();
     expect(view.getAllByText('Original · Português')).toHaveLength(2);
     expect(view.getAllByText('Tradução · Inglês')).toHaveLength(2);
-    expect(view.getByText('Precisão ±0,1 °C')).toBeInTheDocument();
+    // FR-85/87: o original continua inteiro, com o dado técnico destacado (fica igual na tradução).
+    const sources = [...view.container.querySelectorAll('[data-translation-source-text]')];
+    expect(sources.map(source => source.textContent)).toContain('Precisão ±0,1 °C');
+    expect([...view.container.querySelectorAll('mark.vnext-translation-keep')].map(mark => mark.textContent)).toContain('±0,1 °C');
     expect(view.container.textContent).not.toContain('catalog-unit-hidden');
     expect(view.container.textContent).not.toContain('run-a');
     // F-09: na revisão o seletor some e os idiomas viram uma linha; a descrição fica só para leitores de tela.
     expect(view.queryByRole('combobox')).toBeNull();
     expect(view.container.querySelector('[data-translation-languages="compact"]')).toHaveTextContent(/PRESYS TA-25N·Português \(Brasil\) →.*Inglês \(Estados Unidos\)/);
     expect(view.getByText(/Gere e revise uma cópia/)).toHaveClass('vnext-translation-description-compact');
-    expect(view.container.querySelector('[data-translation-suggestions-summary]')).toHaveTextContent('1 ajuste de números · 0 perguntas · 0 termos do glossário');
+    expect(view.container.querySelector('[data-translation-suggestions-summary]')).toHaveTextContent('Para conferir: 1 ajuste de números.');
     const translation = view.getByRole('textbox', { name: 'Tradução 2' });
     expect(translation).toHaveAttribute('data-translation-run', '1');
     fireEvent.change(translation, { target: { value: 'Revised accuracy ±0,1 °C' } });
