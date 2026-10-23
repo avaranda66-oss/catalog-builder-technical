@@ -6,6 +6,7 @@ import { add,mmToU,qToU,uToQ } from '../domain/physical';
 import { diagnostic,type Diagnostic } from '../domain/diagnostics';
 import { walkPageObjects,type CanonicalFrameU,type ObjectTreeEntry } from '../domain/object-tree';
 import { leaderGeometry } from '../rendering/native-paint';
+import { pageFooterContentDiagnostics,pageFooterOverlapDiagnostics } from './page-footer-preflight';
 // toleranceQ is the measurement rounding allowance (0 at 100% zoom); see deviceSnapToleranceQ.
 export const tableHeightOverflows=(renderedIntrinsicHeightQ:number,authoredFrameHeightU:number,toleranceQ=0):boolean => renderedIntrinsicHeightQ>add(uToQ(authoredFrameHeightU),toleranceQ);
 export const textObjectOverflows=(metrics:{widthQ:number;heightQ:number},authoredWidthU:number,authoredHeightU:number,toleranceQ=0):boolean =>
@@ -132,7 +133,7 @@ export function printableContentOverlapDiagnostics(doc:CatalogDocument,root:HTML
   return result;
 }
 export function layoutReport(doc:CatalogDocument,plans:ReadonlyMap<string,TablePlan>,snapshot:LayoutSnapshot,root:HTMLElement):Diagnostic[] {
-  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc),...printableContentOverlapDiagnostics(doc,root,plans),...contentDiagnostics(doc)];
+  const result:Diagnostic[]=[...snapshot.geometryDiagnostics,...authoredFrameDiagnostics(doc),...printableContentOverlapDiagnostics(doc,root,plans),...pageFooterOverlapDiagnostics(doc,root),...contentDiagnostics(doc)];
   const toleranceQ=measurementToleranceQ(root);
   for(const page of doc.pages) {
     const frames=walkPageObjects(page).map(({object})=>({object,w:mmToU(object.frame.widthMm),h:mmToU(object.frame.heightMm)}));
@@ -292,5 +293,5 @@ export function imageResolutionDiagnostics(doc:CatalogDocument):Diagnostic[] {
 }
 
 export function contentDiagnostics(doc:CatalogDocument):Diagnostic[] {
-  return [...placeholderDiagnostics(doc),...emptyTableRowDiagnostics(doc),...imageResolutionDiagnostics(doc)];
+  return [...placeholderDiagnostics(doc),...emptyTableRowDiagnostics(doc),...imageResolutionDiagnostics(doc),...pageFooterContentDiagnostics(doc)];
 }
