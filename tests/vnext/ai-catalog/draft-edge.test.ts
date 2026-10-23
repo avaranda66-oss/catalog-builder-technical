@@ -42,6 +42,7 @@ function loadEdge(globals: Record<string, unknown>, onServe: (handler: Handler) 
 type Options = {
   flag?: boolean; role?: string; active?: boolean; validUser?: boolean; serverKey?: string | null; draftKey?: string;
   settled?: boolean; cacheReady?: boolean; file?: Uint8Array<ArrayBuffer> | null;
+  sketchReplies?: readonly unknown[];
 };
 function sandbox(options: Options = {}) {
   const env: Record<string, string | undefined> = {
@@ -82,6 +83,7 @@ function sandbox(options: Options = {}) {
     storage: { from: vi.fn((bucket: string) => ({ download: (path: string) => download(`${bucket}:${path}`) })) },
   }));
   const google: { url: string; key?: string }[] = [];
+  const sketchReplies = [...(options.sketchReplies ?? [])];
   const fetch = vi.fn(async (url: string, init: { method: string; headers: Record<string, string> }) => {
     google.push({ url, key: init.headers['x-goog-api-key'] });
     if (url.endsWith('/upload/v1beta/files')) {
@@ -92,7 +94,7 @@ function sandbox(options: Options = {}) {
     }
     if (init.method === 'DELETE') return new Response('{}');
     if (url.endsWith(':countTokens')) return Response.json({ totalTokens: 9_000 });
-    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(SHEET) }] } }],
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(sketchReplies.shift() ?? SHEET) }] } }],
       usageMetadata: { promptTokenCount: 9_000, candidatesTokenCount: 600 }, modelVersion: 'gemini-3.8-flash' });
   });
   const log = vi.fn();
@@ -162,6 +164,65 @@ describe('vnext-catalog-draft guards (same as the composer)', () => {
 });
 
 describe('vnext-catalog-draft tasks', () => {
+  const sketchPlan = { archetype: 'capa', regions: [
+    { kind: 'title', bbox: [30, 50, 150, 950], text: 'TA-25N', instruction: '' },
+    { kind: 'image', bbox: [200, 100, 950, 900], text: '', instruction: '' },
+  ], questions: [] };
+  const image = new Uint8Array(33);
+  image.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+  new DataView(image.buffer).setUint32(16, 1200);
+  new DataView(image.buffer).setUint32(20, 1600);
+  const sketch = async (bytes = image) => {
+    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    return { version: 1, task: 'interpret_sketch', source: {
+      path: `${USER}/${hash}.png`, sha256: hash, mimeType: 'image/png', fileName: 'rascunho.png',
+      pageCount: 1, firstPage: 1, lastPage: 1,
+    } };
+  };
+
+  it('interpreta rascunho com os mesmos guardas, storage privado e orçamento cobrindo duas tentativas', async () => {
+    const invalid = { ...sketchPlan, regions: sketchPlan.regions.map(region => ({ ...region, bbox: [950, 100, 200, 900] })) };
+    const box = sandbox({ file: image, sketchReplies: [invalid, sketchPlan], draftKey: DRAFT_KEY });
+    const request = await sketch();
+    const result = await box.call(request);
+    expect(result).toMatchObject({ status: 200, json: { code: 'OK', sketch: { attempts: 2,
+      model: 'gemini-3.8-flash', dimensions: { width: 1200, height: 1600 },
+      usage: { inputTokens: 18_000, outputTokens: 1_200 },
+      plan: { confirmations: expect.arrayContaining([expect.objectContaining({ status: 'confirmar' })]) },
+    } } });
+    expect(box.download).toHaveBeenCalledWith(`vnext-source-files:${request.source.path}`);
+    expect(box.rpcCalls.map(call => call.name)).toEqual(['vnext_agent_reserve_budget_v2', 'vnext_agent_settle_budget_v1']);
+    expect(box.rpcCalls[0].args).toEqual({ p_worst_case_microusd: 170_880, p_feature: 'extraction' });
+    expect(box.rpcCalls[1].args?.p_actual_microusd).toBe(36_000);
+    expect(box.google.filter(call => !call.url.startsWith('https://upload.example.invalid/')).every(call => call.key === DRAFT_KEY)).toBe(true);
+    expect(result.text).not.toMatch(/TEST_FAKE/);
+    expect(box.log).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{}, { authorization: '' }, 401, 'UNAUTHENTICATED'],
+    [{ validUser: false }, {}, 401, 'UNAUTHENTICATED'],
+    [{ active: false }, {}, 403, 'FORBIDDEN'],
+    [{ role: 'viewer' }, {}, 403, 'FORBIDDEN'],
+    [{}, { origin: 'https://evil.example.invalid' }, 403, 'INVALID_ORIGIN'],
+    [{ flag: false }, {}, 503, 'DRAFT_DISABLED'],
+  ] as const)('protege interpret_sketch antes de orçamento e provedor: %s', async (options, init, status, code) => {
+    const box = sandbox(options);
+    expect(await box.call(await sketch(), init)).toMatchObject({ status, json: { code } });
+    expect(box.rpc).not.toHaveBeenCalled(); expect(box.fetch).not.toHaveBeenCalled();
+  });
+
+  it('não aceita metadados falsos de dimensão nem imagem maior que 1600 pelos bytes', async () => {
+    const oversized = image.slice(); new DataView(oversized.buffer).setUint32(20, 1601);
+    const box = sandbox({ file: oversized, sketchReplies: [sketchPlan] });
+    const request = await sketch(oversized);
+    expect(await box.call({ ...request, source: { ...request.source, height: 1600 } }))
+      .toMatchObject({ status: 400, json: { code: 'INVALID_REQUEST' } });
+    expect(await box.call(request)).toMatchObject({ status: 413, json: { code: 'SOURCE_TOO_LARGE' } });
+    expect(box.fetch).not.toHaveBeenCalled();
+    expect(box.rpcCalls.at(-1)?.args?.p_actual_microusd).toBe(0);
+  });
+
   it('status is free and says whether reading files can start', async () => {
     const box = sandbox();
     const result = await box.call({ version: 1, task: 'status' });

@@ -8,6 +8,7 @@ import {
 } from '../../../src/vnext/ai-catalog/draft-contract.ts';
 import { isObj } from '../../../src/vnext/ai-catalog/composer-contract.ts';
 import type { DraftErrorCode, DraftErrorReason } from '../../../src/vnext/ai-catalog/draft-codes.ts';
+import { runSketchInterpretation } from '../../../src/vnext/ai-catalog/sketch-contract.ts';
 
 // FR-66: Gemini reads one private PDF or photo and proposes specification
 // values. Never authoritative: the browser verifies every value against the
@@ -127,6 +128,13 @@ serve(async req => {
       callReserveMicrousd: extractionReservationMicrousd() } });
   }
   if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+  if (request.task === 'interpret_sketch') {
+    const result = await runSketchInterpretation({ request, key, ledger, source: privateSource(db),
+      fetcher: (input, init) => fetch(input, init) });
+    return result.ok
+      ? json(c, 200, 'OK', { sketch: result.sketch })
+      : fail(c, result.status, result.code, result.reason);
+  }
   const result = await runFactExtraction({ request, key, ledger, cache: extractionCache(db), source: privateSource(db),
     fetcher: (input, init) => fetch(input, init) });
   return result.ok

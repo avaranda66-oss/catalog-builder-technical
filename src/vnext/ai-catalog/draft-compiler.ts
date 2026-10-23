@@ -27,7 +27,9 @@ import { pageAfterTableRun } from './intake/source-table-insert';
  * - T1 "Comparativo de modelos": label column + 1–6 model columns, header row.
  * - T3 "Especificações": one product, label/value, no header row.
  * Units go inline with the value (`valueDisplayText`), conditions become table
- * notes, and a table taller than its A4 page continues on new pages with the
+ * notes (a characteristic printed once per model, each under its own
+ * condition, is ONE row with a note per model: `joinConditionSplitRows`),
+ * and a table taller than its A4 page continues on new pages with the
  * header repeated and "(continuação)" in the title (FR-35 paginator).
  *
  * Nothing is invented: a value cell holds a candidate of its own fact, and
@@ -80,6 +82,11 @@ export interface DraftRow {
   readonly label: string;
   readonly unit: string;
   readonly condition: string;
+  /**
+   * One condition per model (by model index, '' for none) when the row joins the rows a file prints once per
+   * model, each under its own condition (`joinConditionSplitRows`); `condition` is then ''.
+   */
+  readonly modelConditions?: readonly string[];
 }
 /**
  * Everything the compiler may use, and the person's choices (FR-68). Choices
@@ -100,9 +107,70 @@ export interface DraftFactSet {
 const rowRef = (sectionId: string, rowId: string) => `${sectionId}/${rowId}`;
 export const conditionPositionId = (ref: string) => `${ref}/condicao`;
 
+/** A value position that holds something: a reading of any status, or a status other than plain absence. */
+const holdsReading = (position: DraftPosition) => position.kind === 'value' && (position.candidates.length > 0 || position.status !== 'MISSING');
+
+/**
+ * One characteristic printed once per model, each under its own condition — "Cooling Time: 11 min (25 °C to
+ * -25 °C) / 16 min (25 °C to -35 °C) / 25 min (25 °C to -50 °C)" — reaches the fact set as one row per
+ * condition (the proposal has one condition per row), each with a single model's value and "—" for the others.
+ * Those rows become ONE row with the value of each model and the conditions as notes per model.
+ *
+ * Only when nothing can be lost or changed: same section, label and unit; all conditions different; each model
+ * holds a reading in at most one of the rows and each row holds at least one; no row has a condition to choose.
+ * The positions keep their ids, candidates, statuses and choices (only `rowRef` changes); the positions that
+ * were plain absences ("—") of the joined rows are dropped, except one per model that holds nothing anywhere.
+ */
+export function joinConditionSplitRows(set: DraftFactSet): DraftFactSet {
+  if (set.models.length < 2) return set;
+  const byRow = new Map<string, DraftPosition[]>();
+  for (const position of set.positions) byRow.set(position.rowRef, [...(byRow.get(position.rowRef) ?? []), position]);
+  const valueAt = (row: DraftRow, model: number) => (byRow.get(row.ref) ?? []).find(item => item.kind === 'value' && item.modelIndex === model);
+  const groups = new Map<string, DraftRow[]>();
+  for (const row of set.rows) {
+    if (row.modelConditions) continue;
+    const id = [row.sectionId, row.label.trim(), row.unit.trim()].join('\u0000');
+    groups.set(id, [...(groups.get(id) ?? []), row]);
+  }
+  const joined = new Map<string, { readonly row: DraftRow; readonly positions: DraftPosition[] } | null>();
+  for (const rows of groups.values()) {
+    if (rows.length < 2 || new Set(rows.map(row => row.condition.trim())).size !== rows.length) continue;
+    if (rows.some(row => (byRow.get(row.ref) ?? []).some(item => item.kind === 'condition'))) continue;
+    const owner: (DraftRow | undefined)[] = set.models.map(() => undefined);
+    const disjoint = rows.every(row => {
+      const held = (byRow.get(row.ref) ?? []).filter(holdsReading);
+      return held.length > 0 && held.every(item => {
+        if (item.modelIndex < 0 || item.modelIndex >= set.models.length || owner[item.modelIndex]) return false;
+        owner[item.modelIndex] = row;
+        return true;
+      });
+    });
+    if (!disjoint) continue;
+    const first = rows[0];
+    const positions = set.models.flatMap((_, model) => {
+      const kept = owner[model] ? valueAt(owner[model]!, model) : rows.map(row => valueAt(row, model)).find(Boolean);
+      return kept ? [{ ...kept, rowRef: first.ref }] : [];
+    });
+    joined.set(first.ref, { row: { ...first, condition: '', modelConditions: owner.map(row => row?.condition.trim() ?? '') }, positions });
+    for (const row of rows.slice(1)) joined.set(row.ref, null);
+  }
+  if (!joined.size) return set;
+  return {
+    ...set,
+    rows: set.rows.flatMap(row => { const entry = joined.get(row.ref); return entry === undefined ? [row] : entry ? [entry.row] : []; }),
+    positions: [...set.positions.filter(position => !joined.has(position.rowRef)),
+      ...[...joined.values()].flatMap(entry => entry?.positions ?? [])],
+  };
+}
+
 /** The fact set of one verified table (one file, or one proposal with its own conflicts). */
 export function factSetFromReport(report: FactVerificationReport, options: {
   readonly title?: string; readonly rowKeys?: Readonly<Record<string, string>>;
+  /**
+   * Join the rows printed once per model under different conditions (`joinConditionSplitRows`). Default false:
+   * `withSourceDivergences` works on the rows as read, and `factSetFromReviews` joins after it.
+   */
+  readonly joinSplitRows?: boolean;
 } = {}): DraftFactSet {
   const { proposal } = report;
   const rows: DraftRow[] = proposal.sections.flatMap(section => section.rows.map(row => {
@@ -117,10 +185,11 @@ export function factSetFromReport(report: FactVerificationReport, options: {
     ...(value.selected === undefined ? {} : { selected: value.selected }),
     ...(value.missingReason ? { missingReason: value.missingReason } : {}),
   }));
-  return {
+  const set: DraftFactSet = {
     version: 1, title: (options.title ?? proposal.title).trim() || proposal.title, models: [...proposal.models], rows, positions,
     sourceNames: Object.fromEntries(report.sourceNames), choices: {},
   };
+  return options.joinSplitRows ? joinConditionSplitRows(set) : set;
 }
 
 const sameReading = (a: DraftCandidate, b: DraftCandidate) =>
@@ -132,6 +201,7 @@ const sameReading = (a: DraftCandidate, b: DraftCandidate) =>
  * CONFLICT between the readings, each with the status it got in its own file;
  * a condition that differs ("23 °C" x "20 °C") becomes a row condition to
  * choose. Nothing is picked here: the person chooses in the pending panel.
+ * Expects the rows as read (before `joinConditionSplitRows`).
  */
 export function withSourceDivergences(set: DraftFactSet, divergences: readonly SourceDivergence[],
   sourceNames: ReadonlyMap<string, string> | Readonly<Record<string, string>> = {}): DraftFactSet {
@@ -145,9 +215,15 @@ export function withSourceDivergences(set: DraftFactSet, divergences: readonly S
   const unique = (items: DraftCandidate[]) => items.filter((item, index) => items.findIndex(other => sameReading(other, item)) === index);
   let positions = [...set.positions];
   const conditions = new Map<string, DraftCandidate[]>();
+  // A quantity printed once per condition has one row per condition: a model's divergence belongs to the row
+  // that holds that model's reading, not to the rows where it is absent ("—").
+  const holds = (row: DraftRow, model: number) =>
+    set.positions.some(position => position.rowRef === row.ref && position.modelIndex === model && holdsReading(position));
   for (const divergence of divergences) {
     const model = set.models.indexOf(divergence.model);
-    for (const row of rowsByKey.get(divergence.key) ?? []) {
+    const keyed = rowsByKey.get(divergence.key) ?? [];
+    const holding = model >= 0 ? keyed.filter(row => holds(row, model)) : [];
+    for (const row of holding.length ? holding : keyed) {
       if (divergence.field === 'condition') {
         const readings = [...(conditions.get(row.ref) ?? []), ...divergence.readings.map(reading => readingCandidate(reading, reading.condition, ''))];
         conditions.set(row.ref, readings.filter((item, index) =>
@@ -182,7 +258,7 @@ export function factSetFromReviews(reviews: readonly ExtractionReview[], options
   if (!primary) throw new Error('DRAFT_NO_MODEL_TABLE');
   const names = Object.fromEntries(reviews.flatMap(review => review.tables.flatMap(table => [...table.report.sourceNames])));
   const set = factSetFromReport(primary.report, { title: options.title ?? primary.title, rowKeys: primary.extraction.rowKeys });
-  return withSourceDivergences(set, findSourceDivergences(reviews.flatMap(reviewSourceValues)), names);
+  return joinConditionSplitRows(withSourceDivergences(set, findSourceDivergences(reviews.flatMap(reviewSourceValues)), names));
 }
 
 /** Candidates a person may choose: only values verified in their own file. */
@@ -274,7 +350,8 @@ function messageFor(set: DraftFactSet, row: DraftRow, position: DraftPosition): 
   }
   const value: VerifiedValue = {
     id: position.id, sectionId: row.sectionId, sectionTitle: row.sectionTitle, rowId: row.rowId, label: row.label,
-    unit: row.unit, condition: row.condition, modelIndex: position.modelIndex, model: set.models[position.modelIndex] ?? '',
+    unit: row.unit, condition: row.modelConditions?.[position.modelIndex] ?? row.condition,
+    modelIndex: position.modelIndex, model: set.models[position.modelIndex] ?? '',
     status: position.status, ...(position.selected === undefined ? {} : { selected: position.selected }),
     ...(position.missingReason ? { missingReason: position.missingReason } : {}),
     candidates: position.candidates.map(item => ({
@@ -383,6 +460,15 @@ interface Grid {
   readonly notes: string[];
 }
 
+function modelsByCondition(conditions: readonly string[], models: readonly string[]): Map<string, string[]> {
+  const byCondition = new Map<string, string[]>();
+  conditions.forEach((condition, index) => {
+    const text = condition.trim();
+    if (text && models[index]) byCondition.set(text, [...(byCondition.get(text) ?? []), models[index]]);
+  });
+  return byCondition;
+}
+
 function buildGrid(set: DraftFactSet, layout: DraftLayout, pendingText: string): Grid {
   const valueOf = new Map(set.positions.filter(item => item.kind === 'value').map(item => [`${item.rowRef}#${item.modelIndex}`, item]));
   const conditionOf = new Map(set.positions.filter(item => item.kind === 'condition').map(item => [item.rowRef, item]));
@@ -414,8 +500,12 @@ function buildGrid(set: DraftFactSet, layout: DraftLayout, pendingText: string):
         ? (() => { const resolved = resolvePosition(set, condition); return 'candidate' in resolved ? condition.candidates[resolved.candidate].value : ''; })()
         : row.condition;
       // A label printed with its colon ("Display Accuracy:") is not doubled in the note.
-      const note = chosenCondition.trim() ? `${row.label.replace(/\s*:\s*$/u, '')}: ${chosenCondition.trim()}` : '';
-      if (note && !grid.notes.includes(note)) grid.notes.push(note);
+      const label = row.label.replace(/\s*:\s*$/u, '');
+      const notes = row.modelConditions
+        // A joined row: one note per condition, naming its models ("Cooling Time (TA-25N): 25 °C to -25 °C").
+        ? [...modelsByCondition(row.modelConditions, set.models)].map(([text, models]) => `${label} (${models.join(', ')}): ${text}`)
+        : chosenCondition.trim() ? [`${label}: ${chosenCondition.trim()}`] : [];
+      for (const note of notes) if (!grid.notes.includes(note)) grid.notes.push(note);
     }
   }
   return grid;
