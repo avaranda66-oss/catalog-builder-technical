@@ -1,3 +1,4 @@
+import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,8 @@ async function renderPanel(options: {
   readonly repository?: (base: ArsenalRepository) => ArsenalRepository;
   readonly props?: Partial<ArsenalPanelProps>;
   readonly waitForList?: boolean;
+  /** Inside React.StrictMode, as the app is mounted (dev mounts, unmounts and mounts again). */
+  readonly strict?: boolean;
 } = {}) {
   const { store, ids } = await seededStore();
   const actor = options.viewer ?? ACTORS.author;
@@ -47,7 +50,7 @@ async function renderPanel(options: {
     onClose,
     ...options.props,
   };
-  const view = render(<ArsenalPanel {...props} />);
+  const view = render(options.strict ? <React.StrictMode><ArsenalPanel {...props} /></React.StrictMode> : <ArsenalPanel {...props} />);
   if (options.waitForList !== false) await screen.findByText('Cabeçalho azul');
   return { ...view, runtime, session, ids, onInserted, onMessage, onClose, props, store };
 }
@@ -119,6 +122,18 @@ describe('Onda 4.5 — painel Arsenal', () => {
     expect(session.getSnapshot().document.pages[0].objects).toHaveLength(0);
     await waitFor(() => expect(within(card('Cabeçalho azul')).getByText('Usado 1×')).toBeInTheDocument());
     expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it('no StrictMode a lista abre e "Usar" termina (não fica em "Abrindo o arsenal…" nem em "Usando…")', async () => {
+    const { session, onInserted } = await renderPanel({ strict: true });
+    const panel = screen.getByRole('complementary', { name: 'Arsenal' });
+    expect(panel.querySelector('[data-arsenal-loading]')).toBeNull();
+    const before = session.getSnapshot().document.pages[0].objects.length;
+    fireEvent.click(within(card('Cabeçalho azul')).getByRole('button', { name: 'Usar “Cabeçalho azul”' }));
+    await waitFor(() => expect(onInserted).toHaveBeenCalledTimes(1));
+    expect(session.getSnapshot().document.pages[0].objects.length).toBeGreaterThan(before);
+    await waitFor(() => expect(within(card('Cabeçalho azul')).getByRole('button', { name: 'Usar “Cabeçalho azul”' })).toHaveTextContent('Usar'));
+    await waitFor(() => expect(within(card('Cabeçalho azul')).getByText('Usado 1×')).toBeInTheDocument());
   });
 
   it('uma página do arsenal entra depois da página atual', async () => {

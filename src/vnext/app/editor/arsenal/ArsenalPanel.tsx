@@ -108,7 +108,9 @@ export function ArsenalPanel({
   const requested = React.useRef(new Set<string>());
   const busyRef = React.useRef<string | null>(null);
   const alive = React.useRef(true);
-  React.useEffect(() => () => { alive.current = false; }, []);
+  // Set again on every mount: StrictMode (dev) unmounts and remounts once, and a flag left false would keep the
+  // list on "Abrindo o arsenal…" and "Usar" on "Usando…".
+  React.useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const live = React.useRef({ currentPageId, selectedObjects });
   live.current = { currentPageId, selectedObjects };
 

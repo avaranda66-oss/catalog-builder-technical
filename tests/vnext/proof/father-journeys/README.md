@@ -25,6 +25,10 @@ node tests/vnext/proof/father-journeys/j02l-tabela-do-pdf.mjs
 # com o Gemini real (docs/ai-catalog/rascunho-servidor/rodada-1/raw), servida pelo harness em window.__FATHER_DRAFT__.sketches.
 node tests/vnext/proof/father-journeys/j14-rascunho.mjs
 
+# J15 (Onda 4.5): guardar a tabela de especificações e o cabeçalho no arsenal, achar pela busca, usar numa página
+# nova (um Desfazer cada, sem IA e sem rede) e pedir no chat "bota aquela tabela de especificações".
+node tests/vnext/proof/father-journeys/j15-arsenal.mjs
+
 # Janela menor; remover a variável para voltar ao padrão.
 $env:VP='1280'
 node tests/vnext/proof/father-journeys/run-all.mjs

@@ -84,7 +84,9 @@ export function ArsenalSaveDialog({ runtime, document, request, assetUrls, retur
   const [problem, setProblem] = React.useState<string | null>(null);
   const attempt = React.useRef<{ key: string; presetId: string; mutationId: string } | null>(null);
   const alive = React.useRef(true);
-  React.useEffect(() => () => { alive.current = false; }, []);
+  // Set again on every mount: StrictMode (dev) unmounts and remounts once, and a flag left false would keep the
+  // dialog on "Guardando…" forever after a successful save.
+  React.useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const source: ArsenalCaptureSource = what === 'style' && request.styleObjectId
     ? { kind: 'style', objectId: request.styleObjectId }

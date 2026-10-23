@@ -1,3 +1,4 @@
+import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createCatalogDocument } from '@/vnext/application';
@@ -28,7 +29,7 @@ function catalog(): CatalogDocument {
 
 type RequestFor = ArsenalSaveRequest | ((document: CatalogDocument) => ArsenalSaveRequest);
 
-function setup(requestFor: RequestFor, repository?: (base: ArsenalRepository) => ArsenalRepository) {
+function setup(requestFor: RequestFor, repository?: (base: ArsenalRepository) => ArsenalRepository, options: { readonly strict?: boolean } = {}) {
   const store = createInMemoryArsenalStore();
   const base = store.as({ ...ACTORS.author });
   const runtime = testRuntime(repository ? repository(base) : base, viewerOf(ACTORS.author));
@@ -36,7 +37,8 @@ function setup(requestFor: RequestFor, repository?: (base: ArsenalRepository) =>
   const request = typeof requestFor === 'function' ? requestFor(document) : requestFor;
   const onSaved = vi.fn();
   const onClose = vi.fn();
-  render(<ArsenalSaveDialog runtime={runtime} document={document} request={request} assetUrls={new Map()} onClose={onClose} onSaved={onSaved} />);
+  const dialogElement = <ArsenalSaveDialog runtime={runtime} document={document} request={request} assetUrls={new Map()} onClose={onClose} onSaved={onSaved} />;
+  render(options.strict ? <React.StrictMode>{dialogElement}</React.StrictMode> : dialogElement);
   const dialog = screen.getByRole('dialog', { name: 'Guardar no arsenal' });
   return { runtime, store, document, onSaved, onClose, dialog };
 }
@@ -90,6 +92,17 @@ describe('Onda 4.5 — diálogo "Guardar no arsenal"', () => {
     const [preset, message] = onSaved.mock.calls[0];
     expect(preset.payload.tableValues).toBe('structure-only');
     expect(message).toMatch(/A tabela foi sem valores\.$/);
+  });
+
+  it('no StrictMode (montar, desmontar, montar de novo) guardar termina: avisa e não fica em "Guardando…"', async () => {
+    const { dialog, onSaved, store } = setup({ source: { kind: 'table', objectId: 'spec' }, styleObjectId: 'spec' }, undefined, { strict: true });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Nome' }), { target: { value: 'Tabela de especificações PCON' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar no arsenal' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onSaved.mock.calls[0][1]).toBe('“Tabela de especificações PCON” guardado no arsenal, em Tabelas. Toda a equipe já pode usar. A tabela foi sem valores.');
+    expect(within(dialog).getByRole('button', { name: 'Guardar no arsenal' })).toBeEnabled();
+    const listed = await store.as(ACTORS.otherEditor).list();
+    expect(listed.ok && listed.value.map((entry) => entry.name)).toEqual(['Tabela de especificações PCON']);
   });
 
   it('"Só a aparência" guarda um estilo em Estilos', async () => {
