@@ -5140,6 +5140,7 @@ export function EditorWorkspace({
                 : undefined}
               selectionLabel={editorState.selectedObjectIds.length
                 ? assistantSelectionLabel({ count: editorState.selectedObjectIds.length, type: selectedObject?.type }) : undefined}
+              selectedObjectIds={editorState.selectedObjectIds}
               onBeforeMutation={() => prepareAuthoringForContextChangeRef.current()}
               measurement={measuredLayout?.source === document ? measuredLayout : null} activePageId={selectedPage.id}
               onShowTable={(pageId, objectId) => { setActivePage(pageId); selectObject(objectId); }}
