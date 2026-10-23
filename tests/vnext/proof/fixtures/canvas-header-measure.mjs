@@ -4,7 +4,6 @@
 // (1093 x 614 px CSS). Cada controle da linha precisa estar inteiro dentro da área da página e ser o elemento de
 // cima em vários pontos (nada encoberto pela coluna de páginas nem pelo painel da direita).
 //
-//   node tests/vnext/proof/fixtures/cover-capa-pcon-measure.mjs   (não é preciso; este script prepara o catálogo)
 //   node tests/vnext/proof/fixtures/canvas-header-measure.mjs
 //   CANVAS_HEADER_PORT=5244   TEMP=TMP=D:\tmp-proofs
 //
