@@ -59,6 +59,7 @@ export type {
 export {
   PAGE_FOOTER_GEOMETRY,
   allPageFooterText,
+  draftMarkText,
   footerDateText,
   footerLanguageCode,
   pageFooterBandMm,

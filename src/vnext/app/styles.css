@@ -548,6 +548,23 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
 .vnext-publication-pages { max-height: 65dvh; overflow: auto; background: #eef2f6; margin-top: 16px; }
 .vnext-publication-pages > [data-editorial-root] { margin: 0 auto; }
 .vnext-publication-pages .editorial-page { margin-bottom: 16px; }
+/* "Imprimir rascunho mesmo assim": offer under the list, then the confirmation (60+ scale: 15 px text, 24 px boxes). */
+.vnext-publication-draft-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 16px; }
+.vnext-publication-draft-offer > p { margin: 0; color: var(--vnext-text-muted); font-size: 15px; }
+.vnext-publication-draft { margin: 4px 0 18px; border: 1px solid #e5d29e; border-radius: var(--vnext-radius-surface); background: var(--vnext-warning-surface); padding: 16px 18px; }
+.vnext-publication-draft h3 { margin: 0 0 6px; font-size: 17px; outline: none; }
+.vnext-publication-draft > p, .vnext-publication-draft li { color: var(--vnext-text-secondary); font-size: 15px; line-height: 1.6; }
+.vnext-publication-draft > p { margin: 0; }
+.vnext-publication-draft ul { margin: 6px 0 12px; padding-left: 22px; }
+.vnext-publication-draft-technical { margin: 4px 0 12px; border: 1px solid #e2b8b8; border-left: 4px solid var(--vnext-error); border-radius: var(--vnext-radius-control); background: var(--vnext-error-surface); padding: 10px 14px; }
+.vnext-publication-draft-technical > strong { color: var(--vnext-error); font-size: 15px; }
+.vnext-publication-draft-technical ul { margin-bottom: 0; }
+.vnext-publication-draft-technical li { color: var(--vnext-error); font-weight: 600; }
+.vnext-publication-draft-check { display: flex; align-items: center; gap: 12px; min-height: 44px; color: var(--vnext-text); font-size: 15px; font-weight: 600; line-height: 1.4; cursor: pointer; }
+.vnext-publication-draft-check > input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--vnext-primary); cursor: pointer; }
+.vnext-publication-draft-check > input[aria-invalid="true"] { outline: 3px solid rgb(143 48 48 / .45); outline-offset: 2px; }
+.vnext-publication-draft .vnext-status { margin: 8px 0 0; }
+.vnext-publication-draft-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 
 .vnext-shell[data-simple-by-default="true"] .vnext-info { padding: 22px 18px; }
 .vnext-shell[data-simple-by-default="true"] .vnext-info h2 { margin-top: 6px; margin-bottom: 12px; font-size: 20px; }
@@ -599,8 +616,11 @@ body { overflow: hidden; background: #eef2f6; color: #172033; font-family: 'Noto
   body[data-vnext-print-policy] { margin: 0 !important; padding: 0 !important; }
   body[data-vnext-print-policy] > * { display: none !important; }
   body[data-vnext-print-policy]::before { content: 'Use Publicar / PDF no catálogo para revisar as páginas antes de imprimir.'; display: block; padding: 24px; }
-  body[data-vnext-print-policy]:has(> [data-publication-status="READY"][data-print-approved="true"])::before { display: none; }
-  body[data-vnext-print-policy] > [data-publication-status="READY"][data-print-approved="true"] { display: block !important; position: static; padding: 0; background: white; }
+  body[data-vnext-print-policy]:has(> [data-publication-status="READY"][data-print-approved="true"])::before,
+  body[data-vnext-print-policy]:has(> [data-publication-status="BLOCKED"][data-print-approved="draft"])::before { display: none; }
+  /* "Imprimir rascunho": a blocked catalog prints only after the person confirmed the draft (never as "true"). */
+  body[data-vnext-print-policy] > [data-publication-status="READY"][data-print-approved="true"],
+  body[data-vnext-print-policy] > [data-publication-status="BLOCKED"][data-print-approved="draft"] { display: block !important; position: static; padding: 0; background: white; }
   body[data-vnext-print-policy] .vnext-publication-dialog { width: 210mm; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
   body[data-vnext-print-policy] .vnext-publication-dialog > header, body[data-vnext-print-policy] .vnext-publication-controls { display: none; }
   body[data-vnext-print-policy] .vnext-publication-pages { max-height: none; overflow: visible; background: white; margin: 0; }

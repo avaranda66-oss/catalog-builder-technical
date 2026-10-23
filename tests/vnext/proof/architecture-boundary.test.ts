@@ -347,7 +347,10 @@ describe('VNext architecture boundary',()=>{
     const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
     const declaration=source.statements.find((statement):statement is ts.InterfaceDeclaration=>ts.isInterfaceDeclaration(statement)&&statement.name.text==='DocumentRendererProps');
     const props=declaration?.members.flatMap(member=>ts.isPropertySignature(member)&&member.name&&ts.isIdentifier(member.name)?[member.name.text]:[])??[];
-    expect(props.sort()).toEqual(['assetUrls','document','plans']);
+    // "Imprimir rascunho" adds one flag, never copy: the draft word comes from the domain language registry.
+    expect(props.sort()).toEqual(['assetUrls','document','draft','plans']);
+    const draft=declaration?.members.find((member):member is ts.PropertySignature=>ts.isPropertySignature(member)&&ts.isIdentifier(member.name)&&member.name.text==='draft');
+    expect(draft?.type?.kind).toBe(ts.SyntaxKind.BooleanKeyword);
     const rendererSource=filesUnder(resolve(vnextRoot,'rendering')).filter(path=>/\.tsx?$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n');
     expect(rendererSource).not.toMatch(/\bfooterLabel\b|PROVA EDITORIAL|editorial-page-number/);
   });

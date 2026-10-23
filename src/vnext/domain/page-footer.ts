@@ -79,6 +79,19 @@ const PAGE_WORDS: Readonly<Record<string, readonly [string, string]>> = Object.f
   it: ['Pagina', 'di'], de: ['Seite', 'von'], pl: ['Strona', 'z'],
 });
 
+/**
+ * "Imprimir rascunho": the word printed diagonally on every page of a draft PDF and appended to its file name, in the
+ * catalog's language (same languages as the footer words). Never stored in the catalog.
+ */
+const DRAFT_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  pt: 'RASCUNHO', en: 'DRAFT', es: 'BORRADOR', fr: 'BROUILLON', it: 'BOZZA', de: 'ENTWURF', pl: 'WERSJA ROBOCZA',
+});
+
+/** "RASCUNHO" in the catalog's language; "DRAFT" for a language without its own word. */
+export function draftMarkText(locale: string): string {
+  return DRAFT_WORDS[primaryLanguage(locale)] ?? 'DRAFT';
+}
+
 /** "Página 2 de 11" in the catalog's language; "2 / 11" for a language without its own words. */
 export function pageNumberText(pageNumber: number, pageCount: number, locale: string): string {
   const words = PAGE_WORDS[primaryLanguage(locale)];
