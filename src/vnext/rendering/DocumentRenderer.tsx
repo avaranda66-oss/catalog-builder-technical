@@ -7,6 +7,12 @@ export interface DocumentRendererProps {
   document: CatalogDocument;
   plans: ReadonlyMap<string, TablePlan>;
   assetUrls: ReadonlyMap<string, string>;
+  /**
+   * "Imprimir rascunho": while a draft is printed, every page carries the draft word of the catalog's language
+   * ("RASCUNHO", "DRAFT"…, from the domain registry, never free text) diagonally. Drawing only: it is never part of
+   * the catalog and the publication checks never see it.
+   */
+  draft?: boolean;
 }
 
 /**
@@ -20,16 +26,16 @@ export interface PageSliceNumbering {
   pageCount: number;
 }
 
-export function DocumentRenderer({document,plans,assetUrls}:DocumentRendererProps) {
-  return <DocumentSliceRenderer document={document} plans={plans} assetUrls={assetUrls}
+export function DocumentRenderer({document,plans,assetUrls,draft}:DocumentRendererProps) {
+  return <DocumentSliceRenderer document={document} plans={plans} assetUrls={assetUrls} draft={draft}
     numbering={{firstPageNumber:1,pageCount:document.pages.length}}/>;
 }
 
 /** The same drawing as DocumentRenderer, for some pages of a longer catalog: "Página 4 de 11" stays right. */
-export function DocumentSliceRenderer({document,plans,assetUrls,numbering}:DocumentRendererProps&{numbering:PageSliceNumbering}) {
+export function DocumentSliceRenderer({document,plans,assetUrls,numbering,draft}:DocumentRendererProps&{numbering:PageSliceNumbering}) {
   const count=Math.max(numbering.pageCount,numbering.firstPageNumber+document.pages.length-1);
   return <div data-editorial-root="" lang={document.locale}>
     {document.pages.map((page,i)=><PageRenderer key={page.id} page={page} document={document} pageNumber={numbering.firstPageNumber+i} pageCount={count}
-      plans={plans} assetUrls={assetUrls}/>)}
+      plans={plans} assetUrls={assetUrls} draft={draft}/>)}
   </div>;
 }

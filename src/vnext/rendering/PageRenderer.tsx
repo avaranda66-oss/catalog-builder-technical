@@ -1,7 +1,7 @@
 import type { CatalogDocument, EditorialObject, GroupObject, LeafEditorialObject, Page } from '../domain/editorial-model';
 import type { TablePlan } from './render-plan';
 import { add,mmToU,qCss,uToQ } from '../domain/physical';
-import { PAGE_FOOTER_GEOMETRY, pageFooterBandMm, pageFooterFont, pageFooterTexts, type PageFooterTexts } from '../domain/page-footer';
+import { PAGE_FOOTER_GEOMETRY, draftMarkText, pageFooterBandMm, pageFooterFont, pageFooterTexts, type PageFooterTexts } from '../domain/page-footer';
 import { PrimitiveRenderer } from './PrimitiveRenderer';
 
 /**
@@ -21,7 +21,20 @@ function PageFooterBand({page,document,texts}:{page:Page;document:CatalogDocumen
   </div>;
 }
 
-export function PageRenderer({page,document,pageNumber,pageCount=document.pages.length,plans,assetUrls}:{page:Page;document:CatalogDocument;pageNumber:number;pageCount?:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>}) {
+/**
+ * "Imprimir rascunho": a large, light, see-through word across the page diagonal, drawn above the content (it never
+ * hides it) and below the footer, clipped to the A4 sheet. Only while a draft is printed; never an object.
+ */
+function DraftWatermark({page,text}:{page:Page;text:string}) {
+  const angle=Math.atan2(page.heightMm,page.widthMm)*180/Math.PI;
+  // Long words ("WERSJA ROBOCZA") get smaller letters so the word stays on the sheet.
+  const sizeMm=Math.min(36,Math.hypot(page.widthMm,page.heightMm)*.7/(Math.max(text.length,1)*.62));
+  return <div data-draft-watermark="" className="editorial-draft-watermark" aria-hidden="true">
+    <span style={{fontSize:sizeMm.toFixed(2)+'mm',transform:'rotate(-'+angle.toFixed(2)+'deg)'}}>{text}</span>
+  </div>;
+}
+
+export function PageRenderer({page,document,pageNumber,pageCount=document.pages.length,plans,assetUrls,draft=false}:{page:Page;document:CatalogDocument;pageNumber:number;pageCount?:number;plans:ReadonlyMap<string,TablePlan>;assetUrls:ReadonlyMap<string,string>;draft?:boolean}) {
   const px=(mm:number)=>qCss(uToQ(mmToU(mm)));
   // A hidden object ("Camadas") keeps its box, so measurement still finds it, but it is never painted: screen and PDF agree.
   const visibility=(object:EditorialObject)=>object.hidden?{visibility:'hidden' as const}:{};
@@ -55,6 +68,7 @@ export function PageRenderer({page,document,pageNumber,pageCount=document.pages.
       ...(background?.image&&backgroundUrl?{backgroundImage:`url("${backgroundUrl.replace(/"/g,'%22')}")`,backgroundSize:background.image.fit,
         backgroundPosition:'50% 50%',backgroundRepeat:'no-repeat'}:{})}}>
     {page.objects.map((object,index)=>({object,index})).sort((a,b)=>a.object.zIndex-b.object.zIndex||a.index-b.index).map(({object})=>renderObject(object))}
+    {draft&&<DraftWatermark page={page} text={draftMarkText(document.locale)}/>}
     {footer&&<PageFooterBand page={page} document={document} texts={footer}/>}
   </section>;
 }
