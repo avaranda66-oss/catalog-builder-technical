@@ -508,6 +508,7 @@ export async function insertArsenalPreset(request: ArsenalInsertRequest, port: A
     pageId: inserted.pageId,
     objectIds: inserted.objectIds,
     placeholders: [...assets.unavailable].map((assetId) => ({ assetId, reason: 'UNAVAILABLE' as const })),
+    ...(runner.changed() ? {} : { unchanged: true as const }),
   };
 }
 

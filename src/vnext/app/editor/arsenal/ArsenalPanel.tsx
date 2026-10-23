@@ -225,9 +225,12 @@ export function ArsenalPanel({
       const message = arsenalInsertedMessage(preset, {
         pageNumber: pageIndex >= 0 ? pageIndex + 1 : undefined,
         placeholders: result.placeholders.length,
+        unchanged: result.unchanged,
       });
       setLastMessage(message);
       onInserted({ preset, result, message });
+      // Nothing changed (a style already applied): not a use, and nothing to undo.
+      if (result.unchanged) return;
       const usedId = preset.id;
       void runtime.repository.recordUse(usedId).then((usage) => {
         if (!usage.ok || !alive.current) return;

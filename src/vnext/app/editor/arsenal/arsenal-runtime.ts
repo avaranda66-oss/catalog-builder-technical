@@ -176,8 +176,13 @@ export function arsenalStyleNeedsWords(target: ArsenalStyleTarget): string {
 /** "entrou … sem usar IA": the message after a successful "Usar". */
 export function arsenalInsertedMessage(
   preset: Pick<ArsenalPreset, 'name' | 'kind'>,
-  where: { readonly pageNumber?: number; readonly placeholders: number },
+  where: { readonly pageNumber?: number; readonly placeholders: number; readonly unchanged?: boolean },
 ): string {
+  if (where.unchanged) {
+    return preset.kind === 'style'
+      ? `O objeto selecionado já estava com o estilo “${preset.name}”. Nada mudou.`
+      : `“${preset.name}” não mudou nada na página.`;
+  }
   const place = preset.kind === 'page'
     ? 'como página nova'
     : preset.kind === 'style'

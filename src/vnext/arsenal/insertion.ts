@@ -97,6 +97,11 @@ export interface ArsenalInsertSuccess {
   /** Top-level objects created, or the styled object. */
   readonly objectIds: readonly string[];
   readonly placeholders: readonly ArsenalImagePlaceholder[];
+  /**
+   * The catalog already looked like this (a style already applied): no action changed anything, so nothing entered
+   * the Desfazer history. The caller must not point at Desfazer (it would undo the change before this one).
+   */
+  readonly unchanged?: true;
 }
 
 export interface ArsenalInsertFailure {

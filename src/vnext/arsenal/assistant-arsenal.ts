@@ -26,7 +26,11 @@ export interface AssistantArsenalUseContext {
 }
 
 export type AssistantArsenalUseResult =
-  | { readonly ok: true; readonly text: string; readonly pageId: string; readonly objectIds: readonly string[]; readonly newPage: boolean }
+  | {
+    readonly ok: true; readonly text: string; readonly pageId: string; readonly objectIds: readonly string[]; readonly newPage: boolean;
+    /** Nothing changed (a style already applied): the chat offers no Desfazer, which would undo the change before. */
+    readonly unchanged?: true;
+  }
   | { readonly ok: false; readonly text: string };
 
 /** "Guardar no arsenal?" after the AI built a page: the person confirmed the name and the category. */
@@ -179,6 +183,12 @@ export function createAssistantArsenal(deps: AssistantArsenalDependencies): Assi
       const result = await deps.insertion.insert({ preset, target }, port);
       if (!result.ok) {
         return { ok: false, text: (INSERT_TEXT[result.error.code] ?? 'Não deu para usar este modelo sem estragar a página.') + ' Nada foi mudado.' };
+      }
+      if (result.unchanged) {
+        return { ok: true, unchanged: true, pageId: result.pageId, objectIds: result.objectIds, newPage: false,
+          text: preset.payload.kind === 'style'
+            ? `O objeto já estava com o estilo “${preset.name}”. Nada mudou.`
+            : `“${preset.name}” não mudou nada na página.` };
       }
       // Counting the use never blocks the insertion that already happened.
       try { await deps.repository.recordUse(presetId); } catch { /* the use count is best effort */ }

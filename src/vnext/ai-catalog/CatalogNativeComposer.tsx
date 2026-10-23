@@ -580,9 +580,12 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
     try {
       const result = await arsenal.use(choice.presetId, { session, activePageId, selectedObjectIds });
       if (!result.ok) { setError(result.text, card.conversationId); return; }
-      rememberUndo(saveTurn(card.conversationId, 'assistant', result.text, 'arsenal'));
+      const said = saveTurn(card.conversationId, 'assistant', result.text, 'arsenal');
+      // Nothing changed (a style already applied): no Desfazer here, it would undo the change before this one.
+      if (!result.unchanged) rememberUndo(said);
       setLocalCard(undefined); setError('');
       if (result.newPage) onShowPage?.(result.pageId);
+      else if (result.objectIds[0]) onShowTable?.(result.pageId, result.objectIds[0]);
     } catch {
       setError('Não deu para usar este modelo agora.' + NOT_CHANGED, card.conversationId);
     } finally {
