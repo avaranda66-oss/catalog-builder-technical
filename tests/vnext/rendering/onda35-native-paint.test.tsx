@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { plainRichText, type CatalogDocument, type EditorialObject } from '@/vnext/domain';
 import { createCatalogDocument } from '@/vnext/application';
@@ -105,27 +105,64 @@ describe('Onda 3.5 native paint (screen and PDF share this DOM)', () => {
     expect(markup).toContain('white-space:pre');
   });
 
-  it('shrinks the words of a selo to the room inside its side padding (the same room the publication review measures)', () => {
-    // Onda 4 (P): the words are 95 px wide at 10 pt; the selo is 100 px wide with 5 px of padding on each side, so only
-    // 90 px are free. Before, the padding counted as room: nothing shrank and the review said "não cabe".
-    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+  /**
+   * A selo laid out like the browser does: the flow root fills the selo inside its side padding (90 px of a 100 px
+   * selo with 5 px each side), its paragraphs are never narrower than that, and the words are `wordsPx` wide at 10 pt
+   * (or always `wordsPx` when `followsFont` is false). `zoom` scales every getBoundingClientRect, like the canvas zoom.
+   */
+  function renderMeasuredSelo({ wordsPx, zoom, followsFont = true }: { wordsPx: number; zoom: number; followsFont?: boolean }) {
+    const room = 90;
+    const fontScale = (flow: HTMLElement) => (followsFont ? Number.parseFloat(flow.parentElement!.style.fontSize || '10pt') / 10 : 1);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const width = this.hasAttribute('data-flow-root') && this.parentElement?.hasAttribute('data-text-box') ? room * zoom : 0;
+      return { width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    // clientWidth ignores the zoom (layout pixels): it must not be the room any more.
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
       return this.hasAttribute('data-text-box') ? 100 : 0;
     });
-    const realStyle = window.getComputedStyle.bind(window);
-    vi.spyOn(window, 'getComputedStyle').mockImplementation((element: Element) =>
-      (element.hasAttribute('data-text-box') ? { paddingLeft: '5px', paddingRight: '5px' } as CSSStyleDeclaration : realStyle(element)));
     let flow: HTMLElement | undefined;
     vi.spyOn(document, 'createRange').mockImplementation(() => ({
       selectNodeContents: (node: Node) => { flow = node as HTMLElement; },
-      getBoundingClientRect: () => ({ width: 95 * Number.parseFloat(flow!.parentElement!.style.fontSize) / 10 }),
+      getBoundingClientRect: () => ({ width: Math.max(room, wordsPx * fontScale(flow!)) * zoom }),
     }) as unknown as Range);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const catalog = documentWith([{ id: 'selo', type: 'text', frame: { xMm: 14, yMm: 150, widthMm: 30, heightMm: 7 },
       zIndex: 0, text: plainRichText('selo', 'Faixa azul 1'), style: { fontSizePt: 10 }, box: { fill: '#173F66', paddingMm: 1.1, fitText: true } }]);
     const view = render(<DocumentRenderer document={catalog} plans={compilePlans(catalog).plans} assetUrls={new Map()} />);
-    const selo = view.container.querySelector<HTMLElement>('[data-text-box]')!;
-    expect(clientWidth).toHaveBeenCalled();
+    return { selo: view.container.querySelector<HTMLElement>('[data-text-box]')!, errors };
+  }
+
+  it('shrinks the words of a selo to the room inside its side padding (the same room the publication review measures)', () => {
+    // Onda 4 (P): the words are 95 px wide at 10 pt; only 90 px are free inside the padding. Before, the padding counted
+    // as room: nothing shrank and the review said "não cabe".
+    const { selo } = renderMeasuredSelo({ wordsPx: 95, zoom: 1 });
     expect(selo.getAttribute('data-text-fit-scale')).toBe('0.94');
     expect(selo.style.fontSize).toBe('9.4pt');
+  });
+
+  it('the page zoom does not change the fit: same scale at 75%, 101% and 125%, and a text that fits stays whole', () => {
+    // Before, the words were measured with the zoom and the room without it: at 125% every selo shrank to 40%, and at
+    // 101% (the advanced editor at 1366 px) the editor stopped with "Maximum update depth exceeded".
+    for (const zoom of [0.75, 1.0113, 1.25]) {
+      const tooLong = renderMeasuredSelo({ wordsPx: 95, zoom });
+      expect(tooLong.selo.getAttribute('data-text-fit-scale')).toBe('0.94');
+      expect(tooLong.errors).not.toHaveBeenCalled();
+      cleanup();
+      vi.restoreAllMocks();
+      const fits = renderMeasuredSelo({ wordsPx: 80, zoom });
+      expect(fits.selo.getAttribute('data-text-fit-scale')).toBe('1');
+      expect(fits.selo.style.fontSize).toBe('10pt');
+      expect(fits.errors).not.toHaveBeenCalled();
+      cleanup();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('stops after one try when the words do not get narrower with the font (never loops down to 40%)', () => {
+    const { selo, errors } = renderMeasuredSelo({ wordsPx: 91, zoom: 1.0113, followsFont: false });
+    expect(selo.getAttribute('data-text-fit-scale')).toBe('0.98');
+    expect(errors).not.toHaveBeenCalled();
   });
 
   it('paints the page background colour and picture on the page itself, not as an object', () => {
