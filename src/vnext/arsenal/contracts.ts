@@ -17,6 +17,7 @@ import {
 } from '../domain/editorial-model';
 import { walkPageObjects } from '../domain/object-tree';
 import { validateTable } from '../table/table-model';
+import { arsenalSearchTermMatchesWord, arsenalSignificantTerms } from './search-text';
 
 /**
  * Onda 4.5 — "Arsenal" (ADR-arsenal): presets the whole team saves once and reuses in any catalog.
@@ -646,12 +647,16 @@ function searchWords(preset: ArsenalSearchable): string[] {
     .filter(Boolean);
 }
 
-/** Every word of the query must start a word of the name, description, tags, synonyms, category or kind. */
+/**
+ * Every word of the query must start a word of the name, description, tags, synonyms, category or kind. Accents,
+ * case, Portuguese plurals and small words ("de", "com") do not count ("cabecalhos" finds "Cabeçalho azul"; see
+ * `search-text.ts`).
+ */
 export function arsenalPresetMatchesQuery(preset: ArsenalSearchable, query: string): boolean {
-  const wanted = normalizeArsenalSearchText(query).split(/[^a-z0-9]+/).filter(Boolean);
+  const wanted = arsenalSignificantTerms(normalizeArsenalSearchText(query).split(/[^a-z0-9]+/).filter(Boolean));
   if (wanted.length === 0) return true;
   const words = searchWords(preset);
-  return wanted.every((term) => words.some((word) => word.startsWith(term)));
+  return wanted.every((term) => words.some((word) => arsenalSearchTermMatchesWord(term, word)));
 }
 
 export interface ArsenalCompactIndexEntry {

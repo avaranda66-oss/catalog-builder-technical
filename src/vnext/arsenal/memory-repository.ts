@@ -36,6 +36,51 @@ export interface ArsenalMemoryActor {
 export interface ArsenalMemoryStoreOptions {
   readonly builtins?: readonly ArsenalPreset[];
   readonly now?: () => string;
+  /**
+   * Where the team presets and use counts live between page loads (the local harness keeps them in
+   * `localStorage`, like its catalogs). Read before every call and written after every change, so two tabs or two
+   * people of the harness share one arsenal, as on the server.
+   */
+  readonly persistence?: ArsenalMemoryPersistence;
+}
+
+/** What the store keeps of the team arsenal (built-ins stay in code). */
+export interface ArsenalMemorySnapshot {
+  readonly version: 1;
+  readonly presets: ReadonlyArray<{
+    readonly preset: ArsenalPreset;
+    readonly lastMutationId: string;
+    readonly deletedAt: string | null;
+    readonly deletedBy: string | null;
+  }>;
+  readonly usage: ReadonlyArray<{ readonly presetId: string; readonly useCount: number; readonly lastUsedAt: string }>;
+}
+
+export interface ArsenalMemoryPersistence {
+  /** The saved snapshot, or `undefined` when nothing was saved. Malformed entries are ignored by the store. */
+  load(): unknown;
+  save(snapshot: ArsenalMemorySnapshot): void;
+}
+
+/** Keeps the snapshot as JSON under one key of a Web Storage (`localStorage` in the harness). */
+export function webStorageArsenalPersistence(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  key: string,
+): ArsenalMemoryPersistence {
+  return {
+    load() {
+      const raw = storage.getItem(key);
+      if (raw === null) return undefined;
+      try {
+        return JSON.parse(raw) as unknown;
+      } catch {
+        return undefined;
+      }
+    },
+    save(snapshot) {
+      storage.setItem(key, JSON.stringify(snapshot));
+    },
+  };
 }
 
 export interface ArsenalMemoryStore {
@@ -108,6 +153,62 @@ export function createInMemoryArsenalStore(options: ArsenalMemoryStoreOptions = 
   }
   const rows = new Map<string, StoredPreset>();
   const usage = new Map<string, StoredUsage>();
+  const persistence = options.persistence;
+
+  /** Replaces the maps with what the persistence holds (entries that do not parse are left out). */
+  const pull = (): void => {
+    if (!persistence) return;
+    const snapshot = persistence.load() as Partial<ArsenalMemorySnapshot> | undefined;
+    rows.clear();
+    usage.clear();
+    if (!snapshot || typeof snapshot !== 'object' || snapshot.version !== 1) return;
+    for (const entry of Array.isArray(snapshot.presets) ? snapshot.presets : []) {
+      const parsed = parseArsenalPreset(entry?.preset);
+      if (!parsed.ok || parsed.value.scope !== 'team' || !isTeamArsenalPresetId(parsed.value.id)) continue;
+      if (typeof entry.lastMutationId !== 'string' || !UUID_PATTERN.test(entry.lastMutationId)) continue;
+      const deletedAt = typeof entry.deletedAt === 'string' ? entry.deletedAt : null;
+      const deletedBy = typeof entry.deletedBy === 'string' ? entry.deletedBy : null;
+      rows.set(parsed.value.id, { preset: parsed.value, lastMutationId: entry.lastMutationId, deletedAt, deletedBy });
+    }
+    for (const entry of Array.isArray(snapshot.usage) ? snapshot.usage : []) {
+      if (!entry || !ArsenalPresetIdSchema.safeParse(entry.presetId).success) continue;
+      if (!Number.isSafeInteger(entry.useCount) || entry.useCount < 1 || typeof entry.lastUsedAt !== 'string') continue;
+      usage.set(entry.presetId, { useCount: entry.useCount, lastUsedAt: entry.lastUsedAt });
+    }
+  };
+
+  const push = (): void => {
+    if (!persistence) return;
+    persistence.save(clone({
+      version: 1,
+      presets: [...rows.values()],
+      usage: [...usage.entries()].map(([presetId, used]) => ({ presetId, ...used })),
+    }));
+  };
+
+  /** Every call sees the persisted state first; a successful change is written back. */
+  const persistent = (repository: ArsenalRepository): ArsenalRepository => {
+    if (!persistence) return repository;
+    const read = <A extends unknown[], R>(call: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
+      pull();
+      return call(...args);
+    };
+    const write = <A extends unknown[], R extends ArsenalResult<unknown>>(call: (...args: A) => Promise<R>) =>
+      async (...args: A): Promise<R> => {
+        pull();
+        const result = await call(...args);
+        if (result.ok) push();
+        return result;
+      };
+    return {
+      list: read(repository.list),
+      getMany: read(repository.getMany),
+      create: write(repository.create),
+      updateCAS: write(repository.updateCAS),
+      deleteCAS: write(repository.deleteCAS),
+      recordUse: write(repository.recordUse),
+    };
+  };
 
   const withUsage = (preset: ArsenalPreset): ArsenalPreset => {
     const used = usage.get(preset.id);
@@ -299,5 +400,5 @@ export function createInMemoryArsenalStore(options: ArsenalMemoryStoreOptions = 
     };
   };
 
-  return { as };
+  return { as: (actor) => persistent(as(actor)) };
 }

@@ -3,5 +3,16 @@ export * from './repository';
 export * from './insertion';
 export * from './capture';
 export * from './preview';
-export { createInMemoryArsenalStore } from './memory-repository';
-export type { ArsenalMemoryActor, ArsenalMemoryStore, ArsenalMemoryStoreOptions } from './memory-repository';
+export { createInMemoryArsenalStore, webStorageArsenalPersistence } from './memory-repository';
+export type {
+  ArsenalMemoryActor,
+  ArsenalMemoryPersistence,
+  ArsenalMemorySnapshot,
+  ArsenalMemoryStore,
+  ArsenalMemoryStoreOptions,
+} from './memory-repository';
+export * from './search-text';
+export * from './search';
+export * from './supabase-repository';
+export * from './builtin-source';
+export * from './service';
