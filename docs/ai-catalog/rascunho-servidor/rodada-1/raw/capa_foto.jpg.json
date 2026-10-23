@@ -1,0 +1,369 @@
+{
+  "image": {
+    "fileName": "capa_foto.jpg",
+    "width": 1131,
+    "height": 1600,
+    "originalWidth": 1240,
+    "originalHeight": 1754
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/b4293ff3f29679a0a87d6c00d31503587cbe391baa4e5ca2b786986e47c219a1.jpg",
+    "sha256": "b4293ff3f29679a0a87d6c00d31503587cbe391baa4e5ca2b786986e47c219a1",
+    "mimeType": "image/jpeg",
+    "fileName": "capa_foto.jpg",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "capa",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "logo",
+              "bbox": [
+                90,
+                160,
+                163,
+                405
+              ],
+              "normalizedBox": [
+                0.09,
+                0.16,
+                0.163,
+                0.405
+              ],
+              "text": "logo PRESYS",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "image",
+              "bbox": [
+                181,
+                117,
+                547,
+                921
+              ],
+              "normalizedBox": [
+                0.181,
+                0.117,
+                0.547,
+                0.921
+              ],
+              "text": "",
+              "instruction": "foto do PCON-Y17"
+            },
+            {
+              "id": "region-3",
+              "kind": "callout",
+              "bbox": [
+                473,
+                582,
+                595,
+                874
+              ],
+              "normalizedBox": [
+                0.473,
+                0.582,
+                0.595,
+                0.874
+              ],
+              "text": "saída pneumática",
+              "instruction": ""
+            },
+            {
+              "id": "region-4",
+              "kind": "title",
+              "bbox": [
+                531,
+                113,
+                595,
+                482
+              ],
+              "normalizedBox": [
+                0.531,
+                0.113,
+                0.595,
+                0.482
+              ],
+              "text": "PCON-Y17",
+              "instruction": ""
+            },
+            {
+              "id": "region-5",
+              "kind": "subtitle",
+              "bbox": [
+                608,
+                107,
+                653,
+                545
+              ],
+              "normalizedBox": [
+                0.608,
+                0.107,
+                0.653,
+                0.545
+              ],
+              "text": "Controlador de pressão",
+              "instruction": ""
+            },
+            {
+              "id": "region-6",
+              "kind": "pill",
+              "bbox": [
+                666,
+                97,
+                716,
+                313
+              ],
+              "normalizedBox": [
+                0.666,
+                0.097,
+                0.716,
+                0.313
+              ],
+              "text": "0 a 200 psi",
+              "instruction": ""
+            },
+            {
+              "id": "region-7",
+              "kind": "pill",
+              "bbox": [
+                677,
+                335,
+                727,
+                552
+              ],
+              "normalizedBox": [
+                0.677,
+                0.335,
+                0.727,
+                0.552
+              ],
+              "text": "hidráulico",
+              "instruction": ""
+            },
+            {
+              "id": "region-8",
+              "kind": "pill",
+              "bbox": [
+                687,
+                574,
+                737,
+                795
+              ],
+              "normalizedBox": [
+                0.687,
+                0.574,
+                0.737,
+                0.795
+              ],
+              "text": "pneumático",
+              "instruction": ""
+            },
+            {
+              "id": "region-9",
+              "kind": "band",
+              "bbox": [
+                759,
+                69,
+                824,
+                877
+              ],
+              "normalizedBox": [
+                0.759,
+                0.069,
+                0.824,
+                0.877
+              ],
+              "text": "",
+              "instruction": "faixa azul"
+            },
+            {
+              "id": "region-10",
+              "kind": "bar",
+              "bbox": [
+                841,
+                75,
+                929,
+                852
+              ],
+              "normalizedBox": [
+                0.841,
+                0.075,
+                0.929,
+                0.852
+              ],
+              "text": "Y17 · Y18-LP · Y18-BP",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": [
+            {
+              "id": "region-2-instruction",
+              "source": "instruction",
+              "regionId": "region-2",
+              "text": "foto do PCON-Y17",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 14,
+                  "end": 16
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-4-text",
+              "source": "text",
+              "regionId": "region-4",
+              "text": "PCON-Y17",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 6,
+                  "end": 8
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-6-text",
+              "source": "text",
+              "regionId": "region-6",
+              "text": "0 a 200 psi",
+              "matches": [
+                {
+                  "value": "0",
+                  "start": 0,
+                  "end": 1
+                },
+                {
+                  "value": "200",
+                  "start": 4,
+                  "end": 7
+                }
+              ],
+              "status": "confirmar"
+            },
+            {
+              "id": "region-10-text",
+              "source": "text",
+              "regionId": "region-10",
+              "text": "Y17 · Y18-LP · Y18-BP",
+              "matches": [
+                {
+                  "value": "17",
+                  "start": 1,
+                  "end": 3
+                },
+                {
+                  "value": "18",
+                  "start": 7,
+                  "end": 9
+                },
+                {
+                  "value": "18",
+                  "start": 16,
+                  "end": 18
+                }
+              ],
+              "status": "confirmar"
+            }
+          ]
+        },
+        "dimensions": {
+          "width": 1131,
+          "height": 1600
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 1277,
+          "estimatedUsd": 0.012167
+        },
+        "ms": 15020
+      }
+    },
+    "ms": 15875
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1213
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2380
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 318
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 11106,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"capa\",\n  \"regions\": [\n    {\n      \"kind\": \"logo\",\n      \"bbox\": [90, 160, 163, 405],\n      \"text\": \"logo PRESYS\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [181, 117, 547, 921],\n      \"text\": \"\",\n      \"instruction\": \"foto do PCON-Y17\"\n    },\n    {\n      \"kind\": \"callout\",\n      \"bbox\": [473, 582, 595, 874],\n      \"text\": \"saída pneumática\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"title\",\n      \"bbox\": [531, 113, 595, 482],\n      \"text\": \"PCON-Y17\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [608, 107, 653, 545],\n      \"text\": \"Controlador de pressão\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [666, 97, 716, 313],\n      \"text\": \"0 a 200 psi\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [677, 335, 727, 552],\n      \"text\": \"hidráulico\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"pill\",\n      \"bbox\": [687, 574, 737, 795],\n      \"text\": \"pneumático\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"band\",\n      \"bbox\": [759, 69, 824, 877],\n      \"text\": \"\",\n      \"instruction\": \"faixa azul\"\n    },\n    {\n      \"kind\": \"bar\",\n      \"bbox\": [841, 75, 929, 852],\n      \"text\": \"Y17 · Y18-LP · Y18-BP\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "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"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 600,
+          "totalTokenCount": 3003,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 677,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "KbLaarT3Hpji5NoPnemRoQc"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 1277
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 854
+    }
+  ]
+}

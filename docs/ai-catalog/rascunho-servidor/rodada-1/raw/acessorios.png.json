@@ -1,0 +1,369 @@
+{
+  "image": {
+    "fileName": "acessorios.png",
+    "width": 1131,
+    "height": 1600,
+    "originalWidth": 1240,
+    "originalHeight": 1754
+  },
+  "source": {
+    "path": "0f8fad5b-d9cb-469f-a165-70867728950e/1502063d8f87635d17a81203dade066fa6a61c5d6d6fedb25e2341efb86036b4.png",
+    "sha256": "1502063d8f87635d17a81203dade066fa6a61c5d6d6fedb25e2341efb86036b4",
+    "mimeType": "image/png",
+    "fileName": "acessorios.png",
+    "pageCount": 1,
+    "firstPage": 1,
+    "lastPage": 1
+  },
+  "response": {
+    "status": 200,
+    "json": {
+      "code": "OK",
+      "sketch": {
+        "plan": {
+          "version": 1,
+          "archetype": "fornecimento_acessorios",
+          "regions": [
+            {
+              "id": "region-1",
+              "kind": "title",
+              "bbox": [
+                45,
+                63,
+                90,
+                390
+              ],
+              "normalizedBox": [
+                0.045,
+                0.063,
+                0.09,
+                0.39
+              ],
+              "text": "Acessórios",
+              "instruction": ""
+            },
+            {
+              "id": "region-2",
+              "kind": "callout",
+              "bbox": [
+                68,
+                345,
+                155,
+                885
+              ],
+              "normalizedBox": [
+                0.068,
+                0.345,
+                0.155,
+                0.885
+              ],
+              "text": "fotos pequenas à esquerda",
+              "instruction": ""
+            },
+            {
+              "id": "region-3",
+              "kind": "image",
+              "bbox": [
+                166,
+                60,
+                300,
+                246
+              ],
+              "normalizedBox": [
+                0.166,
+                0.06,
+                0.3,
+                0.246
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-4",
+              "kind": "subtitle",
+              "bbox": [
+                174,
+                277,
+                212,
+                392
+              ],
+              "normalizedBox": [
+                0.174,
+                0.277,
+                0.212,
+                0.392
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-5",
+              "kind": "paragraph",
+              "bbox": [
+                228,
+                276,
+                282,
+                915
+              ],
+              "normalizedBox": [
+                0.228,
+                0.276,
+                0.282,
+                0.915
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-6",
+              "kind": "image",
+              "bbox": [
+                355,
+                60,
+                489,
+                246
+              ],
+              "normalizedBox": [
+                0.355,
+                0.06,
+                0.489,
+                0.246
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-7",
+              "kind": "subtitle",
+              "bbox": [
+                362,
+                277,
+                401,
+                392
+              ],
+              "normalizedBox": [
+                0.362,
+                0.277,
+                0.401,
+                0.392
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-8",
+              "kind": "paragraph",
+              "bbox": [
+                417,
+                276,
+                471,
+                940
+              ],
+              "normalizedBox": [
+                0.417,
+                0.276,
+                0.471,
+                0.94
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-9",
+              "kind": "image",
+              "bbox": [
+                543,
+                60,
+                676,
+                246
+              ],
+              "normalizedBox": [
+                0.543,
+                0.06,
+                0.676,
+                0.246
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-10",
+              "kind": "subtitle",
+              "bbox": [
+                550,
+                277,
+                589,
+                392
+              ],
+              "normalizedBox": [
+                0.55,
+                0.277,
+                0.589,
+                0.392
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-11",
+              "kind": "paragraph",
+              "bbox": [
+                605,
+                276,
+                660,
+                915
+              ],
+              "normalizedBox": [
+                0.605,
+                0.276,
+                0.66,
+                0.915
+              ],
+              "text": "",
+              "instruction": ""
+            },
+            {
+              "id": "region-12",
+              "kind": "image",
+              "bbox": [
+                732,
+                60,
+                865,
+                246
+              ],
+              "normalizedBox": [
+                0.732,
+                0.06,
+                0.865,
+                0.246
+              ],
+              "text": "",
+              "instruction": "fotos pequenas à esquerda"
+            },
+            {
+              "id": "region-13",
+              "kind": "subtitle",
+              "bbox": [
+                740,
+                277,
+                778,
+                392
+              ],
+              "normalizedBox": [
+                0.74,
+                0.277,
+                0.778,
+                0.392
+              ],
+              "text": "código",
+              "instruction": ""
+            },
+            {
+              "id": "region-14",
+              "kind": "paragraph",
+              "bbox": [
+                793,
+                276,
+                847,
+                921
+              ],
+              "normalizedBox": [
+                0.793,
+                0.276,
+                0.847,
+                0.921
+              ],
+              "text": "",
+              "instruction": ""
+            }
+          ],
+          "questions": [],
+          "confirmations": []
+        },
+        "dimensions": {
+          "width": 1131,
+          "height": 1600
+        },
+        "attempts": 1,
+        "model": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.8-flash",
+        "promptVersion": "sketch-plan-v1",
+        "usage": {
+          "inputTokens": 1726,
+          "outputTokens": 1989,
+          "estimatedUsd": 0.017507
+        },
+        "ms": 18644
+      }
+    },
+    "ms": 19262
+  },
+  "calls": [
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 1252
+    },
+    {
+      "step": "upload-start",
+      "status": 200,
+      "ms": 2500
+    },
+    {
+      "step": "count",
+      "status": 200,
+      "ms": 496
+    },
+    {
+      "step": "generate",
+      "status": 200,
+      "ms": 14386,
+      "envelope": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\n  \"archetype\": \"fornecimento_acessorios\",\n  \"regions\": [\n    {\n      \"kind\": \"title\",\n      \"bbox\": [45, 63, 90, 390],\n      \"text\": \"Acessórios\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"callout\",\n      \"bbox\": [68, 345, 155, 885],\n      \"text\": \"fotos pequenas à esquerda\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [166, 60, 300, 246],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [174, 277, 212, 392],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [228, 276, 282, 915],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [355, 60, 489, 246],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [362, 277, 401, 392],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [417, 276, 471, 940],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [543, 60, 676, 246],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [550, 277, 589, 392],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [605, 276, 660, 915],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"image\",\n      \"bbox\": [732, 60, 865, 246],\n      \"text\": \"\",\n      \"instruction\": \"fotos pequenas à esquerda\"\n    },\n    {\n      \"kind\": \"subtitle\",\n      \"bbox\": [740, 277, 778, 392],\n      \"text\": \"código\",\n      \"instruction\": \"\"\n    },\n    {\n      \"kind\": \"paragraph\",\n      \"bbox\": [793, 276, 847, 921],\n      \"text\": \"\",\n      \"instruction\": \"\"\n    }\n  ],\n  \"questions\": []\n}",
+                  "thoughtSignature": "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"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1726,
+          "candidatesTokenCount": 781,
+          "totalTokenCount": 3715,
+          "promptTokensDetails": [
+            {
+              "modality": "IMAGE",
+              "tokenCount": 1092
+            },
+            {
+              "modality": "TEXT",
+              "tokenCount": 634
+            }
+          ],
+          "thoughtsTokenCount": 1208,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "U7LaatWSIti7iLMPg6nakQY"
+      },
+      "tokens": {
+        "input": 1726,
+        "output": 1989
+      },
+      "finishReason": "STOP"
+    },
+    {
+      "step": "delete",
+      "status": 200,
+      "ms": 617
+    }
+  ]
+}
