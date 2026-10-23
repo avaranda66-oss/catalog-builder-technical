@@ -13,6 +13,10 @@
 /* Onda 4 (FR-55): the control footer of every page (code · revision · date · language, then "Página x de y"). Above all
    objects, never clickable; one line, so a long code never wraps over the page edge. */
 [data-editorial-root] .editorial-page-footer { position:absolute; z-index:2147483647; display:flex; justify-content:space-between; align-items:flex-start; gap:4mm; margin:0; padding:0; border:0; white-space:pre; pointer-events:none; overflow:visible; }
+/* "Imprimir rascunho": the diagonal draft word, see-through and above the content so nothing is hidden, below the footer,
+   clipped to the sheet. Only drawn while a draft is printed. */
+[data-editorial-root] .editorial-draft-watermark { position:absolute; inset:0; z-index:2147483646; display:flex; align-items:center; justify-content:center; margin:0; padding:0; border:0; overflow:hidden; pointer-events:none; }
+[data-editorial-root] .editorial-draft-watermark > span { display:block; flex:none; color:rgb(110 110 110 / .16); font-family:'Noto Sans',sans-serif; font-weight:700; font-style:normal; line-height:1; letter-spacing:.06em; white-space:nowrap; transform-origin:50% 50%; }
 [data-editorial-root] .table-intrinsic { margin:0; padding:0; border:0; }
 [data-editorial-root] .editorial-grid { position:relative; display:grid; box-sizing:border-box; gap:0; margin:0; border:0; padding:0; }
 [data-editorial-root] .logical-row { display:contents; }
