@@ -251,13 +251,18 @@ export function installAutosaveTrace(runtime: VNextPersistenceRuntime, repositor
   };
   // FORCE_RACE=ack-after-fit: the gated save is acknowledged right after the passive effects of the commit that drew
   // the fitted frame (the inspector draft state update from that effect is still pending at default priority).
+  // FORCE_RACE=ack-after-fit-commit: the same instant (first commit at or after the fit, once its passive effects ran),
+  // without asking what the fields say there. 'ack-after-fit' waited for the stale fields the editor showed at that
+  // commit before the fix; after the fix that commit has none, so this mode is the one that still lands in the window.
   let forceStartSeq: number | undefined;
-  if (forceRace === 'ack-after-fit') {
+  if (forceRace === 'ack-after-fit' || forceRace === 'ack-after-fit-commit') {
     (window as any).__AUTOSAVE_ON_PASSIVE__ = (commitPd: unknown) => {
       if (!ackGate || forceStartSeq === undefined) return;
       const seq = ws.getSnapshot().session.getSnapshot().localSequence;
-      if (seq < forceStartSeq + 2 || typeof commitPd !== 'string' || !commitPd.startsWith('inspector:') || commitPd.startsWith('inspector:/')) return;
-      push('force-release', { mode: 'ack-after-fit', commitPd, pdNow: Boolean(barrier?.hasPendingDraftRaw()) });
+      if (seq < forceStartSeq + 2) return;
+      if (forceRace === 'ack-after-fit'
+        && (typeof commitPd !== 'string' || !commitPd.startsWith('inspector:') || commitPd.startsWith('inspector:/'))) return;
+      push('force-release', { mode: forceRace, commitPd, pdNow: Boolean(barrier?.hasPendingDraftRaw()) });
       openAckGate();
     };
   }
