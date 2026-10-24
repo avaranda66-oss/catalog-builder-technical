@@ -15,7 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  aria, baseUrl, consoleErrors, createCatalog, ensureServer, freshDb, harnessUrl, journey, launch,
+  aria, baseUrl, consoleErrors, createCatalog, dumpAutosaveTrace, ensureServer, freshDb, harnessUrl, journey, launch,
   shot, state, visibleText, waitSaved, writeJourneyResult,
 } from './lib.mjs';
 import { scanJargon as eyesScanJargon, unexplainedMm } from './fixtures/father-eyes.mjs';
@@ -600,6 +600,7 @@ try {
     Boolean(timelineB2.first) && timelineB2.first.visible && timelineB2.first.tone === 'success' && /12 linhas e 4 colunas/.test(timelineB2.first.text) && timelineB2.first.afterMs < 1000,
     timelineB2.first ? `${timelineB2.first.afterMs} ms · ${timelineB2.first.tone} · "${timelineB2.first.text.slice(0, 160)}" · sumiu após ${timelineB2.vanishedAfterMs ?? '> 7000'} ms` : 'nenhuma mensagem apareceu em 4 s');
   await waitSaved(page, 20000);
+  await dumpAutosaveTrace(page, 'B2-salvo');
   j.step('B2 cabe na página e foi salvo', sumB2?.fitsPage && (await state(page)).runtime.saveLabel === 'Saved', JSON.stringify(sumB2?.frame));
   j.addEvidence(await shot(page, 'j04-editar-a-mao-06-tabela-colada-pelo-botao'));
 
