@@ -234,6 +234,42 @@ describe('W3.H deterministic autosave coordinator', () => {
     expect(active.runtime.workspace.getSnapshot().save.label).toBe('Saved');
   });
 
+  it('AUTOSAVE-08B a draft that ends without a publish re-arms autosave on the next syncDraftState, and only then', async () => {
+    // j04 @1280: the editor's answer went from "draft pending" to "nothing pending" in a render, with nobody
+    // publishing, and autosave stayed disarmed on "Alterações não salvas". syncDraftState runs after every commit.
+    const document = documentFixture();
+    const repository = new StrictCasCatalogRepository(document);
+    const clock = new ManualAutosaveClock();
+    const active = runtimeFixture(repository, document, 750, { autosaveClock: clock });
+    let pending = true;
+    const binding = active.runtime.workspace.getSnapshot().binding;
+    active.runtime.registerAuthoringBarrier(binding.openSessionId, {
+      hasPendingDraft: () => pending,
+      prepareForSave: () => ({ ok: true as const }),
+    });
+    rename(active, 'Silent draft');
+    expect(clock.pendingCount()).toBe(0);
+
+    const publishes = vi.fn();
+    const unsubscribe = active.runtime.workspace.subscribe(publishes);
+    active.runtime.workspace.syncDraftState();
+    expect(publishes).not.toHaveBeenCalled(); // same answer as the snapshot: nothing to say
+
+    pending = false; // ended in silence
+    expect(clock.pendingCount()).toBe(0);
+    active.runtime.workspace.syncDraftState();
+    expect(publishes).toHaveBeenCalledTimes(1);
+    expect(clock.pendingCount()).toBe(1);
+    active.runtime.workspace.syncDraftState();
+    expect(publishes).toHaveBeenCalledTimes(1); // already told: no publish storm
+    unsubscribe();
+
+    clock.advanceBy(25);
+    await settleAsyncWork();
+    expect(repository.saveCAS).toHaveBeenCalledTimes(1);
+    expect(active.runtime.workspace.getSnapshot()).toMatchObject({ dirty: false, save: { label: 'Saved' } });
+  });
+
   it('AUTOSAVE-09 keeps OFFLINE work dirty and locally recoverable, retrying only after 5 s (FR-44), never in a tight loop', async () => {
     const document = documentFixture();
     const repository = new StrictCasCatalogRepository(document);
