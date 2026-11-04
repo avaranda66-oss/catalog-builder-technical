@@ -34,6 +34,7 @@ import {
 } from '@/vnext/application';
 import { CatalogLibrary, CatalogOpenFailure } from '@/vnext/app/CatalogLibrary';
 import { VNextApp } from '@/vnext/app/VNextApp';
+import { autosaveTraceEnabled, installAutosaveTrace } from './autosave-trace';
 import { createSaveBeforeLibraryNavigation } from '@/vnext/app/catalog-navigation';
 import {
   DefaultAssetPersistenceBridge,
@@ -770,6 +771,7 @@ async function openCatalog(catalogId: string): Promise<void> {
   });
   activeRuntime = runtime;
   activeBridge = bridge;
+  if (autosaveTraceEnabled()) installAutosaveTrace(runtime, repository, readCatalog);
   const opened = await runtime.reopenCoordinator.open(catalogId, { allowDiscardUnsaved: true });
   if (activeRuntime !== runtime) return;
   if (!opened.ok) {

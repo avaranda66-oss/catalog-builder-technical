@@ -173,7 +173,42 @@ export async function launch({ width = VP.width, height = VP.height } = {}) {
     acceptDownloads: false,
   });
   const log = { console: [], pageErrors: [], dialogs: [] };
+  // Investigação do autosave (opt-in): rastreio no harness, latência no repositório simulado e CPU lenta.
+  if (AUTOSAVE_TRACE) await context.addInitScript(() => {
+    window.__AUTOSAVE_TRACE_ENABLED__ = true;
+    // React commit / passive-effect timing through the DevTools hook (react-refresh wraps it; nothing else changes).
+    const events = (window.__AUTOSAVE_TRACE_EVENTS__ = []);
+    const now = () => Math.round(performance.now() * 10) / 10;
+    const pd = () => { try { return window.__AUTOSAVE_PD__ ? window.__AUTOSAVE_PD__() : null; } catch { return 'erro'; } };
+    let commits = 0;
+    window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      renderers: new Map(),
+      supportsFiber: true,
+      isDisabled: false,
+      inject(renderer) { const id = this.renderers.size + 1; this.renderers.set(id, renderer); return id; },
+      checkDCE() {},
+      onScheduleFiberRoot() {},
+      onCommitFiberUnmount() {},
+      onCommitFiberRoot(_id, _root, priority) {
+        commits += 1;
+        const value = pd();
+        window.__AUTOSAVE_LAST_COMMIT_PD__ = value;
+        if (window.__AUTOSAVE_PD__ && events.length < 20000) events.push({ t: now(), ev: 'react-commit', n: commits, prio: priority ?? null, pd: value });
+      },
+      onPostCommitFiberRoot() {
+        if (window.__AUTOSAVE_PD__ && events.length < 20000) events.push({ t: now(), ev: 'react-passive', n: commits, pd: pd() });
+        try { window.__AUTOSAVE_ON_PASSIVE__?.(window.__AUTOSAVE_LAST_COMMIT_PD__); } catch { /* investigação */ }
+      },
+    };
+  });
+  if (SAVE_LATENCY_MS > 0) await context.addInitScript((ms) => { window.__SAVE_LATENCY_MS__ = ms; }, SAVE_LATENCY_MS);
+  if (process.env.PD_POLL === '1') await context.addInitScript(() => { window.__PD_POLL__ = true; });
+  if (process.env.FORCE_RACE) await context.addInitScript((mode) => { window.__FORCE_RACE__ = mode; }, process.env.FORCE_RACE);
   const page = await context.newPage();
+  if (CPU_THROTTLE > 1) {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
+  }
   observe(page, log);
   // Abas abertas depois (segundo "funcionário") entram no mesmo log.
   context.on('page', (other) => observe(other, log));
@@ -196,6 +231,39 @@ export async function aria(page, locator) {
 
 export const state = (page) => page.evaluate(() => window.__FATHER__.state());
 
+const AUTOSAVE_TRACE = process.env.AUTOSAVE_TRACE === '1';
+const SAVE_LATENCY_MS = Number(process.env.SAVE_LATENCY_MS || 0);
+const CPU_THROTTLE = Number(process.env.CPU_THROTTLE || 1);
+let traceDumps = 0;
+
+/**
+ * Investigação do autosave (AUTOSAVE_TRACE=1): grava os eventos do rastreio do harness e uma sonda do estado
+ * (documento sujo de verdade? timer armado? rascunho pendente?). Com nudge, republica o workspace e sonda de novo.
+ */
+export async function dumpAutosaveTrace(page, label, { nudge = false } = {}) {
+  if (!AUTOSAVE_TRACE) return null;
+  const journeyName = (process.argv[1] ?? 'journey').split(/[\\/]/).pop().replace(/\.mjs$/, '');
+  const data = await page.evaluate(() => {
+    const trace = window.__AUTOSAVE_TRACE__;
+    return trace ? { probe: trace.probe(), events: trace.events.slice() } : null;
+  }).catch((error) => ({ error: String(error) }));
+  let afterNudge = null;
+  if (nudge && data && !data.error) {
+    await page.evaluate(() => window.__AUTOSAVE_TRACE__?.nudge()).catch(() => {});
+    await page.waitForTimeout(3000);
+    afterNudge = await page.evaluate(() => ({
+      probe: window.__AUTOSAVE_TRACE__?.probe(),
+      tail: window.__AUTOSAVE_TRACE__?.events.slice(-40),
+    })).catch((error) => ({ error: String(error) }));
+  }
+  const dir = resolve(OUT, 'autosave-trace');
+  await mkdir(dir, { recursive: true });
+  traceDumps += 1;
+  const path = resolve(dir, `${journeyName}${VP_SUFFIX}-${String(traceDumps).padStart(2, '0')}-${label}.json`);
+  await writeFile(path, JSON.stringify({ label, journey: journeyName, cpuThrottle: CPU_THROTTLE, saveLatencyMs: SAVE_LATENCY_MS, ...data, afterNudge }, null, 1));
+  return path;
+}
+
 export async function waitSaved(page, timeout = 15000) {
   try {
     await page.waitForFunction(() => {
@@ -203,6 +271,7 @@ export async function waitSaved(page, timeout = 15000) {
       return Boolean(runtime) && runtime.dirty === false && runtime.savePhase === 'idle';
     }, null, { timeout });
   } catch (error) {
+    const shotPath = AUTOSAVE_TRACE ? await shot(page, `autosave-parado-${traceDumps + 1}`).catch(() => null) : null;
     const diagnostic = await page.evaluate(() => {
       const snapshot = window.__FATHER__?.state();
       return {
@@ -213,6 +282,9 @@ export async function waitSaved(page, timeout = 15000) {
         focusedInspectorField: document.activeElement?.getAttribute('data-inspector-field'),
       };
     }).catch(() => ({ pageUnavailable: true }));
+    // Depois do diagnóstico original: o nudge do rastreio muda o estado (só para a investigação).
+    await dumpAutosaveTrace(page, 'waitSaved-falhou', { nudge: true }).catch(() => {});
+    if (shotPath) diagnostic.shot = shotPath;
     throw new Error(`Salvamento não confirmado em ${timeout} ms: ${JSON.stringify(diagnostic)}`, { cause: error });
   }
 }
