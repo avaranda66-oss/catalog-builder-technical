@@ -1,3 +1,4 @@
+import { getMyAiKeyState, setMyAiKeyState } from './my-ai-key';
 import { isDraftErrorCode, isDraftErrorReason, type DraftErrorCode, type DraftErrorReason } from './draft-codes';
 import {
   DRAFT_LIMITS, SOURCE_FILES_BUCKET, SOURCE_MIME_TYPES, sourceStoragePath, type SourceMimeType,
@@ -20,6 +21,10 @@ import type { ExtractedPdf } from './pdf-intake';
  */
 
 export const DRAFT_FUNCTION_NAME = 'vnext-catalog-draft';
+/** "Minha chave de IA": known to have no key -> warn without calling anything. */
+export function assertDraftKeyNotMissing(): void {
+  if (getMyAiKeyState() === 'missing') throw new DraftRequestError('USER_AI_KEY_MISSING');
+}
 
 export interface DraftClient {
   readonly functions: {
@@ -164,6 +169,7 @@ function readExtraction(data: unknown): ServerExtraction | null {
 
 /** Asks the server to read one stored file. Never sends a credential. */
 export async function requestFactExtraction(client: DraftClient, input: FactExtractionRequest): Promise<ServerExtraction> {
+  assertDraftKeyNotMissing();
   const { firstPage, lastPage, pageCount } = input;
   if (![firstPage, lastPage, pageCount].every(Number.isInteger) || firstPage < 1 || firstPage > lastPage || lastPage > pageCount ||
     lastPage - firstPage + 1 > DRAFT_LIMITS.maxRangePages) throw new DraftRequestError('PAGE_RANGE_INVALID');
@@ -201,6 +207,7 @@ export async function extractFactsFromFile(client: DraftClient, input: {
   readonly models?: readonly string[];
   readonly sourceId?: string;
 }): Promise<{ readonly review: ExtractionReview; readonly extraction: ServerExtraction }> {
+  assertDraftKeyNotMissing();
   const stored = await storeSourceFile(client, { userId: input.userId, fileName: input.file.name,
     ...(input.file.type ? { mimeType: input.file.type } : {}), bytes: input.file.bytes, sha256: input.pdf.sha256 });
   const extraction = await requestFactExtraction(client, {
@@ -243,6 +250,7 @@ function readCatalogPlan(data: unknown): ServerCatalogPlan | null {
  * credential or a file: only the bounded brief, checked with the server's own parser before it leaves.
  */
 export async function requestCatalogPlan(client: DraftClient, brief: PlanBrief): Promise<ServerCatalogPlan> {
+  assertDraftKeyNotMissing();
   const body = { version: 1, task: 'plan_draft', brief };
   if (!parsePlanDraftRequest(body) || JSON.stringify(body).length > PLAN_LIMITS.maxBodyChars) {
     throw new DraftRequestError('PAYLOAD_TOO_LARGE');
@@ -271,7 +279,8 @@ export async function readDraftReadiness(client: DraftClient): Promise<DraftRead
   if (result.error) return { kind: 'blocked', code: (await draftFailure(result)).code };
   const status = isRecord(result.data) && isRecord(result.data.status) ? result.data.status : null;
   if (!status) return { kind: 'blocked', code: 'DRAFT_UNAVAILABLE' };
-  if (status.serverKey !== true) return { kind: 'blocked', code: 'PROVIDER_NOT_CONFIGURED' };
+  if (typeof status.userKey === 'boolean') setMyAiKeyState(status.userKey ? 'present' : status.serverKey === true ? 'unknown' : 'missing');
+  if (status.serverKey !== true) return { kind: 'blocked', code: status.userKey === false ? 'USER_AI_KEY_MISSING' : 'PROVIDER_NOT_CONFIGURED' };
   if (status.budget === 'missing') return { kind: 'blocked', code: 'BUDGET_NOT_READY' };
   const remaining = typeof status.remainingMicrousd === 'number' ? status.remainingMicrousd : null;
   const reserve = typeof status.callReserveMicrousd === 'number' ? status.callReserveMicrousd : null;
@@ -292,7 +301,8 @@ const MESSAGES: Record<DraftClientCode, string> = {
   METHOD_NOT_ALLOWED: 'Não foi possível falar com a IA agora. Tente de novo em instantes.',
   PAYLOAD_TOO_LARGE: 'O pedido ficou grande demais. Escolha menos páginas e tente de novo.',
   INVALID_REQUEST: 'A IA não aceitou este pedido. Confira as páginas escolhidas e tente de novo.',
-  PROVIDER_NOT_CONFIGURED: 'A IA do servidor ainda não foi configurada. Fale com o administrador.',
+  PROVIDER_NOT_CONFIGURED: 'A IA ainda não foi configurada. Cadastre sua chave de IA em Minha conta.',
+  USER_AI_KEY_MISSING: 'Cadastre sua chave de IA em Minha conta.',
   BUDGET_NOT_READY: 'O controle de gastos da IA ainda não foi atualizado no servidor, por isso a leitura de arquivos não pode começar. Fale com o administrador.',
   AGENT_DAILY_BUDGET_EXCEEDED: 'O limite de uso da IA foi atingido. Continue montando o catálogo à mão hoje; amanhã o limite renova.',
   SOURCE_NOT_FOUND: 'O arquivo não chegou ao servidor. Escolha o arquivo de novo e tente outra vez.',
@@ -302,7 +312,7 @@ const MESSAGES: Record<DraftClientCode, string> = {
   PROVIDER_FILE_FAILED: 'O Google não conseguiu abrir este arquivo. Confira se ele abre normalmente no computador e tente de novo.',
   EXTRACTION_TIMEOUT: 'A IA demorou demais para ler o arquivo. Escolha menos páginas e tente de novo.',
   PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.',
-  PROVIDER_REJECTED_KEY: 'O Google recusou a chave da IA do servidor. Fale com o administrador.',
+  PROVIDER_REJECTED_KEY: 'O Google recusou a chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.',
   PROVIDER_UNAVAILABLE: 'O serviço de IA não respondeu agora. Verifique a internet e tente de novo em instantes.',
   INVALID_PROVIDER_RESPONSE: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo; se repetir, escolha menos páginas.',
   INVALID_REPLY: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo em instantes.',

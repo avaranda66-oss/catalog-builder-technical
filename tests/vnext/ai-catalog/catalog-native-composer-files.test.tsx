@@ -129,7 +129,7 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     expect(screen.getAllByRole('group', { name: 'Proposta de páginas' })).toHaveLength(1);
   });
 
-  it('PROVIDER_NOT_CONFIGURED names "Usar minha própria chave" only where a personal key can be used', async () => {
+  it('PROVIDER_NOT_CONFIGURED points to Minha conta only where a key can be registered', async () => {
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: false }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     await send('Crie uma capa para o TA-25N.');
@@ -140,9 +140,9 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: true }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     await send('Crie uma capa para o TA-25N.');
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('“Usar minha própria chave”'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cadastre sua chave de IA em Minha conta'));
     fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
-    expect(screen.getByRole('menuitem', { name: 'Usar minha própria chave' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cadastrar minha chave de IA' })).toBeInTheDocument();
   });
 
   it('the readiness line says the server AI is not configured without pointing to a missing key option', async () => {
@@ -150,7 +150,7 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     await waitFor(() => expect(screen.getByText(/A IA do servidor ainda não foi configurada/)).toBeInTheDocument());
     expect(screen.getByText(/A IA do servidor ainda não foi configurada/)).not.toHaveTextContent('chave própria');
     fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
-    expect(screen.queryByRole('menuitem', { name: 'Usar minha própria chave' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Cadastrar minha chave de IA' })).toBeNull();
   });
 });
 

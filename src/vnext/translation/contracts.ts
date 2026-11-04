@@ -148,6 +148,8 @@ export const TRANSLATION_ERROR_CODES = [
   'UNSUPPORTED_LANGUAGE',
   'INVALID_REQUEST',
   'CREDENTIAL_UNAVAILABLE',
+  /** "Minha chave de IA": the caller has no key of their own (nothing was sent to Google). */
+  'USER_AI_KEY_MISSING',
   'PROVIDER_UNAVAILABLE',
   'PROVIDER_RATE_LIMIT',
   'INVALID_PROVIDER_RESPONSE',

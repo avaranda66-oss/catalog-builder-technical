@@ -46,6 +46,7 @@ function message(error: unknown): string {
   if (code === 'STALE_RESULT') return 'O catálogo de origem mudou. Gere a tradução novamente.';
   if (code === 'TECHNICAL_TOKEN_MISMATCH') return 'Mantenha os códigos e valores técnicos da origem ao revisar.';
   if (code === 'UNSUPPORTED_LANGUAGE') return 'Escolha um catálogo em português (Brasil) para traduzir para espanhol ou inglês.';
+  if (code === 'USER_AI_KEY_MISSING') return 'Cadastre sua chave de IA em Minha conta.';
   if (code === 'CREDENTIAL_UNAVAILABLE') return 'O serviço de tradução ainda não está configurado. Contate o administrador.';
   if (code === 'PAYLOAD_TOO_LARGE') return 'Esta etapa excede o limite atual do serviço de tradução. Contate o administrador; o original foi preservado.';
   if (code === 'PROVIDER_RATE_LIMIT') return 'O serviço de tradução está ocupado. Aguarde um pouco e tente novamente; o original foi preservado.';

@@ -16,10 +16,11 @@ const MESSAGES: Record<ComposerClientCode, string> = {
   TOKEN_BUDGET_EXCEEDED: 'O pedido e a conversa ficaram longos demais. Escreva um pedido mais curto e peça menos páginas de cada vez.',
   INVALID_REQUEST: 'A IA não aceitou o pedido desse jeito. Escreva com outras palavras e tente de novo.',
   BYOK_DISABLED: 'O uso de chave própria está desligado no servidor. Escolha “Voltar a usar a IA do servidor” no menu de opções (⚙) e tente de novo.',
-  PROVIDER_NOT_CONFIGURED: 'A IA do servidor ainda não foi configurada. Fale com o administrador. Se você tiver uma chave própria do Gemini, use “Usar minha própria chave” no menu de opções do assistente (⚙).',
+  PROVIDER_NOT_CONFIGURED: 'A IA ainda não foi configurada. Cadastre sua chave de IA em Minha conta.',
+  USER_AI_KEY_MISSING: 'Cadastre sua chave de IA em Minha conta.',
   AGENT_DAILY_BUDGET_EXCEEDED: 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.',
   PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.',
-  PROVIDER_REJECTED_KEY: 'O Google recusou a chave da IA do servidor. Fale com o administrador.',
+  PROVIDER_REJECTED_KEY: 'O Google recusou a chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.',
   PROVIDER_UNAVAILABLE: 'O serviço de IA não respondeu agora. Verifique a internet e tente de novo em instantes.',
   INVALID_PROVIDER_RESPONSE: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo, pedindo no máximo 4 páginas.',
   INVALID_REPLY: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo, pedindo no máximo 4 páginas.',
@@ -34,7 +35,7 @@ export function composerErrorMessage(error: unknown, context: { usingOwnKey: boo
   let message = MESSAGES[failure.code];
   if (failure.code === 'PROVIDER_UNAVAILABLE' && failure.httpStatus === 429) message = MESSAGES.PROVIDER_RATE_LIMIT;
   if (failure.code === 'PROVIDER_REJECTED_KEY' && context.usingOwnKey) {
-    message = 'O Google recusou a sua chave própria. Confira a chave em “Usar minha própria chave” no menu de opções (⚙) ou volte a usar a IA do servidor.';
+    message = 'O Google recusou a sua chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.';
   }
   if (failure.code === 'INVALID_PROVIDER_RESPONSE' && failure.reason === 'MAX_TOKENS') {
     message = 'A resposta da IA ficou longa demais. Peça menos páginas de cada vez (por exemplo, uma capa e uma tabela) e tente de novo.';
@@ -50,6 +51,8 @@ export function composerReadinessText(readiness: ComposerReadiness | undefined, 
   if (!readiness) return 'Verificando a IA…';
   if (readiness.kind === 'available') return 'IA disponível.';
   if (readiness.kind === 'blocked') return MESSAGES[readiness.code];
+  if (readiness.userKey === false && !readiness.serverKey) return MESSAGES.USER_AI_KEY_MISSING;
+  if (readiness.userKey) return 'IA pronta, usando a sua chave de IA.';
   if (!readiness.serverKey) return MESSAGES.PROVIDER_NOT_CONFIGURED;
   if (readiness.remainingMicrousd !== null && readiness.callReserveMicrousd !== null &&
     readiness.remainingMicrousd < readiness.callReserveMicrousd) return MESSAGES.AGENT_DAILY_BUDGET_EXCEEDED;

@@ -13,6 +13,7 @@ import {
   Pencil,
   Search,
   Sparkles,
+  UserRound,
   X,
 } from 'lucide-react';
 import type { CatalogListItem } from '../persistence';
@@ -30,6 +31,8 @@ import {
   normalizeCatalogTitle,
 } from '../library/service';
 import { LibraryRowMenu } from './editor/LibraryRowMenu';
+import { MyAccountDialog } from './MyAccountDialog';
+import type { MyAiKeyClient } from '../ai-catalog/my-ai-key';
 import { catalogEditorUrl } from '../ai-catalog/intake/assistant-link';
 import './styles.css';
 import './editor/entry-and-title.css';
@@ -47,6 +50,8 @@ interface CatalogLibraryProps {
   readonly onOpenWithAssistant?: (catalogId: string) => void;
   readonly onSignOut?: () => void | Promise<void>;
   readonly onUnauthorized?: () => void | Promise<void>;
+  /** "Minha conta → Minha chave de IA" (absent: the button is hidden). */
+  readonly accountClient?: MyAiKeyClient;
 }
 
 interface LibraryActionError {
@@ -257,7 +262,8 @@ const openWithAssistantByAddress = (catalogId: string) => {
   window.location.assign(catalogEditorUrl(catalogId, { assistant: true }));
 };
 
-export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWithAssistantByAddress, onSignOut, onUnauthorized }: CatalogLibraryProps) {
+export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWithAssistantByAddress, onSignOut, onUnauthorized, accountClient }: CatalogLibraryProps) {
+  const [accountOpen, setAccountOpen] = React.useState(false);
   const [view, setView] = React.useState<CatalogLibraryView>('active');
   const [search, setSearch] = React.useState('');
   const [appliedSearch, setAppliedSearch] = React.useState('');
@@ -650,6 +656,12 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
               <span>{busy && (createChooserOpen || createPending) ? (createPending ? 'Verificando…' : 'Criando…') : (createPending ? 'Verificar criação' : 'Novo catálogo')}</span>
             </button>
           )}
+          {accountClient && (
+            <button type="button" className="vnext-library-secondary" onClick={() => setAccountOpen(true)} data-open-my-account="">
+              <UserRound size={17} aria-hidden="true" />
+              <span>Minha conta</span>
+            </button>
+          )}
           {onSignOut && (
             <button type="button" className="vnext-library-secondary" onClick={() => { void onSignOut(); }} disabled={busy}>
               <LogOut size={17} aria-hidden="true" />
@@ -864,6 +876,8 @@ export function CatalogLibrary({ service, onOpen, onOpenWithAssistant = openWith
           </form>
         </div>
       )}
+
+      {accountOpen && accountClient && <MyAccountDialog client={accountClient} onClose={() => setAccountOpen(false)} />}
 
       {archiveTarget && (
         <div className="vnext-library-dialog-backdrop">

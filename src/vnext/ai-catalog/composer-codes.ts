@@ -16,6 +16,8 @@ export const COMPOSER_ERROR_CODES = Object.freeze([
   'INVALID_REQUEST',
   'BYOK_DISABLED',
   'PROVIDER_NOT_CONFIGURED',
+  /** "Minha chave de IA": the caller has no key of their own (nothing was sent to Google). */
+  'USER_AI_KEY_MISSING',
   'AGENT_DAILY_BUDGET_EXCEEDED',
   'PROVIDER_UNAVAILABLE',
   'PROVIDER_RATE_LIMIT',

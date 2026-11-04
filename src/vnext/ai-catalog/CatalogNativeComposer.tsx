@@ -28,7 +28,8 @@ import {
 } from './assistant-quick-tools';
 import { redactConversationMessage } from './conversation-evidence';
 import { composerErrorMessage, composerReadinessText } from './composer-messages';
-import { clearByokCredential, setByokCredential, useByokCredential } from './byok-session';
+import { clearByokCredential, useByokCredential } from './byok-session';
+import { saveMyAiKey, type MyAiKeyClient } from './my-ai-key';
 import { VerifiedPdfTableReview } from './VerifiedPdfTableReview';
 import type { NativePdfCellFillTarget } from './native-pdf-cell-fill';
 import type { FitHeightMeasurement } from '../editor/table-fit-height-authoring';
@@ -252,12 +253,13 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
   // A personal key does not use the server's daily budget.
   const dailyLimitReached = !ownKey && (limitAnswered || dailyLimitKnown(readiness));
   // Wait for readiness before offering a new key. Keep an unlocked key and the legacy available state usable.
+  // "Minha chave de IA": the panel below is a shortcut that saves the key in the person's account (never in this tab).
   const ownKeyOffered = Boolean(client) && (Boolean(ownKey) || readiness?.kind === 'available' ||
-    (readiness?.kind === 'ready' && readiness.byok));
+    (readiness?.kind === 'ready' && (readiness.byok || readiness.userKey === false)));
   const ownKeyOfferedRef = React.useRef(ownKeyOffered);
   ownKeyOfferedRef.current = ownKeyOffered;
   const readinessText = !client ? 'A IA não está disponível nesta tela.'
-    : !ownKey && !ownKeyOffered && readiness?.kind === 'ready' && !readiness.serverKey ? SERVER_AI_NOT_CONFIGURED
+    : !ownKey && !ownKeyOffered && readiness?.kind === 'ready' && !readiness.serverKey && readiness.userKey === undefined ? SERVER_AI_NOT_CONFIGURED
       : composerReadinessText(readiness, !!ownKey);
   // Built at call time, so a bad personal key becomes a plain error in the conversation, never a broken panel.
   const editGateway = React.useMemo<EditIntentGateway | undefined>(() => client
@@ -1028,7 +1030,7 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       label: 'Chave do Gemini',
       items: ownKey
         ? [{ id: 'server-key', label: 'Voltar a usar a IA do servidor', onSelect: () => { clearByokCredential(); setError(''); } }]
-        : ownKeyOffered ? [{ id: 'own-key', label: 'Usar minha própria chave', onSelect: () => setKeyPanelOpen(true) }] : [],
+        : ownKeyOffered ? [{ id: 'own-key', label: 'Cadastrar minha chave de IA', onSelect: () => setKeyPanelOpen(true) }] : [],
     },
     {
       label: 'Ações rápidas (sem IA)',
@@ -1065,9 +1067,9 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
       newConversationDisabled={turns.length === 0} history={history} settings={settings}
       wide={wide} onWideChange={onWideChange} onClose={onClose} />
     {keyPanelOpen && ownKeyOffered && !ownKey && (
-      <div id="catalog-gemini-settings" className="ai-compose-settings" role="region" aria-label="Usar minha própria chave">
+      <div id="catalog-gemini-settings" className="ai-compose-settings" role="region" aria-label="Cadastrar minha chave de IA">
         <div className="ai-compose-settings-head">
-          <strong>Usar minha própria chave</strong>
+          <strong>Cadastrar minha chave de IA</strong>
           <button type="button" onClick={() => { setKeyPanelOpen(false); input.current?.focus(); }}>Fechar</button>
         </div>
         <ProviderCredentialsSettings onlyProvider="gemini" initiallyUnlocked={[]}
@@ -1076,13 +1078,13 @@ export function CatalogNativeComposer({ session, documentId, ownerScope, client,
               setError('Somente uma chave do Gemini funciona nesta tela.');
               return;
             }
-            try {
-              setByokCredential(key, ownerScope);
+            // Saved encrypted in the account (Minha conta → Minha chave de IA); never kept in this tab.
+            void saveMyAiKey(client as unknown as MyAiKeyClient, key).then(() => {
+              if (client) readinessCache.delete(client);
+              setReadiness(value => value?.kind === 'ready' ? { ...value, userKey: true, serverKey: true } : value);
               setKeyPanelOpen(false);
               setError('');
-            } catch {
-              setError('Essa chave não parece válida. Confira e tente de novo.');
-            }
+            }, () => setError('Não foi possível salvar essa chave. Confira a chave e tente de novo.'));
           }}
           onLock={() => clearByokCredential()}
         />

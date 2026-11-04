@@ -16,6 +16,8 @@ export const DRAFT_ERROR_CODES = Object.freeze([
   'PAYLOAD_TOO_LARGE',
   'INVALID_REQUEST',
   'PROVIDER_NOT_CONFIGURED',
+  /** "Minha chave de IA": the caller has no key of their own (nothing was sent to Google). */
+  'USER_AI_KEY_MISSING',
   /** Migration 00028 (settled budget) is not applied: extraction never runs on the 00027 ledger. */
   'BUDGET_NOT_READY',
   'AGENT_DAILY_BUDGET_EXCEEDED',

@@ -35,7 +35,12 @@ type Options = {
   composerKey?: string;
   settled?: 'present' | 'missing';
   countStatus?: number;
+  /** "Minha chave de IA": the caller's own key in Vault (default FAKE_KEY; null = none). */
+  userKey?: string | null;
+  /** VNEXT_AI_SERVER_KEY_FALLBACK=true (off by default). */
+  fallback?: boolean;
 };
+const SERVICE_ROLE = 'FAKE_SERVICE_ROLE_TEST_KEY';
 
 /** Loads the Deno entry and its relative imports as CommonJS inside one VM context. */
 function loadEdge(entry: string, globals: Record<string, unknown>, onServe: (handler: Handler) => void) {
@@ -71,7 +76,15 @@ function sandbox(options: Options = {}) {
     SUPABASE_ANON_KEY: 'FAKE_ANON_PUBLIC_TEST_KEY',
     GEMINI_API_KEY: options.serverKey === null ? undefined : options.serverKey ?? SERVER_KEY,
     VNEXT_COMPOSER_GEMINI_API_KEY: options.composerKey,
+    SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE,
+    VNEXT_AI_SERVER_KEY_FALLBACK: options.fallback ? 'true' : undefined,
   };
+  const userKey = options.userKey === undefined ? FAKE_KEY : options.userKey;
+  const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
+    if (name === 'vnext_ai_key_secret_for_v1') return { data: args?.p_user_id === 'test-user' ? userKey : null, error: null };
+    if (name === 'vnext_ai_key_mark_checked_v1') return { data: null, error: null };
+    return { data: null, error: { code: 'PGRST202', message: 'not found' } };
+  });
   const events: string[] = [];
   const settlements: Array<{ id: string; actual: number }> = [];
   const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
@@ -98,7 +111,7 @@ function sandbox(options: Options = {}) {
     data: { user: options.validUser === false ? null : { id: 'test-user' } },
     error: null,
   }));
-  const createClient = vi.fn(() => ({
+  const createClient = vi.fn((_url: string, key: string) => key === SERVICE_ROLE ? { rpc: adminRpc } : ({
     auth: { getUser },
     from: vi.fn(() => ({
       select: () => ({
@@ -151,25 +164,20 @@ function sandbox(options: Options = {}) {
   };
   const generationBodies = () => fetch.mock.calls.filter(([url]) => String(url).endsWith(':generateContent'))
     .map(([, init]) => JSON.parse(String(init?.body)));
-  return { request, fetch, rpc, events, env, createClient, getUser, settlements, generationBodies };
+  return { request, fetch, rpc, adminRpc, events, env, createClient, getUser, settlements, generationBodies };
 }
 const scaffoldRequest = () => ({
   version: 1, task: 'compose_scaffold',
   message: 'Faça uma capa editorial e uma tabela comparativa.',
   history: [{ role: 'user', message: 'Vamos criar o catálogo?' }],
   document: { title: 'Novo catálogo', pages: 1, currentPageHeadings: [] },
-  credential: { provider: 'gemini', apiKey: FAKE_KEY },
 });
-const serverKeyRequest = () => {
-  const { credential: _credential, ...rest } = scaffoldRequest();
-  return rest;
-};
+const serverKeyRequest = () => scaffoldRequest();
 const textEditRequest = () => ({
   version: 1, task: 'revise_selected_text',
   message: 'Por favor reescreva o título em tom institucional.',
   history: [{ role: 'assistant', message: 'Vamos revisar o título.' }],
   target: { objectId: 'f12e7325-1f87-4ae8-8baf-3dde17059b37', text: 'Texto selecionado' },
-  credential: { provider: 'gemini', apiKey: FAKE_KEY },
 });
 
 describe('experimental Gemini composer Edge security, no internet/network/real keys', () => {
@@ -202,12 +210,13 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
       expect(x.rpc).not.toHaveBeenCalled();
     }
   });
-  it('rejects a personal key while BYOK is disabled, before the budget reservation', async () => {
-    const x = sandbox({ byok: false });
-    const r = await x.request(scaffoldRequest());
-    expect(r.status).toBe(503);
-    expect(r.body.code).toBe('BYOK_DISABLED');
+  it('no longer accepts a key in the request body (old per-tab mode), before the budget reservation', async () => {
+    const x = sandbox();
+    const r = await x.request({ ...scaffoldRequest(), credential: { provider: 'gemini', apiKey: 'TEST_FAKE_BODY_KEY_0000000' } });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe('INVALID_REQUEST');
     expect(x.rpc).not.toHaveBeenCalled();
+    expect(x.fetch).not.toHaveBeenCalled();
   });
   it('never calls Google when cumulative atomic budget rejects', async () => {
     const x = sandbox({ reserve: false });
@@ -308,23 +317,23 @@ describe('experimental Gemini composer Edge security, no internet/network/real k
   });
 });
 
-describe('server key by default, personal key only in advanced mode', () => {
-  it('generates with the server key when the browser sends no credential', async () => {
-    const x = sandbox();
+describe('server key only behind VNEXT_AI_SERVER_KEY_FALLBACK, for callers without a key', () => {
+  it('generates with the server key when the fallback is on and the caller has no key', async () => {
+    const x = sandbox({ userKey: null, fallback: true });
     const r = await x.request(serverKeyRequest());
     expect(r.status).toBe(200);
     expect(x.fetch.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': SERVER_KEY });
     expect(JSON.stringify(r.body)).not.toContain(SERVER_KEY);
   });
   it('prefers the composer-specific secret so the shared GEMINI_API_KEY never needs overwriting', async () => {
-    const x = sandbox({ composerKey: 'TEST_FAKE_COMPOSER_ONLY_KEY' });
+    const x = sandbox({ composerKey: 'TEST_FAKE_COMPOSER_ONLY_KEY', userKey: null, fallback: true });
     expect((await x.request(serverKeyRequest())).status).toBe(200);
     expect(x.fetch.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': 'TEST_FAKE_COMPOSER_ONLY_KEY' });
   });
-  it('answers PROVIDER_NOT_CONFIGURED without reserving budget when no key exists anywhere', async () => {
-    const x = sandbox({ serverKey: null });
+  it('answers USER_AI_KEY_MISSING without reserving budget or calling Google when the caller has no key', async () => {
+    const x = sandbox({ userKey: null });
     const r = await x.request(serverKeyRequest());
-    expect(r).toEqual({ status: 503, body: { code: 'PROVIDER_NOT_CONFIGURED' } });
+    expect(r).toEqual({ status: 409, body: { code: 'USER_AI_KEY_MISSING' } });
     expect(x.rpc).not.toHaveBeenCalled();
     expect(x.fetch).not.toHaveBeenCalled();
   });
@@ -333,12 +342,13 @@ describe('server key by default, personal key only in advanced mode', () => {
     const r = await x.request({ version: 1, task: 'status' });
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: true,
-      byok: true, tasks: ['compose_scaffold', 'revise_selected_text', 'edit_intent'], features: ['arsenal_index'],
-      remainingMicrousd: null, callReserveMicrousd: 7800 } });
+      byok: false, userKey: true, tasks: ['compose_scaffold', 'revise_selected_text', 'edit_intent'],
+      features: ['arsenal_index', 'user_ai_key'], remainingMicrousd: null, callReserveMicrousd: 7800 } });
     expect(x.fetch).not.toHaveBeenCalled();
     expect(x.rpc).not.toHaveBeenCalled();
-    const missing = sandbox({ serverKey: null, byok: false });
-    expect((await missing.request({ version: 1, task: 'status' })).body.status).toMatchObject({ serverKey: false, byok: false });
+    expect(JSON.stringify(r.body)).not.toContain(FAKE_KEY);
+    const missing = sandbox({ userKey: null });
+    expect((await missing.request({ version: 1, task: 'status' })).body.status).toMatchObject({ serverKey: false, userKey: false });
     expect((await x.request({ version: 1, task: 'status', extra: true })).status).toBe(400);
   });
   it('accepts a one-word answer to a clarification', async () => {
@@ -505,5 +515,42 @@ describe('edit_intent (FR-72): the conversation that edits, same guards and boun
       expect(r.status).toBe(400);
       expect(x.events).toEqual([]);
     }
+  });
+});
+
+describe('"Minha chave de IA": only the caller\'s own key, read with the service role', () => {
+  it('reads the secret for the authenticated user id only, through the service-role client, and never echoes it', async () => {
+    const x = sandbox({ serverKey: 'TEST_FAKE_SERVER_KEY_MUST_NOT_BE_USED' });
+    const logs = vi.spyOn(console, 'log'), errors = vi.spyOn(console, 'error');
+    const r = await x.request(scaffoldRequest());
+    expect(r.status).toBe(200);
+    expect(x.adminRpc).toHaveBeenCalledWith('vnext_ai_key_secret_for_v1', { p_user_id: 'test-user' });
+    expect(x.rpc.mock.calls.map(([name]) => name)).not.toContain('vnext_ai_key_secret_for_v1');
+    for (const [, init] of x.fetch.mock.calls) expect(init?.headers).toMatchObject({ 'x-goog-api-key': FAKE_KEY });
+    expect(JSON.stringify(r.body)).not.toContain(FAKE_KEY);
+    expect(JSON.stringify([...logs.mock.calls, ...errors.mock.calls])).not.toContain(FAKE_KEY);
+    logs.mockRestore(); errors.mockRestore();
+  });
+  it('without a key: plain code, no Google call, no budget, even with a server key configured', async () => {
+    const x = sandbox({ userKey: null, serverKey: 'TEST_FAKE_SERVER_KEY_MUST_NOT_BE_USED' });
+    expect(await x.request(scaffoldRequest())).toEqual({ status: 409, body: { code: 'USER_AI_KEY_MISSING' } });
+    expect(x.fetch).not.toHaveBeenCalled();
+    expect(x.rpc).not.toHaveBeenCalled();
+  });
+  it('"Testar" makes one free models call with the caller\'s key and records ok/error', async () => {
+    const x = sandbox();
+    x.fetch.mockImplementationOnce(async () => new Response('{"models":[]}', { status: 200 }));
+    expect(await x.request({ version: 1, task: 'test_user_key' })).toEqual({ status: 200, body: { code: 'OK', test: { status: 'ok' } } });
+    expect(String(x.fetch.mock.calls[0][0])).toMatch(/\/v1beta\/models\?pageSize=1$/);
+    expect(x.fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', headers: { 'x-goog-api-key': FAKE_KEY } });
+    expect(x.adminRpc).toHaveBeenCalledWith('vnext_ai_key_mark_checked_v1', { p_user_id: 'test-user', p_status: 'ok' });
+    x.fetch.mockImplementationOnce(async () => new Response('{"error":{"message":"API key not valid ' + FAKE_KEY + '"}}', { status: 400 }));
+    const bad = await x.request({ version: 1, task: 'test_user_key' });
+    expect(bad).toEqual({ status: 200, body: { code: 'OK', test: { status: 'error' } } });
+    expect(JSON.stringify(bad)).not.toContain(FAKE_KEY);
+    expect(x.rpc).not.toHaveBeenCalled();
+    const none = sandbox({ userKey: null, fallback: true });
+    expect(await none.request({ version: 1, task: 'test_user_key' })).toEqual({ status: 409, body: { code: 'USER_AI_KEY_MISSING' } });
+    expect(none.fetch).not.toHaveBeenCalled();
   });
 });

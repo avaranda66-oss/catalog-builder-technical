@@ -1,5 +1,6 @@
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { edgeSecretAccess, resolveCallerAiKey, USER_AI_KEY_MISSING_MESSAGE } from '../../../src/vnext/ai-catalog/user-ai-key.ts';
 
 // Bundle this pure local dependency with the Edge Function; VM tests resolve the same source.
 import { VNEXT_TRANSLATION_MODEL_ID, VNEXT_TRANSLATION_PROFILES, findRegisteredTranslationProfile, getTranslationLanguage } from '../../../src/vnext/translation/language-registry.ts';
@@ -400,11 +401,13 @@ serve(async (request: Request) => {
     }
     const boundedAcceptance = budgetMode === 'bounded-acceptance';
 
-    // Translation-specific secret first, so the shared GEMINI_API_KEY never has to be overwritten.
-    const providerSecret = Deno.env.get('VNEXT_TRANSLATION_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '';
-    if (!providerSecret) {
-      return json(cors, 503, 'CREDENTIAL_UNAVAILABLE', 'Credencial do provedor não configurada no servidor.');
-    }
+    // "Minha chave de IA": only the caller's own key (Vault, service role). The shared server key
+    // (translation-specific first) answers only when VNEXT_AI_SERVER_KEY_FALLBACK=true.
+    const access = edgeSecretAccess(name => Deno.env.get(name), (u, k) => createClient(u, k, { auth: { persistSession: false } }));
+    const caller = await resolveCallerAiKey({ userId: user.id, readSecret: access.readSecret, serverFallback: access.serverFallback,
+      serverKey: !access.serverFallback ? '' : Deno.env.get('VNEXT_TRANSLATION_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '' });
+    if (!caller.ok) return json(cors, 409, 'USER_AI_KEY_MISSING', USER_AI_KEY_MISSING_MESSAGE);
+    const providerSecret = caller.key;
 
     const translationProfile = resolveGatewayProfile(body.sourceLocale, body.targetLocale, body.profileVersion)!;
     const canonicalSpanish = translationProfile.profileVersion === CANONICAL_SPANISH_PROFILE.profileVersion;

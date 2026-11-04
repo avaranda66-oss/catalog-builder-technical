@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { edgeSecretAccess, resolveCallerAiKey, runUserKeyTest } from '../../../src/vnext/ai-catalog/user-ai-key.ts';
 // Bundled with the Edge Function; scripts/probe-composer.mjs and the VM tests run the same source.
 import {
   COMPOSER_FEATURES, COMPOSER_LIMITS, COMPOSER_TASKS, composerReservationMicrousd, isObj, parseComposerBudgetMode, parseComposerRequest,
@@ -15,8 +16,10 @@ import type { ComposerErrorCode, ComposerErrorReason } from '../../../src/vnext/
 // Onda 4.5: compose_scaffold and edit_intent may carry a short arsenal index and
 // answer use_preset with one of its refs (feature 'arsenal_index' in status).
 // Authentication, active editor role and a durable budget reservation are
-// mandatory before any provider call. Server key by default; a personal key
-// (BYOK) only when VNEXT_CATALOG_AGENT_BYOK_ENABLED=true.
+// mandatory before any provider call. "Minha chave de IA": the caller's own key
+// (Vault) only; the server key only with VNEXT_AI_SERVER_KEY_FALLBACK=true.
+// A key in the request body (old per-tab BYOK) is no longer accepted.
+// task 'test_user_key' (before the composer contract): minimal free Google call with the caller's key.
 type Obj = Record<string, unknown>;
 type Db = ReturnType<typeof createClient>;
 
@@ -108,21 +111,27 @@ serve(async req => {
     if (raw.length > COMPOSER_LIMITS.maxBodyChars) return fail(c, 413, 'PAYLOAD_TOO_LARGE');
     body = JSON.parse(raw);
   } catch { return fail(c, 400, 'INVALID_REQUEST'); }
+  const access = edgeSecretAccess(name => Deno.env.get(name), (u, k) => createClient(u, k, { auth: { persistSession: false } }));
+  if (isObj(body) && body.version === 1 && body.task === 'test_user_key' && Object.keys(body).length === 2) {
+    const tested = await runUserKeyTest({ userId: user.id, readSecret: access.readSecret, markChecked: access.markChecked,
+      fetcher: (input, init) => fetch(input, init) });
+    return tested.ok ? json(c, 200, 'OK', { test: { status: tested.status } }) : fail(c, 409, tested.code);
+  }
   const request = parseComposerRequest(body);
   if (!request) return fail(c, 400, 'INVALID_REQUEST');
-  const byok = Deno.env.get('VNEXT_CATALOG_AGENT_BYOK_ENABLED') === 'true';
-  // Composer-specific secret first, so the shared GEMINI_API_KEY (translation,
-  // classic app, agent) never has to be overwritten.
-  const serverKey = Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '';
+  // Composer-specific secret first; used only when the server fallback flag is on.
+  const caller = await resolveCallerAiKey({ userId: user.id, readSecret: access.readSecret, serverFallback: access.serverFallback,
+    serverKey: !access.serverFallback ? '' : Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '' });
   const ledger = budgetLedger(db, mode);
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether the AI is ready.
-    return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: !!serverKey, byok, tasks: [...COMPOSER_TASKS],
-      features: [...COMPOSER_FEATURES], ...await ledger.remaining() } });
+    return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: caller.ok, byok: false,
+      userKey: caller.ok && caller.source === 'user', tasks: [...COMPOSER_TASKS],
+      features: [...COMPOSER_FEATURES, 'user_ai_key'], ...await ledger.remaining() } });
   }
-  if (request.key && !byok) return fail(c, 503, 'BYOK_DISABLED');
-  const key = request.key ?? serverKey;
-  if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+  if (request.key) return fail(c, 400, 'INVALID_REQUEST');
+  if (!caller.ok) return fail(c, 409, 'USER_AI_KEY_MISSING');
+  const key = caller.key;
   // Credentials, prompts, document titles and model text must never be logged.
   const result = await runComposerGeneration({ request, key, ledger, fetcher: (input, init) => fetch(input, init) });
   return result.ok

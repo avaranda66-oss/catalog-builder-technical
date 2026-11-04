@@ -1,4 +1,4 @@
-import { DRAFT_FUNCTION_NAME, DraftRequestError, draftErrorMessage, draftFailure, storeSourceFile, type DraftClient } from './draft-client';
+import { assertDraftKeyNotMissing, DRAFT_FUNCTION_NAME, DraftRequestError, draftErrorMessage, draftFailure, storeSourceFile, type DraftClient } from './draft-client';
 import { SKETCH_SERVER_LIMITS, sketchImageDimensions, type InterpretSketchRequest, type SketchImageDimensions } from './sketch-contract';
 import { SKETCH_LIMITS, validateSketchPlan, type SketchPagePlan } from './sketch-plan';
 import { snapSketchPlan, type SketchSnapPlan } from './sketch-snap';
@@ -80,6 +80,7 @@ function readSketch(data: unknown): ServerSketch | null {
 
 /** Asks the server to read one stored sketch image. Never sends a credential. */
 export async function requestSketchInterpretation(client: DraftClient, input: SketchInterpretationRequest): Promise<SketchInterpretation> {
+  assertDraftKeyNotMissing();
   const body = { version: 1, task: 'interpret_sketch', source: {
     path: input.path, sha256: input.sha256, mimeType: input.mimeType, fileName: input.fileName, pageCount: 1, firstPage: 1, lastPage: 1,
   } };
@@ -113,6 +114,7 @@ export async function interpretSketchFromFile(client: DraftClient, input: {
   if (!dimensions) throw new DraftRequestError('INVALID_REQUEST');
   if (Math.max(dimensions.width, dimensions.height) > SKETCH_LIMITS.maxImageSidePx) throw new DraftRequestError('SOURCE_TOO_LARGE');
   const sha256 = await sha256Hex(bytes);
+  assertDraftKeyNotMissing();
   const stored = await storeSourceFile(client, { userId: input.userId, fileName: input.file.name, mimeType, bytes, sha256 });
   return requestSketchInterpretation(client, { path: stored.path, sha256, mimeType, fileName: input.file.name });
 }
