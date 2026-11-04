@@ -132,7 +132,8 @@ serve(async req => {
     serverKey: !access.serverFallback ? '' : Deno.env.get('VNEXT_DRAFT_GEMINI_API_KEY') || Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') ||
       Deno.env.get('GEMINI_API_KEY') || '' });
   const key = caller.ok ? caller.key : '';
-  const missing = () => fail(c, 409, 'USER_AI_KEY_MISSING');
+  // A failed Vault read is temporary (503), never "no key" (409): the screen must not lock the AI.
+  const missing = () => !caller.ok && caller.code !== 'USER_AI_KEY_MISSING' ? fail(c, 503, 'PROVIDER_UNAVAILABLE') : fail(c, 409, 'USER_AI_KEY_MISSING');
   const ledger = budgetLedger(db);
   if (plan) {
     if (!key) return missing();
@@ -146,7 +147,7 @@ serve(async req => {
     // No provider call and no reservation: only tells the screen whether reading files can start.
     const budget = await ledger.remaining();
     // `tasks` lets a newer screen know what this deployed version can do before it spends anything.
-    return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, userKey: caller.ok && caller.source === 'user', model: EXTRACTION_MODEL,
+    return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, userKey: caller.ok ? caller.source === 'user' : caller.code === 'USER_AI_KEY_MISSING' ? false : undefined, model: EXTRACTION_MODEL,
       tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'],
       promptVersion: EXTRACTION_PROMPT_VERSION, budget: budget.ledger, remainingMicrousd: budget.remainingMicrousd,
       callReserveMicrousd: extractionReservationMicrousd() } });

@@ -16,16 +16,50 @@ describe('Minha conta → Minha chave de IA', () => {
     });
     const invoke = vi.fn(async () => ({ data: { code: 'OK', test: { status: 'ok' } }, error: null }));
     render(<MyAccountDialog client={{ rpc, functions: { invoke } } as unknown as MyAiKeyClient} onClose={() => undefined} />);
-    await waitFor(() => expect(screen.getByText('Nenhuma chave cadastrada.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Nenhuma chave de IA (Gemini) cadastrada.')).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/Cole aqui sua chave do Gemini/), { target: { value: KEY } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar chave' }));
-    await waitFor(() => expect(screen.getByText('Gemini · termina em …9876 · ainda não testada')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Chave de IA (Gemini) cadastrada, termina em 9876. Ainda não testada. Clique em “Testar”.')).toBeInTheDocument());
     expect(document.body.innerHTML).not.toContain(KEY);
     fireEvent.click(screen.getByRole('button', { name: 'Testar' }));
-    await waitFor(() => expect(screen.getByText('Gemini · termina em …9876 · funcionando')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Chave de IA (Gemini) cadastrada, termina em 9876. Funcionando.')).toBeInTheDocument());
     expect(invoke).toHaveBeenCalledWith('vnext-catalog-composer', { body: { version: 1, task: 'test_user_key' } });
+    expect(screen.getByText('Sua chave está funcionando.')).toHaveAttribute('role', 'status');
+    // Removing asks first; "Cancelar" keeps the key.
+    fireEvent.click(screen.getByRole('button', { name: 'Remover chave' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(rpc).not.toHaveBeenCalledWith('vnext_ai_key_remove_v1');
+    fireEvent.click(screen.getByRole('button', { name: 'Remover chave' }));
+    expect(screen.getByText(/Os recursos de IA deixam de funcionar/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
-    await waitFor(() => expect(screen.getByText('Nenhuma chave cadastrada.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Nenhuma chave de IA (Gemini) cadastrada.')).toBeInTheDocument());
     expect(document.body.innerHTML).not.toContain(KEY);
+  });
+
+  it('explains how to get a key, why Save is off, lets the person see the key, and closes with Esc', async () => {
+    const rpc = vi.fn(async () => ({ data: [], error: null }));
+    const onClose = vi.fn();
+    const opener = document.createElement('button');
+    document.body.appendChild(opener); opener.focus();
+    const view = render(<MyAccountDialog client={{ rpc, functions: { invoke: vi.fn() } } as unknown as MyAiKeyClient} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByText('Nenhuma chave de IA (Gemini) cadastrada.')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'aistudio.google.com/apikey' })).toHaveAttribute('target', '_blank');
+    const input = screen.getByLabelText(/Cole aqui sua chave do Gemini/);
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'isso não é chave' } });
+    expect(screen.getByText(/não parece uma chave do Gemini/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Salvar chave' })).toBeDisabled();
+    // Quotes and spaces that come along with the copy are removed.
+    fireEvent.change(input, { target: { value: ` "${KEY}" ` } });
+    expect(screen.getByText('Código colado termina em 9876.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Salvar chave' })).toBeEnabled();
+    expect(input).toHaveAttribute('type', 'password');
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar chave' }));
+    expect(input).toHaveAttribute('type', 'text');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    view.unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
   });
 });

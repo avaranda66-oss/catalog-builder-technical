@@ -1,4 +1,5 @@
 import { ComposerRequestError, type ComposerClientCode, type ComposerReadiness } from './native-compose-client';
+import { USER_AI_KEY_MISSING_MESSAGE, USER_AI_KEY_QUOTA_HINT } from './user-ai-key';
 
 /**
  * Plain Portuguese for every composer outcome, each with what to do next.
@@ -16,10 +17,10 @@ const MESSAGES: Record<ComposerClientCode, string> = {
   TOKEN_BUDGET_EXCEEDED: 'O pedido e a conversa ficaram longos demais. Escreva um pedido mais curto e peça menos páginas de cada vez.',
   INVALID_REQUEST: 'A IA não aceitou o pedido desse jeito. Escreva com outras palavras e tente de novo.',
   BYOK_DISABLED: 'O uso de chave própria está desligado no servidor. Escolha “Voltar a usar a IA do servidor” no menu de opções (⚙) e tente de novo.',
-  PROVIDER_NOT_CONFIGURED: 'A IA ainda não foi configurada. Cadastre sua chave de IA em Minha conta.',
-  USER_AI_KEY_MISSING: 'Cadastre sua chave de IA em Minha conta.',
+  PROVIDER_NOT_CONFIGURED: `A IA ainda não foi configurada. ${USER_AI_KEY_MISSING_MESSAGE}`,
+  USER_AI_KEY_MISSING: USER_AI_KEY_MISSING_MESSAGE,
   AGENT_DAILY_BUDGET_EXCEEDED: 'O limite diário de uso da IA foi atingido. Continue editando manualmente hoje; amanhã o limite renova.',
-  PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.',
+  PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.' + USER_AI_KEY_QUOTA_HINT,
   PROVIDER_REJECTED_KEY: 'O Google recusou a chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.',
   PROVIDER_UNAVAILABLE: 'O serviço de IA não respondeu agora. Verifique a internet e tente de novo em instantes.',
   INVALID_PROVIDER_RESPONSE: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo, pedindo no máximo 4 páginas.',

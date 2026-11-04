@@ -126,11 +126,12 @@ serve(async req => {
   if (request.task === 'status') {
     // No provider call and no reservation: only tells the screen whether the AI is ready.
     return json(c, 200, 'OK', { status: { enabled: true, mode, serverKey: caller.ok, byok: false,
-      userKey: caller.ok && caller.source === 'user', tasks: [...COMPOSER_TASKS],
+      userKey: caller.ok ? caller.source === 'user' : caller.code === 'USER_AI_KEY_MISSING' ? false : undefined, tasks: [...COMPOSER_TASKS],
       features: [...COMPOSER_FEATURES, 'user_ai_key'], ...await ledger.remaining() } });
   }
   if (request.key) return fail(c, 400, 'INVALID_REQUEST');
-  if (!caller.ok) return fail(c, 409, 'USER_AI_KEY_MISSING');
+  // A failed Vault read is temporary (503), never "no key" (409): the screen must not lock the AI.
+  if (!caller.ok) return caller.code === 'USER_AI_KEY_MISSING' ? fail(c, 409, 'USER_AI_KEY_MISSING') : fail(c, 503, 'PROVIDER_UNAVAILABLE');
   const key = caller.key;
   // Credentials, prompts, document titles and model text must never be logged.
   const result = await runComposerGeneration({ request, key, ledger, fetcher: (input, init) => fetch(input, init) });

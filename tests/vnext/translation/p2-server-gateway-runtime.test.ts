@@ -8,6 +8,7 @@ import { VNEXT_TRANSLATION_PROFILES, type RegisteredTranslationProfile } from '@
 import type { TranslationProviderRequest } from '@/vnext/translation/contracts';
 import { GEMINI_TRANSLATION_MODEL } from '@/vnext/ai-catalog/gemini-models';
 import { PRESYS_GLOSSARY_VERSION } from '@/vnext/translation/presys-glossary';
+import { VNextTranslationGatewayClient } from '@/vnext/translation/provider-client';
 
 // FR-86: every profile, including the server-only canonical Spanish bridge, uses the registry model.
 const MODEL = GEMINI_TRANSLATION_MODEL;
@@ -51,7 +52,7 @@ function gateway() {
     providerThrows: false, malformedEnvelope: false, missingEnvironment: '',
     budgetMode: undefined as string | undefined, countStatus: 200, countThrows: false, malformedCount: false,
     countPayload: { totalTokens: 100 } as unknown, finishReason: 'STOP' as string | undefined, extraCandidates: false,
-    transform: (payload: ProviderPayload): unknown => payload, userKey: undefined as string | null | undefined };
+    transform: (payload: ProviderPayload): unknown => payload, userKey: undefined as string | null | undefined, userKeyReadFails: false };
   const envReads: string[] = [];
   const profileQueries: string[] = [];
   const countProvider = vi.fn(async (_options: RequestInit) => {
@@ -73,7 +74,7 @@ function gateway() {
   });
   const fakeProvider = vi.fn(async (url: string, options: RequestInit) => {
     expect(options.method).toBe('POST');
-    expect((options.headers as Record<string, string>)['x-goog-api-key']).toBe('fixture-server-key');
+    expect((options.headers as Record<string, string>)['x-goog-api-key']).toBe(state.userKey ?? 'fixture-server-key');
     if (url === `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:countTokens`) {
       return countProvider(options);
     }
@@ -81,7 +82,8 @@ function gateway() {
     return generateProvider(options);
   });
   const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) =>
-    name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === 'fixture-user' ? state.userKey ?? null : null, error: null }
+    name === 'vnext_ai_key_secret_for_v1' && state.userKeyReadFails ? { data: null, error: { code: 'XX000' } }
+      : name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === 'fixture-user' ? state.userKey ?? null : null, error: null }
       : { data: null, error: { code: 'PGRST202' } });
   const createClient = vi.fn((_url: string, _key: string, options: { global: { headers: { Authorization: string } } }) => {
     if (_key === 'fixture-service-role') return { rpc: adminRpc } as never;
@@ -579,5 +581,21 @@ describe('"Minha chave de IA" in vnext-translation-provider', () => {
     expect(g.adminRpc).toHaveBeenCalledWith('vnext_ai_key_secret_for_v1', { p_user_id: 'fixture-user' });
     expect(g.fakeProvider).not.toHaveBeenCalled();
     expect(g.envReads).not.toContain('GEMINI_API_KEY');
+  });
+
+  it('Google refusing the caller OWN key says so (PROVIDER_REJECTED_KEY), not "contact the administrator"', async () => {
+    const g = gateway(); g.state.userKey = 'TEST_FAKE_OWN_TRANSLATION_KEY_0001'; g.state.providerStatus = 401;
+    const response = await g.invoke(body());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'PROVIDER_REJECTED_KEY' });
+    const client = new VNextTranslationGatewayClient(async () => ({ data: { error: 'PROVIDER_REJECTED_KEY' }, error: { message: 'x' } }));
+    await expect(client.translate(body())).rejects.toMatchObject({ code: 'PROVIDER_REJECTED_KEY' });
+  });
+  it('a failed Vault read is temporary (503 PROVIDER_UNAVAILABLE), never "no key"', async () => {
+    const g = gateway(); g.state.userKey = null; g.state.userKeyReadFails = true;
+    const response = await g.invoke(body());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'PROVIDER_UNAVAILABLE' });
+    expect(g.fakeProvider).not.toHaveBeenCalled();
   });
 });

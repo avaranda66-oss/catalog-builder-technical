@@ -8,6 +8,8 @@ import { isGeminiKeyFormat, USER_AI_KEY_MISSING_MESSAGE } from './user-ai-key';
  * it back: status is provider + last 4 characters + test result. A small
  * module store remembers whether the signed-in person has a key, so the AI
  * buttons can warn without calling anything when it is known to be missing.
+ * Only the SERVER may say "missing" (USER_AI_KEY_MISSING / readiness): the
+ * table alone cannot know whether VNEXT_AI_SERVER_KEY_FALLBACK is on.
  */
 export type MyAiKeyState = 'unknown' | 'missing' | 'present';
 export interface MyAiKeyStatus { provider: 'gemini'; key_last4: string; check_status: 'untested' | 'ok' | 'error' }
@@ -52,7 +54,8 @@ export async function loadMyAiKeyStatus(client: MyAiKeyClient): Promise<MyAiKeyS
   const { data, error } = await client.rpc('vnext_ai_key_status_v1');
   if (error) throw new Error('MY_AI_KEY_STATUS_FAILED');
   const status = parseStatus(data);
-  setMyAiKeyState(status ? 'present' : 'missing');
+  // No row is NOT "missing": the server fallback may still answer. Never lock the AI from here.
+  setMyAiKeyState(status ? 'present' : 'unknown');
   return status;
 }
 
@@ -69,7 +72,7 @@ export async function saveMyAiKey(client: MyAiKeyClient, apiKey: string): Promis
 export async function removeMyAiKey(client: MyAiKeyClient): Promise<void> {
   const { error } = await client.rpc('vnext_ai_key_remove_v1');
   if (error) throw new Error('MY_AI_KEY_REMOVE_FAILED');
-  setMyAiKeyState('missing');
+  setMyAiKeyState('unknown');
 }
 
 /** "Testar": the composer function makes one free call to Google with the caller's own key. */
@@ -80,6 +83,7 @@ export async function testMyAiKey(client: MyAiKeyClient): Promise<'ok' | 'error'
   const test = result.data && typeof result.data === 'object' ? (result.data as { test?: { status?: unknown } }).test : undefined;
   if (!result.error && test && (test.status === 'ok' || test.status === 'error' || test.status === 'unavailable')) return test.status;
   const context = (result.error as { context?: { status?: unknown } } | null)?.context;
-  if (context && context.status === 409) { setMyAiKeyState('missing'); return 'missing'; }
+  // "Testar" never uses the server fallback, so its 409 does not mean the AI is locked: keep the state.
+  if (context && context.status === 409) return 'missing';
   return 'unavailable';
 }

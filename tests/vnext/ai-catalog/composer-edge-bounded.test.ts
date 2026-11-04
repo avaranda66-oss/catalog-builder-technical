@@ -37,6 +37,8 @@ type Options = {
   countStatus?: number;
   /** "Minha chave de IA": the caller's own key in Vault (default FAKE_KEY; null = none). */
   userKey?: string | null;
+  /** The service-role read of the Vault secret fails (transient). */
+  userKeyReadFails?: boolean;
   /** VNEXT_AI_SERVER_KEY_FALLBACK=true (off by default). */
   fallback?: boolean;
 };
@@ -81,6 +83,7 @@ function sandbox(options: Options = {}) {
   };
   const userKey = options.userKey === undefined ? FAKE_KEY : options.userKey;
   const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
+    if (name === 'vnext_ai_key_secret_for_v1' && options.userKeyReadFails) return { data: null, error: { code: 'XX000' } };
     if (name === 'vnext_ai_key_secret_for_v1') return { data: args?.p_user_id === 'test-user' ? userKey : null, error: null };
     if (name === 'vnext_ai_key_mark_checked_v1') return { data: null, error: null };
     return { data: null, error: { code: 'PGRST202', message: 'not found' } };
@@ -329,6 +332,13 @@ describe('server key only behind VNEXT_AI_SERVER_KEY_FALLBACK, for callers witho
     const x = sandbox({ composerKey: 'TEST_FAKE_COMPOSER_ONLY_KEY', userKey: null, fallback: true });
     expect((await x.request(serverKeyRequest())).status).toBe(200);
     expect(x.fetch.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': 'TEST_FAKE_COMPOSER_ONLY_KEY' });
+  });
+  it('a failed Vault read answers 503 PROVIDER_UNAVAILABLE (temporary), never USER_AI_KEY_MISSING nor the server key', async () => {
+    const x = sandbox({ userKeyReadFails: true, fallback: true, serverKey: 'TEST_FAKE_SERVER_KEY_MUST_NOT_BE_USED' });
+    expect(await x.request(serverKeyRequest())).toEqual({ status: 503, body: { code: 'PROVIDER_UNAVAILABLE' } });
+    expect(x.fetch).not.toHaveBeenCalled();
+    const status = (await x.request({ version: 1, task: 'status' })).body.status as Record<string, unknown>;
+    expect(status.userKey).toBeUndefined();
   });
   it('answers USER_AI_KEY_MISSING without reserving budget or calling Google when the caller has no key', async () => {
     const x = sandbox({ userKey: null });

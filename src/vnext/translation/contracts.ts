@@ -150,6 +150,8 @@ export const TRANSLATION_ERROR_CODES = [
   'CREDENTIAL_UNAVAILABLE',
   /** "Minha chave de IA": the caller has no key of their own (nothing was sent to Google). */
   'USER_AI_KEY_MISSING',
+  /** The caller's own key was refused by Google (400/401/403): fix it in Minha conta. */
+  'PROVIDER_REJECTED_KEY',
   'PROVIDER_UNAVAILABLE',
   'PROVIDER_RATE_LIMIT',
   'INVALID_PROVIDER_RESPONSE',

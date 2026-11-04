@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  edgeSecretAccess, isGeminiKeyFormat, resolveCallerAiKey, runUserKeyTest, testGeminiKey, userKeyStatusLine,
+  edgeSecretAccess, isGeminiKeyFormat, resolveCallerAiKey, runUserKeyTest, testGeminiKey, userKeyStatusLine, USER_AI_KEY_MISSING_MESSAGE, USER_AI_KEY_QUOTA_HINT,
 } from '../../../src/vnext/ai-catalog/user-ai-key';
 import {
   getMyAiKeyState, loadMyAiKeyStatus, removeMyAiKey, saveMyAiKey, setMyAiKeyState, testMyAiKey, type MyAiKeyClient,
@@ -12,6 +12,10 @@ import { nativeComposeGateway, ComposerRequestError } from '../../../src/vnext/a
 import { composerErrorMessage } from '../../../src/vnext/ai-catalog/composer-messages';
 import { requestCatalogPlan, draftErrorMessage } from '../../../src/vnext/ai-catalog/draft-client';
 import { VNextTranslationGatewayClient } from '../../../src/vnext/translation/provider-client';
+import { W5_TRANSLATION_PROFILE } from '../../../src/vnext/translation/contracts';
+import {
+  TRANSLATION_USER_AI_KEY_MISSING_MESSAGE, TRANSLATION_USER_AI_KEY_QUOTA_HINT,
+} from '../../../src/vnext/translation/review-coordinator';
 
 const KEY_A = 'TEST_FAKE_KEY_OF_USER_A_000000001234';
 const KEY_B = 'TEST_FAKE_KEY_OF_USER_B_000000005678';
@@ -81,6 +85,12 @@ describe('server: the key of the right person, or nothing', () => {
     const broken = vi.fn(async () => { throw new Error('db said ' + KEY_A); });
     const failed = await resolveCallerAiKey({ userId: 'a', readSecret: broken, serverFallback: false, serverKey: '' });
     expect(JSON.stringify(failed)).not.toContain(KEY_A);
+    // A failed read is temporary, never "no key", and never silently switches to the server key.
+    expect(failed).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
+    expect(await resolveCallerAiKey({ userId: 'a', readSecret: broken, serverFallback: true, serverKey: 'SERVER' }))
+      .toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
+    expect(await runUserKeyTest({ userId: 'a', readSecret: broken, markChecked: null, fetcher: vi.fn() }))
+      .toEqual({ ok: true, status: 'unavailable' });
   });
   it('reads the secret only through the service-role client and only for the given user', async () => {
     const rpc = vi.fn(async (_name: string, args: Record<string, unknown>) => ({ data: vault[String(args.p_user_id)] ?? null, error: null }));
@@ -102,9 +112,11 @@ describe('server: the key of the right person, or nothing', () => {
     expect(await runUserKeyTest({ userId: 'c', readSecret, markChecked, fetcher: vi.fn() })).toEqual({ ok: false, code: 'USER_AI_KEY_MISSING' });
   });
   it('shows only provider, last 4 characters and the result', () => {
-    expect(userKeyStatusLine({ key_last4: '1234', check_status: 'ok' })).toBe('Gemini · termina em …1234 · funcionando');
-    expect(userKeyStatusLine({ key_last4: '1234', check_status: 'error' })).toBe('Gemini · termina em …1234 · erro');
-    expect(userKeyStatusLine(null)).toBe('Nenhuma chave cadastrada.');
+    expect(userKeyStatusLine({ key_last4: '1234', check_status: 'ok' })).toBe('Chave de IA (Gemini) cadastrada, termina em 1234. Funcionando.');
+    expect(userKeyStatusLine({ key_last4: '1234', check_status: 'error' }))
+      .toBe('Chave de IA (Gemini) cadastrada, termina em 1234. O Google recusou esta chave. Troque a chave.');
+    expect(userKeyStatusLine({ key_last4: '1234', check_status: 'untested' })).toMatch(/Ainda não testada\. Clique em “Testar”\.$/);
+    expect(userKeyStatusLine(null)).toBe('Nenhuma chave de IA (Gemini) cadastrada.');
     expect(isGeminiKeyFormat('short')).toBe(false);
     expect(isGeminiKeyFormat(KEY_A)).toBe(true);
   });
@@ -124,8 +136,11 @@ describe('browser: the key goes once to the account and never comes back', () =>
     expect(JSON.stringify(status)).not.toContain(KEY_A);
     expect(getMyAiKeyState()).toBe('present');
     await removeMyAiKey(client({ data: true, error: null }).value);
-    expect(getMyAiKeyState()).toBe('missing');
+    // Only the server knows whether VNEXT_AI_SERVER_KEY_FALLBACK answers people without a key.
+    expect(getMyAiKeyState()).toBe('unknown');
+    setMyAiKeyState('present');
     expect(await loadMyAiKeyStatus(client({ data: [], error: null }).value)).toBeNull();
+    expect(getMyAiKeyState()).toBe('unknown');
     expect(await testMyAiKey(saved.value)).toBe('ok');
     expect(saved.functions.invoke).toHaveBeenCalledWith('vnext-catalog-composer', { body: { version: 1, task: 'test_user_key' } });
     await expect(saveMyAiKey(saved.value, 'curta')).rejects.toThrow('MY_AI_KEY_INVALID_FORMAT');
@@ -138,12 +153,32 @@ describe('browser: the key goes once to the account and never comes back', () =>
     const composer = nativeComposeGateway(functions as never);
     const composeError = await composer({} as never).catch(error => error);
     expect(composeError).toBeInstanceOf(ComposerRequestError);
-    expect(composerErrorMessage(composeError)).toMatch(/^Cadastre sua chave de IA em Minha conta\. O catálogo não foi alterado\.$/);
+    expect(composerErrorMessage(composeError)).toBe(`${USER_AI_KEY_MISSING_MESSAGE} O catálogo não foi alterado.`);
+    expect(TRANSLATION_USER_AI_KEY_MISSING_MESSAGE).toBe(USER_AI_KEY_MISSING_MESSAGE);
+    expect(TRANSLATION_USER_AI_KEY_QUOTA_HINT).toBe(USER_AI_KEY_QUOTA_HINT);
+    expect(USER_AI_KEY_MISSING_MESSAGE).toMatch(/“Meus catálogos”.*“Minha conta”.*“Minha chave de IA”.*⚙/);
     const planError = await requestCatalogPlan(functions as never, { request: 'Catálogo', files: [] } as never).catch(error => error);
-    expect(draftErrorMessage(planError)).toMatch(/^Cadastre sua chave de IA em Minha conta\. Nada foi alterado/);
+    expect(draftErrorMessage(planError).startsWith(`${USER_AI_KEY_MISSING_MESSAGE} Nada foi alterado`)).toBe(true);
     const translate = vi.fn();
     await expect(new VNextTranslationGatewayClient(translate).translate({} as never)).rejects.toMatchObject({ code: 'USER_AI_KEY_MISSING' });
     expect(invoke).not.toHaveBeenCalled();
     expect(translate).not.toHaveBeenCalled();
+  });
+});
+
+describe('browser: with the server fallback on, a person without a key still reaches the server', () => {
+  it('a status with no row does not lock translation; only the server answer does', async () => {
+    await loadMyAiKeyStatus({ rpc: vi.fn(async () => ({ data: [], error: null })), functions: { invoke: vi.fn() } } as never);
+    const translate = vi.fn(async () => ({ data: { error: 'USER_AI_KEY_MISSING' }, error: null }));
+    const profile = W5_TRANSLATION_PROFILE;
+    const request = { sourceLocale: profile.sourceLocale, targetLocale: profile.targetLocale,
+      profileVersion: profile.profileVersion, contractVersion: profile.contractVersion };
+    await new VNextTranslationGatewayClient(translate).translate(request as never).catch(() => undefined);
+    expect(translate).toHaveBeenCalledTimes(1);
+  });
+  it('"Testar" answering 409 (never uses the fallback) does not lock the AI buttons', async () => {
+    const invoke = vi.fn(async () => ({ data: null, error: { context: { status: 409 } } }));
+    expect(await testMyAiKey({ rpc: vi.fn(), functions: { invoke } } as never)).toBe('missing');
+    expect(getMyAiKeyState()).toBe('unknown');
   });
 });

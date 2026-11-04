@@ -140,7 +140,7 @@ describe('Onda 1 (1B) leftovers in the composer', () => {
     make(async () => httpFailure(503, { code: 'PROVIDER_NOT_CONFIGURED' }), status({ byok: true }));
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     await send('Crie uma capa para o TA-25N.');
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cadastre sua chave de IA em Minha conta'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('volte à tela “Meus catálogos”, clique em “Minha conta”'));
     fireEvent.click(screen.getByRole('button', { name: 'Opções do assistente' }));
     expect(screen.getByRole('menuitem', { name: 'Cadastrar minha chave de IA' })).toBeInTheDocument();
   });

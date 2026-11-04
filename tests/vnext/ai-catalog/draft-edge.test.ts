@@ -46,6 +46,8 @@ type Options = {
   sketchReplies?: readonly unknown[];
   /** "Minha chave de IA" in Vault for USER (undefined: no service role, legacy harness on the server-key fallback). */
   userKey?: string | null;
+  /** The service-role read of the Vault secret fails (transient). */
+  userKeyReadFails?: boolean;
 };
 const SERVICE_ROLE = 'FAKE_SERVICE_ROLE_TEST_KEY';
 const USER_KEY = 'TEST_FAKE_USER_KEY_NOT_A_CREDENTIAL';
@@ -61,7 +63,8 @@ function sandbox(options: Options = {}) {
     VNEXT_AI_SERVER_KEY_FALLBACK: options.userKey === undefined ? 'true' : undefined,
   };
   const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) =>
-    name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === USER ? options.userKey ?? null : null, error: null }
+    name === 'vnext_ai_key_secret_for_v1' && options.userKeyReadFails ? { data: null, error: { code: 'XX000', message: 'boom' } }
+      : name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === USER ? options.userKey ?? null : null, error: null }
       : { data: null, error: { code: 'PGRST202', message: 'not found' } });
   const rpcCalls: { name: string; args?: Record<string, unknown> }[] = [];
   const missing = { data: null, error: { code: 'PGRST202', message: 'not found' } };
@@ -368,6 +371,7 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
     ['no budget table (00028)', { settled: false }, 503, 'BUDGET_NOT_READY'],
     ['no key at all', { serverKey: null }, 409, 'USER_AI_KEY_MISSING'],
     ['a caller without their own key', { userKey: null }, 409, 'USER_AI_KEY_MISSING'],
+    ['a failed Vault read (temporary, not "no key")', { userKey: null, userKeyReadFails: true }, 503, 'PROVIDER_UNAVAILABLE'],
   ] as const)('refuses %s before any provider call', async (_label, options, status, code) => {
     const box = sandbox(options);
     expect(await box.call(planBody())).toMatchObject({ status, json: { code } });

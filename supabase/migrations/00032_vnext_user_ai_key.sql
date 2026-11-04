@@ -83,7 +83,25 @@ BEGIN
 END;
 $$;
 
--- 3. Remover a própria chave (apaga também o segredo do Vault) ------------------------------------------------------
+-- 3. Apagar a linha apaga o segredo do Vault ----------------------------------------------------------------------
+-- Vale para "Remover" e também para o CASCADE quando a conta é apagada em auth.users (sem segredo órfão).
+CREATE FUNCTION public.vnext_user_ai_keys_drop_secret()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  DELETE FROM vault.secrets s WHERE s.id = OLD.secret_id;
+  RETURN OLD;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.vnext_user_ai_keys_drop_secret() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER vnext_user_ai_keys_drop_secret
+  AFTER DELETE ON public.vnext_user_ai_keys
+  FOR EACH ROW EXECUTE FUNCTION public.vnext_user_ai_keys_drop_secret();
+
+-- 4. Remover a própria chave (o gatilho acima apaga o segredo do Vault) --------------------------------------------
 CREATE FUNCTION public.vnext_ai_key_remove_v1()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -97,13 +115,11 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'VNEXT_UNAUTHENTICATED' USING ERRCODE = '28000'; END IF;
   DELETE FROM public.vnext_user_ai_keys k WHERE k.user_id = v_uid RETURNING k.secret_id INTO v_secret_id;
-  IF v_secret_id IS NULL THEN RETURN false; END IF;
-  DELETE FROM vault.secrets s WHERE s.id = v_secret_id;
-  RETURN true;
+  RETURN v_secret_id IS NOT NULL;
 END;
 $$;
 
--- 4. Somente funções Edge (service_role): ler a chave e anotar o resultado do teste ---------------------------------
+-- 5. Somente funções Edge (service_role): ler a chave e anotar o resultado do teste ---------------------------------
 CREATE FUNCTION public.vnext_ai_key_secret_for_v1(p_user_id UUID)
 RETURNS TEXT
 LANGUAGE sql

@@ -57,6 +57,9 @@ function mapGatewayFailure(data: unknown, message = ''): TranslationFoundationEr
     setMyAiKeyState('missing');
     return new TranslationFoundationError('USER_AI_KEY_MISSING', 'The caller has no AI key of their own');
   }
+  if (code === 'PROVIDER_REJECTED_KEY') {
+    return new TranslationFoundationError('PROVIDER_REJECTED_KEY', 'Google rejected the own AI key of the caller');
+  }
   if (code === 'CREDENTIAL_UNAVAILABLE') {
     return new TranslationFoundationError('CREDENTIAL_UNAVAILABLE', 'Translation provider credential is unavailable on the server');
   }

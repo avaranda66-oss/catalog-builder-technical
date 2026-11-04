@@ -1,4 +1,5 @@
 import { getMyAiKeyState, setMyAiKeyState } from './my-ai-key';
+import { USER_AI_KEY_MISSING_MESSAGE, USER_AI_KEY_QUOTA_HINT } from './user-ai-key';
 import { isDraftErrorCode, isDraftErrorReason, type DraftErrorCode, type DraftErrorReason } from './draft-codes';
 import {
   DRAFT_LIMITS, SOURCE_FILES_BUCKET, SOURCE_MIME_TYPES, sourceStoragePath, type SourceMimeType,
@@ -301,8 +302,8 @@ const MESSAGES: Record<DraftClientCode, string> = {
   METHOD_NOT_ALLOWED: 'Não foi possível falar com a IA agora. Tente de novo em instantes.',
   PAYLOAD_TOO_LARGE: 'O pedido ficou grande demais. Escolha menos páginas e tente de novo.',
   INVALID_REQUEST: 'A IA não aceitou este pedido. Confira as páginas escolhidas e tente de novo.',
-  PROVIDER_NOT_CONFIGURED: 'A IA ainda não foi configurada. Cadastre sua chave de IA em Minha conta.',
-  USER_AI_KEY_MISSING: 'Cadastre sua chave de IA em Minha conta.',
+  PROVIDER_NOT_CONFIGURED: `A IA ainda não foi configurada. ${USER_AI_KEY_MISSING_MESSAGE}`,
+  USER_AI_KEY_MISSING: USER_AI_KEY_MISSING_MESSAGE,
   BUDGET_NOT_READY: 'O controle de gastos da IA ainda não foi atualizado no servidor, por isso a leitura de arquivos não pode começar. Fale com o administrador.',
   AGENT_DAILY_BUDGET_EXCEEDED: 'O limite de uso da IA foi atingido. Continue montando o catálogo à mão hoje; amanhã o limite renova.',
   SOURCE_NOT_FOUND: 'O arquivo não chegou ao servidor. Escolha o arquivo de novo e tente outra vez.',
@@ -311,7 +312,7 @@ const MESSAGES: Record<DraftClientCode, string> = {
   TOKEN_BUDGET_EXCEEDED: 'Este arquivo é grande demais para a IA ler de uma vez. Escolha menos páginas (só as de especificações) e tente de novo.',
   PROVIDER_FILE_FAILED: 'O Google não conseguiu abrir este arquivo. Confira se ele abre normalmente no computador e tente de novo.',
   EXTRACTION_TIMEOUT: 'A IA demorou demais para ler o arquivo. Escolha menos páginas e tente de novo.',
-  PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.',
+  PROVIDER_RATE_LIMIT: 'O serviço do Google está ocupado. Espere um minuto e tente de novo.' + USER_AI_KEY_QUOTA_HINT,
   PROVIDER_REJECTED_KEY: 'O Google recusou a chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.',
   PROVIDER_UNAVAILABLE: 'O serviço de IA não respondeu agora. Verifique a internet e tente de novo em instantes.',
   INVALID_PROVIDER_RESPONSE: 'A IA respondeu de um jeito que não pôde ser usado. Tente de novo; se repetir, escolha menos páginas.',

@@ -1,4 +1,5 @@
 import { setMyAiKeyState } from '../../../src/vnext/ai-catalog/my-ai-key';
+import { USER_AI_KEY_MISSING_MESSAGE } from '../../../src/vnext/ai-catalog/user-ai-key';
 import { webcrypto } from 'node:crypto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
@@ -118,10 +119,10 @@ describe('Gemini conversational creation, confirmation and native editor action 
     const rpc = vi.fn(async () => ({ data: [{ provider: 'gemini', key_last4: '-key', check_status: 'untested' }], error: null }));
     const client = { functions: { invoke }, rpc } as unknown as NativeComposeFunctionsClient;
     render(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01" client={client} onBeforeMutation={() => true} />);
-    await waitFor(() => expect(screen.getByText('Cadastre sua chave de IA em Minha conta.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(USER_AI_KEY_MISSING_MESSAGE)).toBeInTheDocument());
     // Without a key nothing is called: the warning comes back at once.
     await send();
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cadastre sua chave de IA em Minha conta.'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(USER_AI_KEY_MISSING_MESSAGE));
     expect(invoke.mock.calls.filter(([, options]) => options.body.task !== 'status')).toHaveLength(0);
     chooseOption('Cadastrar minha chave de IA');
     expect(screen.getByRole('region', { name: 'Cadastrar minha chave de IA' })).toBeInTheDocument();

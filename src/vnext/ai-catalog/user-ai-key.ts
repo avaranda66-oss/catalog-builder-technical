@@ -10,7 +10,11 @@
 /** Server flag that lets the old shared server key answer people again (off by default). */
 export const SERVER_KEY_FALLBACK_FLAG = 'VNEXT_AI_SERVER_KEY_FALLBACK';
 export const USER_AI_KEY_MISSING = 'USER_AI_KEY_MISSING' as const;
-export const USER_AI_KEY_MISSING_MESSAGE = 'Cadastre sua chave de IA em Minha conta.';
+/** Read failure (RPC/Vault): NOT the same as "no key"; the caller should just try again. */
+export const USER_AI_KEY_READ_FAILED = 'PROVIDER_UNAVAILABLE' as const;
+/** Says where the screen is: "Minha conta" only exists on "Meus catálogos"; the assistant has its own ⚙ shortcut. */
+export const USER_AI_KEY_MISSING_MESSAGE = 'Para usar a IA, cadastre a sua chave de IA do Google: volte à tela “Meus catálogos”, ' +
+  'clique em “Minha conta” e depois em “Minha chave de IA”. No assistente, também dá pelo menu ⚙ → Cadastrar minha chave de IA.';
 
 export interface ServiceRoleRpc {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
@@ -21,7 +25,7 @@ export type KeyFetcher = (input: string, init: RequestInit) => Promise<Response>
 
 export type CallerKey =
   | { ok: true; key: string; source: 'user' | 'server' }
-  | { ok: false; code: typeof USER_AI_KEY_MISSING };
+  | { ok: false; code: typeof USER_AI_KEY_MISSING | typeof USER_AI_KEY_READ_FAILED };
 
 export function isGeminiKeyFormat(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 20 && value.length <= 256 && /^[A-Za-z0-9_-]+$/.test(value);
@@ -51,7 +55,8 @@ export async function resolveCallerAiKey(input: {
 }): Promise<CallerKey> {
   let own: string | null = null;
   if (input.readSecret && input.userId) {
-    try { own = await input.readSecret(input.userId); } catch { own = null; }
+    // A failed read is not "no key": never answer USER_AI_KEY_MISSING (nor fall back) on a transient error.
+    try { own = await input.readSecret(input.userId); } catch { return { ok: false, code: USER_AI_KEY_READ_FAILED }; }
   }
   if (own) return { ok: true, key: own, source: 'user' };
   if (input.serverFallback && input.serverKey) return { ok: true, key: input.serverKey, source: 'server' };
@@ -93,7 +98,7 @@ export async function runUserKeyTest(input: {
   userId: string; readSecret: SecretReader | null; markChecked: CheckMarker | null; fetcher: KeyFetcher;
 }): Promise<UserKeyTestResult> {
   const caller = await resolveCallerAiKey({ userId: input.userId, readSecret: input.readSecret, serverFallback: false, serverKey: '' });
-  if (!caller.ok) return caller;
+  if (!caller.ok) return caller.code === USER_AI_KEY_MISSING ? { ok: false, code: USER_AI_KEY_MISSING } : { ok: true, status: 'unavailable' };
   const outcome = await testGeminiKey(caller.key, input.fetcher);
   if (outcome === 'unavailable') return { ok: true, status: 'unavailable' };
   const status = outcome === 'ok' ? 'ok' : 'error';
@@ -101,9 +106,13 @@ export async function runUserKeyTest(input: {
   return { ok: true, status };
 }
 
-/** "Gemini · termina em …1234 · funcionando" — the only thing the screen ever shows about a key. */
+/** "Chave cadastrada (termina em 1234). Funcionando." — the only thing the screen ever shows about a key. */
 export function userKeyStatusLine(status: { key_last4: string; check_status: string } | null): string {
-  if (!status) return 'Nenhuma chave cadastrada.';
-  const state = status.check_status === 'ok' ? 'funcionando' : status.check_status === 'error' ? 'erro' : 'ainda não testada';
-  return `Gemini · termina em …${status.key_last4} · ${state}`;
+  if (!status) return 'Nenhuma chave de IA (Gemini) cadastrada.';
+  const state = status.check_status === 'ok' ? 'Funcionando.'
+    : status.check_status === 'error' ? 'O Google recusou esta chave. Troque a chave.' : 'Ainda não testada. Clique em “Testar”.';
+  return `Chave de IA (Gemini) cadastrada, termina em ${status.key_last4}. ${state}`;
 }
+
+/** Plain text that orients the person when their OWN key hit Google's limit (often the daily quota). */
+export const USER_AI_KEY_QUOTA_HINT = ' Se continuar, a cota da sua chave de IA pode ter acabado por hoje; confira no Google AI Studio.';
