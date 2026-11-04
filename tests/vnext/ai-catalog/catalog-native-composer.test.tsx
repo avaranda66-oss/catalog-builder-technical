@@ -1,3 +1,5 @@
+import { setMyAiKeyState } from '../../../src/vnext/ai-catalog/my-ai-key';
+import { USER_AI_KEY_MISSING_MESSAGE } from '../../../src/vnext/ai-catalog/user-ai-key';
 import { webcrypto } from 'node:crypto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, afterEach, afterAll, describe, it, expect, vi } from 'vitest';
@@ -107,25 +109,32 @@ describe('Gemini conversational creation, confirmation and native editor action 
     await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('Quais modelos devem aparecer'));
     expect(f.session.getSnapshot().document.pages).toHaveLength(1);
   });
-  it('uses a personal key only from the options menu, keeps it after the panel closes, and can go back to the server key', async () => {
-    const f = make();
-    await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
-    chooseOption('Usar minha própria chave');
-    expect(screen.getByRole('region', { name: 'Usar minha própria chave' })).toBeInTheDocument();
+  it('"Cadastrar minha chave de IA" saves the key in the account (never in the tab or the request) and then uses it', async () => {
+    const doc = createCatalogDocument(id, 'Novo catálogo');
+    const session = createDocumentSession(doc, { createId: id });
+    const invoke = vi.fn(async (_name: string, options: { body: Body }) => options.body.task === 'status'
+      ? { data: { code: 'OK', status: { enabled: true, mode: 'bounded-acceptance', serverKey: false, userKey: false, byok: false,
+        remainingMicrousd: null, callReserveMicrousd: 7800 } }, error: null }
+      : { data: { reply: plan }, error: null });
+    const rpc = vi.fn(async () => ({ data: [{ provider: 'gemini', key_last4: '-key', check_status: 'untested' }], error: null }));
+    const client = { functions: { invoke }, rpc } as unknown as NativeComposeFunctionsClient;
+    render(<CatalogNativeComposer documentId={doc.id} session={session} ownerScope="user:01" client={client} onBeforeMutation={() => true} />);
+    await waitFor(() => expect(screen.getByText(USER_AI_KEY_MISSING_MESSAGE)).toBeInTheDocument());
+    // Without a key nothing is called: the warning comes back at once.
+    await send();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(USER_AI_KEY_MISSING_MESSAGE));
+    expect(invoke.mock.calls.filter(([, options]) => options.body.task !== 'status')).toHaveLength(0);
+    chooseOption('Cadastrar minha chave de IA');
+    expect(screen.getByRole('region', { name: 'Cadastrar minha chave de IA' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Desbloquear chave de teste' }));
-    expect(screen.queryByRole('region', { name: 'Usar minha própria chave' })).toBeNull();
-    expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith('vnext_ai_key_save_v1', { p_provider: 'gemini', p_api_key: 'temporary-test-only-key' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Cadastrar minha chave de IA' })).toBeNull());
+    expect(screen.getByText('IA pronta, usando a sua chave de IA.')).toBeInTheDocument();
     await sendAndWaitProposal();
-    expect(f.generationCalls()[0][1].body.credential).toEqual({ provider: 'gemini', apiKey: 'temporary-test-only-key' });
+    const generation = invoke.mock.calls.filter(([, options]) => options.body.task !== 'status');
+    expect(generation[0][1].body).not.toHaveProperty('credential');
     expect(JSON.stringify(localStorage)).not.toContain('temporary-test-only-key');
-    // Closing the assistant panel unmounts the composer; the unlocked key survives.
-    f.ui.unmount();
-    render(f.element);
-    expect(screen.getByText('IA pronta, usando a sua chave própria nesta aba.')).toBeInTheDocument();
-    chooseOption('Voltar a usar a IA do servidor');
-    await send('Crie mais uma página de apresentação para o catálogo.');
-    await waitFor(() => expect(f.generationCalls()).toHaveLength(2));
-    expect(f.generationCalls()[1][1].body).not.toHaveProperty('credential');
+    setMyAiKeyState('unknown');
   });
 });
 
@@ -155,7 +164,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     const f = makeWith(async (_name, options) => options.body.task === 'status'
       ? httpFailure(400, { code: 'INVALID_REQUEST' }) : { data: { reply: plan }, error: null });
     await waitFor(() => expect(screen.getByText('IA disponível.')).toBeInTheDocument());
-    expect(optionNames()).toContain('Usar minha própria chave');
+    expect(optionNames()).toContain('Cadastrar minha chave de IA');
     await sendAndWaitProposal();
     expect(f.generationCalls()[0][1].body).not.toHaveProperty('credential');
   });
@@ -163,10 +172,10 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
   it('offers "Usar minha própria chave" only when the server accepts a personal key, and no "↗" on the send button', async () => {
     makeWith(async (_name, options) => options.body.task === 'status' ? statusOk : { data: { reply: plan }, error: null });
     // Do not flash an unusable key option before the server has reported its capability.
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
     await waitFor(() => expect(screen.getByText('IA pronta.')).toBeInTheDocument());
     // The server says byok: false, so the key option remains hidden; no always-visible key buttons either.
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
     expect(screen.queryByRole('button', { name: /Avançado|chave própria|IA do servidor/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar ao Gemini' })).toBeInTheDocument();
     expect(screen.queryByText(/↗/)).toBeNull();
@@ -175,7 +184,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
   it('C-05: with the daily limit already known, switches "Enviar" off with the reason beside it and keeps the typed request', async () => {
     const f = makeWith(async () => httpFailure(429, { code: 'AGENT_DAILY_BUDGET_EXCEEDED' }));
     await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
     const box = screen.getByRole('textbox', { name: 'Seu pedido ao Gemini' });
     fireEvent.change(box, { target: { value: 'Crie uma capa para o catálogo de calibradores.' } });
     const sendButton = screen.getByRole('button', { name: 'Enviar ao Gemini' });
@@ -238,9 +247,9 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     ['FORBIDDEN', 403],
   ])('keeps personal-key controls hidden when readiness is blocked by %s', async (code, status) => {
     const f = makeWith(async () => httpFailure(status, { code }));
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
     await waitFor(() => expect(document.querySelector('[data-ai-readiness="blocked"]')).toBeInTheDocument());
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
     await send('Crie uma capa para o catálogo de calibradores.');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('O catálogo não foi alterado.'));
     expect(screen.getByRole('article', { name: 'Mensagem não enviada' })).toHaveTextContent('Crie uma capa para o catálogo de calibradores.');
@@ -269,7 +278,7 @@ describe('readiness, plain-Portuguese errors and a stable conversation (FR-60, F
     render(<CatalogNativeComposer documentId={doc.id} session={createDocumentSession(doc, { createId: id })}
       ownerScope="user:01" onBeforeMutation={() => true} />);
     expect(screen.getByText('A IA não está disponível nesta tela.')).toBeInTheDocument();
-    expect(optionNames()).not.toContain('Usar minha própria chave');
+    expect(optionNames()).not.toContain('Cadastrar minha chave de IA');
   });
 
   it('keeps the first suggestions in view and only follows the conversation once it starts', async () => {

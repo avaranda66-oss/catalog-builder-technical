@@ -4,6 +4,7 @@ import type { EditIntentGateway, EditIntentRequest } from './edit-intents';
 import {
   isComposerErrorCode, isComposerErrorReason, type ComposerErrorCode, type ComposerErrorReason,
 } from './composer-codes';
+import { getMyAiKeyState, setMyAiKeyState } from './my-ai-key';
 
 type ComposerBody = (NativeComposeRequest | NativeTextEditRequest | EditIntentRequest | { version: 1; task: 'status' }) & {
   credential?: { provider: 'gemini'; apiKey: string };
@@ -64,11 +65,17 @@ function checkedCredential(credential: string | undefined): string | undefined {
   return credential;
 }
 async function invokeComposer(client: NativeComposeFunctionsClient, body: ComposerBody): Promise<unknown> {
+  // "Minha chave de IA": known to have no key -> warn without calling anything.
+  if (getMyAiKeyState() === 'missing') throw new ComposerRequestError('USER_AI_KEY_MISSING');
   let result: Awaited<ReturnType<NativeComposeFunctionsClient['functions']['invoke']>>;
   try { result = await client.functions.invoke('vnext-catalog-composer', { body }); }
   catch { throw new ComposerRequestError('NATIVE_COMPOSER_UNAVAILABLE'); }
   const { data, error } = result;
-  if (error || !data || typeof data !== 'object' || !('reply' in data)) throw await composerFailure(result);
+  if (error || !data || typeof data !== 'object' || !('reply' in data)) {
+    const failure = await composerFailure(result);
+    if (failure.code === 'USER_AI_KEY_MISSING') setMyAiKeyState('missing');
+    throw failure;
+  }
   return (data as { reply: unknown }).reply;
 }
 
@@ -102,7 +109,9 @@ export function editIntentGateway(client: NativeComposeFunctionsClient, credenti
 
 export type ComposerReadiness =
   /** New composer: ready, with what the server reported. */
-  | { kind: 'ready'; serverKey: boolean; byok: boolean; remainingMicrousd: number | null; callReserveMicrousd: number | null;
+  | { kind: 'ready'; serverKey: boolean; byok: boolean;
+      /** "Minha chave de IA": the caller has their own key (absent: an older deploy). */
+      userKey?: boolean; remainingMicrousd: number | null; callReserveMicrousd: number | null;
       /** FR-72: the deployed function knows `edit_intent` (absent: an older deploy without the task list). */
       editing?: boolean;
       /** Onda 4.5: the deployed function accepts the arsenal index and may answer `use_preset`. */
@@ -112,7 +121,7 @@ export type ComposerReadiness =
   /** A known reason the AI cannot answer now. */
   | { kind: 'blocked'; code: ComposerClientCode };
 
-const BLOCKING: readonly ComposerClientCode[] = ['COMPOSER_DISABLED', 'SERVER_NOT_CONFIGURED', 'UNAUTHENTICATED',
+const BLOCKING: readonly ComposerClientCode[] = ['USER_AI_KEY_MISSING', 'COMPOSER_DISABLED', 'SERVER_NOT_CONFIGURED', 'UNAUTHENTICATED',
   'FORBIDDEN', 'INVALID_ORIGIN', 'AGENT_DAILY_BUDGET_EXCEEDED'];
 const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 /** Free readiness check (no provider call, no budget). Tolerates the older deployed composer. */
@@ -123,7 +132,9 @@ export async function readComposerReadiness(client: NativeComposeFunctionsClient
   const status = result.data && typeof result.data === 'object' ? (result.data as { status?: unknown }).status : undefined;
   if (!result.error && status && typeof status === 'object') {
     const value = status as Record<string, unknown>;
+    if (typeof value.userKey === 'boolean') setMyAiKeyState(value.userKey ? 'present' : value.serverKey === true ? 'unknown' : 'missing');
     return { kind: 'ready', serverKey: value.serverKey === true, byok: value.byok === true,
+      ...(typeof value.userKey === 'boolean' ? { userKey: value.userKey } : {}),
       remainingMicrousd: finite(value.remainingMicrousd), callReserveMicrousd: finite(value.callReserveMicrousd),
       ...(Array.isArray(value.tasks) ? { editing: value.tasks.includes('edit_intent') } : {}),
       ...(Array.isArray(value.features) ? { arsenalIndex: value.features.includes('arsenal_index') } : {}) };

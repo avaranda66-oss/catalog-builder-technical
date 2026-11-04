@@ -34,6 +34,7 @@ import { createW2CDemoDocument, resolveKnownW2CDemoAssetUrls } from './editor-de
 import { VNextApp } from './VNextApp';
 import type { NativeComposeFunctionsClient } from '../ai-catalog/native-compose-client';
 import type { DraftClient } from '../ai-catalog/draft-client';
+import { loadMyAiKeyStatus, type MyAiKeyClient } from '../ai-catalog/my-ai-key';
 import { serverSpecTableGateway } from '../ai-catalog/spec-table/spec-table-gateway';
 import { createPresysPageTemplateRegistry } from '../library/presys-ta25n-starter';
 import { DefaultStarterDependencyPreparer, bindPresysPageReuse } from '../library/starter-dependencies';
@@ -251,6 +252,9 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
     replaceWithCanonicalRoot();
     return;
   }
+  // "Minha chave de IA": learn early whether this person has a key, so AI buttons can warn without calling.
+  // Failure (for example migration 00032 not applied yet) keeps the state unknown and the server decides.
+  void loadMyAiKeyStatus(supabase as unknown as MyAiKeyClient).catch(() => undefined);
 
   const presysTemplates = createPresysPageTemplateRegistry();
   const applicationDependencies: ApplicationExecutionDependencies = {
@@ -382,6 +386,7 @@ export async function mountVNextApp(root: HTMLElement): Promise<void> {
           onOpen={(catalogId) => window.location.assign(`/v2?catalog=${encodeURIComponent(catalogId)}`)}
           onSignOut={() => useAuthStore.getState().signOut()}
           onUnauthorized={revalidateAfterServerUnauthorized}
+          accountClient={supabase as unknown as MyAiKeyClient}
         />
       </React.StrictMode>
     );

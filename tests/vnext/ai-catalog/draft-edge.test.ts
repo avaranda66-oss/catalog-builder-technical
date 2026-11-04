@@ -44,7 +44,13 @@ type Options = {
   flag?: boolean; role?: string; active?: boolean; validUser?: boolean; serverKey?: string | null; draftKey?: string;
   settled?: boolean; cacheReady?: boolean; file?: Uint8Array<ArrayBuffer> | null;
   sketchReplies?: readonly unknown[];
+  /** "Minha chave de IA" in Vault for USER (undefined: no service role, legacy harness on the server-key fallback). */
+  userKey?: string | null;
+  /** The service-role read of the Vault secret fails (transient). */
+  userKeyReadFails?: boolean;
 };
+const SERVICE_ROLE = 'FAKE_SERVICE_ROLE_TEST_KEY';
+const USER_KEY = 'TEST_FAKE_USER_KEY_NOT_A_CREDENTIAL';
 function sandbox(options: Options = {}) {
   const env: Record<string, string | undefined> = {
     VNEXT_CATALOG_ALLOWED_ORIGINS: ORIGIN,
@@ -53,7 +59,13 @@ function sandbox(options: Options = {}) {
     SUPABASE_ANON_KEY: 'FAKE_ANON_PUBLIC_TEST_KEY',
     GEMINI_API_KEY: options.serverKey === null ? undefined : options.serverKey ?? SERVER_KEY,
     VNEXT_DRAFT_GEMINI_API_KEY: options.draftKey,
+    SUPABASE_SERVICE_ROLE_KEY: options.userKey === undefined ? undefined : SERVICE_ROLE,
+    VNEXT_AI_SERVER_KEY_FALLBACK: options.userKey === undefined ? 'true' : undefined,
   };
+  const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) =>
+    name === 'vnext_ai_key_secret_for_v1' && options.userKeyReadFails ? { data: null, error: { code: 'XX000', message: 'boom' } }
+      : name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === USER ? options.userKey ?? null : null, error: null }
+      : { data: null, error: { code: 'PGRST202', message: 'not found' } });
   const rpcCalls: { name: string; args?: Record<string, unknown> }[] = [];
   const missing = { data: null, error: { code: 'PGRST202', message: 'not found' } };
   const rpc = vi.fn(async (name: string, args?: Record<string, unknown>) => {
@@ -76,7 +88,7 @@ function sandbox(options: Options = {}) {
     return file ? { data: new Blob([file]), error: null } : { data: null, error: { message: 'Object not found' } };
   });
   const getUser = vi.fn(async () => ({ data: { user: options.validUser === false ? null : { id: USER } }, error: null }));
-  const createClient = vi.fn(() => ({
+  const createClient = vi.fn((_url: string, key: string) => key === SERVICE_ROLE ? { rpc: adminRpc } : ({
     auth: { getUser },
     from: vi.fn(() => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({
       data: { id: USER, role: options.role ?? 'editor', is_active: options.active !== false }, error: null }) }) }) })),
@@ -113,7 +125,7 @@ function sandbox(options: Options = {}) {
     const text = await response.text();
     return { status: response.status, headers: response.headers, text, json: text ? JSON.parse(text) as Record<string, unknown> : null };
   };
-  return { call, rpc, rpcCalls, download, fetch, google, getUser, log };
+  return { call, rpc, rpcCalls, adminRpc, download, fetch, google, getUser, log };
 }
 const extract = (source: Record<string, unknown> = {}) => ({
   version: 1, task: 'extract_facts', models: ['TA-25N'],
@@ -265,7 +277,7 @@ describe('vnext-catalog-draft tasks', () => {
   });
 
   it('needs a server key and the stored file', async () => {
-    expect(await sandbox({ serverKey: null }).call(extract())).toMatchObject({ status: 503, json: { code: 'PROVIDER_NOT_CONFIGURED' } });
+    expect(await sandbox({ serverKey: null }).call(extract())).toMatchObject({ status: 409, json: { code: 'USER_AI_KEY_MISSING' } });
     const missing = sandbox({ file: null });
     expect(await missing.call(extract())).toMatchObject({ status: 404, json: { code: 'SOURCE_NOT_FOUND' } });
     expect(missing.fetch).not.toHaveBeenCalled();
@@ -357,7 +369,9 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
   it.each([
     ['a viewer', { role: 'viewer' }, 403, 'FORBIDDEN'],
     ['no budget table (00028)', { settled: false }, 503, 'BUDGET_NOT_READY'],
-    ['no server key', { serverKey: null }, 503, 'PROVIDER_NOT_CONFIGURED'],
+    ['no key at all', { serverKey: null }, 409, 'USER_AI_KEY_MISSING'],
+    ['a caller without their own key', { userKey: null }, 409, 'USER_AI_KEY_MISSING'],
+    ['a failed Vault read (temporary, not "no key")', { userKey: null, userKeyReadFails: true }, 503, 'PROVIDER_UNAVAILABLE'],
   ] as const)('refuses %s before any provider call', async (_label, options, status, code) => {
     const box = sandbox(options);
     expect(await box.call(planBody())).toMatchObject({ status, json: { code } });
@@ -377,5 +391,26 @@ describe('vnext-catalog-draft task plan_draft (FR-70)', () => {
     expect(await box.call(planBody())).toMatchObject({ status: 502, json: { code: 'INVALID_PROVIDER_RESPONSE', reason: 'CONTRACT' } });
     expect(box.rpcCalls.at(-1)).toEqual({ name: 'vnext_agent_settle_budget_v1',
       args: { p_reservation_id: 'b1a7c0de-0000-4000-8000-000000000001', p_actual_microusd: 18_000 } });
+  });
+});
+
+describe('"Minha chave de IA" in vnext-catalog-draft', () => {
+  it('uses only the own key of the caller (service role, own user id), never the server key, and never echoes it', async () => {
+    const box = sandbox({ userKey: USER_KEY, draftKey: DRAFT_KEY });
+    const result = await box.call(extract());
+    expect(result.status).toBe(200);
+    expect(box.adminRpc).toHaveBeenCalledWith('vnext_ai_key_secret_for_v1', { p_user_id: USER });
+    expect(box.google.length).toBeGreaterThan(0);
+    expect(box.google.filter(call => call.key !== undefined).every(call => call.key === USER_KEY)).toBe(true);
+    expect(box.google.some(call => call.key === USER_KEY)).toBe(true);
+    expect(result.text).not.toContain(USER_KEY);
+    expect(JSON.stringify(box.log.mock.calls)).not.toContain(USER_KEY);
+    expect((await box.call({ version: 1, task: 'status' })).json).toMatchObject({ status: { serverKey: true, userKey: true } });
+  });
+  it('without a key: status says so for free and reading never calls Google', async () => {
+    const box = sandbox({ userKey: null, draftKey: DRAFT_KEY });
+    expect((await box.call({ version: 1, task: 'status' })).json).toMatchObject({ status: { serverKey: false, userKey: false } });
+    expect(await box.call(extract())).toMatchObject({ status: 409, json: { code: 'USER_AI_KEY_MISSING' } });
+    expect(box.fetch).not.toHaveBeenCalled();
   });
 });

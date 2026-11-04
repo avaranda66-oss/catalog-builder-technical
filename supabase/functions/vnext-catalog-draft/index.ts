@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { edgeSecretAccess, resolveCallerAiKey } from '../../../src/vnext/ai-catalog/user-ai-key.ts';
 // Bundled with the Edge Function; the unit tests and the local live check run the same source.
 import {
   DRAFT_LIMITS, EXTRACTION_MODEL, EXTRACTION_PROMPT_VERSION, SOURCE_FILES_BUCKET, extractionReservationMicrousd,
@@ -124,12 +125,18 @@ serve(async req => {
   const plan = planning ? parsePlanDraftRequest(body) : null;
   const request = planning ? null : parseDraftRequest(body);
   if (!plan && !request) return fail(c, 400, 'INVALID_REQUEST');
-  // Draft-specific secret first, so the shared keys never have to be overwritten.
-  const key = Deno.env.get('VNEXT_DRAFT_GEMINI_API_KEY') || Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') ||
-    Deno.env.get('GEMINI_API_KEY') || '';
+  // "Minha chave de IA": only the caller's own key (Vault, service role). The shared server key
+  // (draft-specific first) answers only when VNEXT_AI_SERVER_KEY_FALLBACK=true.
+  const access = edgeSecretAccess(name => Deno.env.get(name), (u, k) => createClient(u, k, { auth: { persistSession: false } }));
+  const caller = await resolveCallerAiKey({ userId: user.id, readSecret: access.readSecret, serverFallback: access.serverFallback,
+    serverKey: !access.serverFallback ? '' : Deno.env.get('VNEXT_DRAFT_GEMINI_API_KEY') || Deno.env.get('VNEXT_COMPOSER_GEMINI_API_KEY') ||
+      Deno.env.get('GEMINI_API_KEY') || '' });
+  const key = caller.ok ? caller.key : '';
+  // A failed Vault read is temporary (503), never "no key" (409): the screen must not lock the AI.
+  const missing = () => !caller.ok && caller.code !== 'USER_AI_KEY_MISSING' ? fail(c, 503, 'PROVIDER_UNAVAILABLE') : fail(c, 409, 'USER_AI_KEY_MISSING');
   const ledger = budgetLedger(db);
   if (plan) {
-    if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+    if (!key) return missing();
     const result = await runCatalogPlan({ request: plan, key, ledger, fetcher: (input, init) => fetch(input, init) });
     return result.ok
       ? json(c, 200, 'OK', { plan: result.plan })
@@ -140,12 +147,12 @@ serve(async req => {
     // No provider call and no reservation: only tells the screen whether reading files can start.
     const budget = await ledger.remaining();
     // `tasks` lets a newer screen know what this deployed version can do before it spends anything.
-    return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, model: EXTRACTION_MODEL,
+    return json(c, 200, 'OK', { status: { enabled: true, serverKey: !!key, userKey: caller.ok ? caller.source === 'user' : caller.code === 'USER_AI_KEY_MISSING' ? false : undefined, model: EXTRACTION_MODEL,
       tasks: ['extract_facts', 'interpret_sketch', 'plan_draft'],
       promptVersion: EXTRACTION_PROMPT_VERSION, budget: budget.ledger, remainingMicrousd: budget.remainingMicrousd,
       callReserveMicrousd: extractionReservationMicrousd() } });
   }
-  if (!key) return fail(c, 503, 'PROVIDER_NOT_CONFIGURED');
+  if (!key) return missing();
   if (request.task === 'interpret_sketch') {
     const result = await runSketchInterpretation({ request, key, ledger, source: privateSource(db),
       fetcher: (input, init) => fetch(input, init) });

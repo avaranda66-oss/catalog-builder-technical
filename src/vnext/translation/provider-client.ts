@@ -1,4 +1,5 @@
-﻿import {
+﻿import { getMyAiKeyState, setMyAiKeyState } from '../ai-catalog/my-ai-key';
+import {
   TranslationFoundationError,
   resolveTranslationProfile,
   type TranslationProvider,
@@ -52,6 +53,13 @@ async function sanitizedGatewayErrorData(...candidates: readonly unknown[]): Pro
 
 function mapGatewayFailure(data: unknown, message = ''): TranslationFoundationError {
   const code = externalErrorCode(data);
+  if (code === 'USER_AI_KEY_MISSING') {
+    setMyAiKeyState('missing');
+    return new TranslationFoundationError('USER_AI_KEY_MISSING', 'The caller has no AI key of their own');
+  }
+  if (code === 'PROVIDER_REJECTED_KEY') {
+    return new TranslationFoundationError('PROVIDER_REJECTED_KEY', 'Google rejected the own AI key of the caller');
+  }
   if (code === 'CREDENTIAL_UNAVAILABLE') {
     return new TranslationFoundationError('CREDENTIAL_UNAVAILABLE', 'Translation provider credential is unavailable on the server');
   }
@@ -102,6 +110,8 @@ export class VNextTranslationGatewayClient implements TranslationProvider {
 
   async translate(request: TranslationProviderRequest, signal?: AbortSignal): Promise<unknown> {
     if (signal?.aborted) throw new TranslationFoundationError('ABORTED', 'Translation request was cancelled');
+    // "Minha chave de IA": known to have no key -> warn without calling anything.
+    if (getMyAiKeyState() === 'missing') throw new TranslationFoundationError('USER_AI_KEY_MISSING', 'The caller has no AI key of their own');
     const profile = resolveTranslationProfile(request.sourceLocale, request.targetLocale, request.profileVersion);
     if (request.contractVersion !== profile.contractVersion) throw new TranslationFoundationError('INVALID_REQUEST', 'Unsupported translation contract');
     let response: GatewayInvocationResult;

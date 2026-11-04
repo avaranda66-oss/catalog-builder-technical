@@ -99,8 +99,8 @@ describe('plain Portuguese messages', () => {
   it('specializes the message by reason and by who owns the key', () => {
     expect(composerErrorMessage(new ComposerRequestError('INVALID_PROVIDER_RESPONSE', 'MAX_TOKENS'))).toContain('Peça menos páginas de cada vez');
     expect(composerErrorMessage(new ComposerRequestError('INVALID_PROVIDER_RESPONSE', 'SAFETY'))).toContain('Escreva com outras palavras');
-    expect(composerErrorMessage(new ComposerRequestError('PROVIDER_REJECTED_KEY'), { usingOwnKey: true })).toContain('recusou a sua chave própria');
-    expect(composerErrorMessage(new ComposerRequestError('PROVIDER_REJECTED_KEY'))).toContain('Fale com o administrador');
+    expect(composerErrorMessage(new ComposerRequestError('PROVIDER_REJECTED_KEY'), { usingOwnKey: true })).toContain('recusou a sua chave de IA');
+    expect(composerErrorMessage(new ComposerRequestError('PROVIDER_REJECTED_KEY'))).toContain('Minha conta');
     expect(composerErrorMessage(new ComposerRequestError('PROVIDER_UNAVAILABLE', undefined, 429))).toContain('Espere um minuto');
     expect(composerErrorMessage(new Error('anything else'))).toContain('A IA respondeu de um jeito que não pôde ser usado');
   });

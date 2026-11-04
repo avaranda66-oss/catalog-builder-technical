@@ -8,6 +8,7 @@ import { VNEXT_TRANSLATION_PROFILES, type RegisteredTranslationProfile } from '@
 import type { TranslationProviderRequest } from '@/vnext/translation/contracts';
 import { GEMINI_TRANSLATION_MODEL } from '@/vnext/ai-catalog/gemini-models';
 import { PRESYS_GLOSSARY_VERSION } from '@/vnext/translation/presys-glossary';
+import { VNextTranslationGatewayClient } from '@/vnext/translation/provider-client';
 
 // FR-86: every profile, including the server-only canonical Spanish bridge, uses the registry model.
 const MODEL = GEMINI_TRANSLATION_MODEL;
@@ -42,12 +43,16 @@ function gateway() {
   const glossaryPath = resolve(dirname(gatewayPath), '../../../src/vnext/translation/presys-glossary.ts');
   const glossaryExports: Record<string, unknown> = {};
   runInContext(transpile(glossaryPath), createContext({ exports: glossaryExports }), { filename: glossaryPath });
+  // "Minha chave de IA" (pure, no imports): the caller's own key through the service role.
+  const userKeyPath = resolve(dirname(gatewayPath), '../../../src/vnext/ai-catalog/user-ai-key.ts');
+  const userKeyExports: Record<string, unknown> = {};
+  runInContext(transpile(userKeyPath), createContext({ exports: userKeyExports }), { filename: userKeyPath });
   let handler: ((request: Request) => Promise<Response>) | undefined;
   const state = { authenticated: true, active: true, role: 'editor', profileError: false, providerStatus: 200,
     providerThrows: false, malformedEnvelope: false, missingEnvironment: '',
     budgetMode: undefined as string | undefined, countStatus: 200, countThrows: false, malformedCount: false,
     countPayload: { totalTokens: 100 } as unknown, finishReason: 'STOP' as string | undefined, extraCandidates: false,
-    transform: (payload: ProviderPayload): unknown => payload };
+    transform: (payload: ProviderPayload): unknown => payload, userKey: undefined as string | null | undefined, userKeyReadFails: false };
   const envReads: string[] = [];
   const profileQueries: string[] = [];
   const countProvider = vi.fn(async (_options: RequestInit) => {
@@ -69,14 +74,19 @@ function gateway() {
   });
   const fakeProvider = vi.fn(async (url: string, options: RequestInit) => {
     expect(options.method).toBe('POST');
-    expect((options.headers as Record<string, string>)['x-goog-api-key']).toBe('fixture-server-key');
+    expect((options.headers as Record<string, string>)['x-goog-api-key']).toBe(state.userKey ?? 'fixture-server-key');
     if (url === `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:countTokens`) {
       return countProvider(options);
     }
     expect(url).toBe(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`);
     return generateProvider(options);
   });
+  const adminRpc = vi.fn(async (name: string, args?: Record<string, unknown>) =>
+    name === 'vnext_ai_key_secret_for_v1' && state.userKeyReadFails ? { data: null, error: { code: 'XX000' } }
+      : name === 'vnext_ai_key_secret_for_v1' ? { data: args?.p_user_id === 'fixture-user' ? state.userKey ?? null : null, error: null }
+      : { data: null, error: { code: 'PGRST202' } });
   const createClient = vi.fn((_url: string, _key: string, options: { global: { headers: { Authorization: string } } }) => {
+    if (_key === 'fixture-service-role') return { rpc: adminRpc } as never;
     expect(options.global.headers.Authorization).toBe('Bearer fixture-session');
     return {
       auth: { getUser: async () => ({ data: { user: state.authenticated ? { id: 'fixture-user' } : null }, error: null }) },
@@ -95,12 +105,16 @@ function gateway() {
       if (moduleId === 'https://esm.sh/@supabase/supabase-js@2.112.4') return { createClient };
       if (resolve(dirname(gatewayPath), moduleId) === registryPath) return registryExports;
       if (resolve(dirname(gatewayPath), moduleId) === glossaryPath) return glossaryExports;
+      if (resolve(dirname(gatewayPath), moduleId) === userKeyPath) return userKeyExports;
       throw new Error(`Unexpected gateway dependency: ${moduleId}`);
     },
     Deno: { env: { get: (key: string) => {
       envReads.push(key);
       if (state.missingEnvironment === key) return undefined;
       if (key === 'VNEXT_TRANSLATION_BUDGET_MODE') return state.budgetMode;
+      // Legacy fixtures run on the server-key fallback; state.userKey switches to "Minha chave de IA".
+      if (key === 'SUPABASE_SERVICE_ROLE_KEY') return state.userKey === undefined ? undefined : 'fixture-service-role';
+      if (key === 'VNEXT_AI_SERVER_KEY_FALLBACK') return state.userKey === undefined ? 'true' : undefined;
       return ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_ANON_KEY: 'fixture-anon', GEMINI_API_KEY: 'fixture-server-key' } as Record<string, string>)[key];
     } } },
     fetch: fakeProvider,
@@ -112,7 +126,7 @@ function gateway() {
       ...(options.auth === false ? {} : { Authorization: 'Bearer fixture-session' }) },
     ...(['GET', 'OPTIONS'].includes(options.method ?? '') ? {} : { body: options.rawBody ?? JSON.stringify(body) }),
   }));
-  return { invoke, state, envReads, fakeProvider, countProvider, generateProvider, profileQueries, createClient };
+  return { invoke, state, envReads, fakeProvider, countProvider, generateProvider, profileQueries, createClient, adminRpc };
 }
 
 function request(profile: RegisteredTranslationProfile): TranslationProviderRequest {
@@ -169,7 +183,7 @@ describe.each(VNEXT_TRANSLATION_PROFILES)('P2 executed server gateway $targetLoc
     if (scenario === 'missing-infrastructure') g.state.missingEnvironment = 'SUPABASE_URL';
     if (scenario === 'missing-secret') g.state.missingEnvironment = 'GEMINI_API_KEY';
     const response = await g.invoke(request(profile), { auth: scenario !== 'missing-auth' });
-    expect(response.status).toBe(scenario === 'missing-secret' || scenario === 'missing-infrastructure' ? 503
+    expect(response.status).toBe(scenario === 'missing-secret' ? 409 : scenario === 'missing-infrastructure' ? 503
       : scenario === 'missing-auth' || scenario === 'invalid-auth' ? 401 : 403);
     expect(g.fakeProvider).not.toHaveBeenCalled();
     if (scenario !== 'missing-secret') expect(g.envReads).not.toContain('GEMINI_API_KEY');
@@ -281,7 +295,7 @@ describe('P2 server-first compatibility with the canonical Spanish client', () =
     if (scenario === 'inactive') g.state.active = false;
     if (scenario === 'missing-secret') g.state.missingEnvironment = 'GEMINI_API_KEY';
     const response = await g.invoke(canonicalRequest(), { auth: scenario !== 'missing-auth' });
-    expect(response.status).toBe(scenario === 'missing-auth' ? 401 : scenario === 'inactive' ? 403 : 503);
+    expect(response.status).toBe(scenario === 'missing-auth' ? 401 : scenario === 'inactive' ? 403 : 409);
     expect(g.fakeProvider).not.toHaveBeenCalled();
   });
 
@@ -399,7 +413,7 @@ describe.each(budgetProfiles)('P2 server-owned token budget $label', item => {
     if (scenario === 'missing-infrastructure') g.state.missingEnvironment = 'SUPABASE_URL';
     if (scenario === 'missing-secret') g.state.missingEnvironment = 'GEMINI_API_KEY';
     const response = await g.invoke(body(), { auth: scenario !== 'missing-auth' });
-    expect(response.status).toBe(scenario === 'missing-secret' || scenario === 'missing-infrastructure' ? 503
+    expect(response.status).toBe(scenario === 'missing-secret' ? 409 : scenario === 'missing-infrastructure' ? 503
       : scenario === 'missing-auth' || scenario === 'invalid-auth' ? 401 : 403);
     expect(g.fakeProvider).not.toHaveBeenCalled();
   });
@@ -553,5 +567,35 @@ describe('FR-87 canonical Spanish bridge keeps its original prompt', () => {
     expect(prompt.units[0].runs[0].protectedText).toBe('Exatidão do Kompressor [[VNEXT_TECH_0_001]]');
     expect(Object.keys(prompt)).not.toContain('glossary');
     expect(Object.keys(prompt)).not.toContain('glossaryVersion');
+  });
+});
+
+describe('"Minha chave de IA" in vnext-translation-provider', () => {
+  const profile = VNEXT_TRANSLATION_PROFILES[0];
+  const body = () => request(profile);
+  it('without a key of their own the caller gets USER_AI_KEY_MISSING and nothing reaches Google', async () => {
+    const g = gateway(); g.state.userKey = null;
+    const response = await g.invoke(body());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'USER_AI_KEY_MISSING' });
+    expect(g.adminRpc).toHaveBeenCalledWith('vnext_ai_key_secret_for_v1', { p_user_id: 'fixture-user' });
+    expect(g.fakeProvider).not.toHaveBeenCalled();
+    expect(g.envReads).not.toContain('GEMINI_API_KEY');
+  });
+
+  it('Google refusing the caller OWN key says so (PROVIDER_REJECTED_KEY), not "contact the administrator"', async () => {
+    const g = gateway(); g.state.userKey = 'TEST_FAKE_OWN_TRANSLATION_KEY_0001'; g.state.providerStatus = 401;
+    const response = await g.invoke(body());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'PROVIDER_REJECTED_KEY' });
+    const client = new VNextTranslationGatewayClient(async () => ({ data: { error: 'PROVIDER_REJECTED_KEY' }, error: { message: 'x' } }));
+    await expect(client.translate(body())).rejects.toMatchObject({ code: 'PROVIDER_REJECTED_KEY' });
+  });
+  it('a failed Vault read is temporary (503 PROVIDER_UNAVAILABLE), never "no key"', async () => {
+    const g = gateway(); g.state.userKey = null; g.state.userKeyReadFails = true;
+    const response = await g.invoke(body());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'PROVIDER_UNAVAILABLE' });
+    expect(g.fakeProvider).not.toHaveBeenCalled();
   });
 });

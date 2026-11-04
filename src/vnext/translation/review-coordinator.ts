@@ -41,14 +41,22 @@ export interface TranslationReviewOptions {
   readonly createMutationId: () => string;
 }
 
+// Same text as USER_AI_KEY_MISSING_MESSAGE / USER_AI_KEY_QUOTA_HINT (ai-catalog/user-ai-key.ts; a test keeps them equal).
+// Inlined because this coordinator must not depend on the ai-catalog graph (architecture boundary).
+export const TRANSLATION_USER_AI_KEY_MISSING_MESSAGE = 'Para usar a IA, cadastre a sua chave de IA do Google: volte à tela “Meus catálogos”, ' +
+  'clique em “Minha conta” e depois em “Minha chave de IA”. No assistente, também dá pelo menu ⚙ → Cadastrar minha chave de IA.';
+export const TRANSLATION_USER_AI_KEY_QUOTA_HINT = ' Se continuar, a cota da sua chave de IA pode ter acabado por hoje; confira no Google AI Studio.';
+
 function message(error: unknown): string {
   const code = error instanceof TranslationFoundationError ? error.code : String(error);
   if (code === 'STALE_RESULT') return 'O catálogo de origem mudou. Gere a tradução novamente.';
   if (code === 'TECHNICAL_TOKEN_MISMATCH') return 'Mantenha os códigos e valores técnicos da origem ao revisar.';
   if (code === 'UNSUPPORTED_LANGUAGE') return 'Escolha um catálogo em português (Brasil) para traduzir para espanhol ou inglês.';
+  if (code === 'USER_AI_KEY_MISSING') return TRANSLATION_USER_AI_KEY_MISSING_MESSAGE;
+  if (code === 'PROVIDER_REJECTED_KEY') return 'O Google recusou a sua chave de IA. Confira ou troque a chave em Minha conta → Minha chave de IA.';
   if (code === 'CREDENTIAL_UNAVAILABLE') return 'O serviço de tradução ainda não está configurado. Contate o administrador.';
   if (code === 'PAYLOAD_TOO_LARGE') return 'Esta etapa excede o limite atual do serviço de tradução. Contate o administrador; o original foi preservado.';
-  if (code === 'PROVIDER_RATE_LIMIT') return 'O serviço de tradução está ocupado. Aguarde um pouco e tente novamente; o original foi preservado.';
+  if (code === 'PROVIDER_RATE_LIMIT') return 'O serviço de tradução está ocupado. Aguarde um pouco e tente novamente; o original foi preservado.' + TRANSLATION_USER_AI_KEY_QUOTA_HINT;
   if (code === 'PROVIDER_UNAVAILABLE') return 'A conexão com o serviço de tradução falhou. Confira sua conexão e tente novamente; o original foi preservado.';
   if (code === 'INVALID_PROVIDER_RESPONSE') return 'Não foi possível validar todos os textos recebidos. Tente novamente; nenhuma cópia incompleta foi criada.';
   if (code === 'UNCLASSIFIED_TEXT_SURFACE') return 'Há conteúdo neste catálogo que o serviço ainda não consegue traduzir. Contate o administrador; o original foi preservado.';
