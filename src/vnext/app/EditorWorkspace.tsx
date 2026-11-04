@@ -445,8 +445,13 @@ export function EditorWorkspace({
   const [newMarkerCode, setNewMarkerCode] = React.useState('');
   const [newMarkerText, setNewMarkerText] = React.useState('');
   const [tableTitleDraft, setTableTitleDraft] = React.useState<TableTitleDraftSession | null>(null);
+  /**
+   * The drafts the authoring barrier reads (title, cell, position/size) live in refs that every writer sets together
+   * with the state; render never copies the state back. A render at higher priority than a pending update still
+   * sees the old state, and copying it brought back a draft that was already gone: autosave heard "draft pending"
+   * and stopped for good (j04 @1280, "Criar tabela" while the previous save was being confirmed).
+   */
   const tableTitleDraftRef = React.useRef<TableTitleDraftSession | null>(null);
-  tableTitleDraftRef.current = tableTitleDraft;
   const [newAnnotationKind, setNewAnnotationKind] = React.useState<'caption' | 'note' | 'footnote'>('note');
   const [newAnnotationText, setNewAnnotationText] = React.useState('');
   const [newAnnotationTarget, setNewAnnotationTarget] = React.useState<'TABLE' | 'CELL'>('TABLE');
@@ -465,8 +470,8 @@ export function EditorWorkspace({
   const [tableRangeExtensionArmed, setTableRangeExtensionArmed] = React.useState(false);
   const tableSelectionRef = React.useRef<TableSelection | null>(null);
   const [cellDraft, setCellDraft] = React.useState<TableCellDraft | null>(null);
+  /** Set together with `setCellDraft` by every writer, never from render (see `tableTitleDraftRef`). */
   const cellDraftRef = React.useRef<TableCellDraft | null>(null);
-  cellDraftRef.current = cellDraft;
   const cellEditorFieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null>(null);
   const tableHistoryContextRef = React.useRef<{ table: TableModel; selection: TableSelection } | null>(null);
   tableSelectionRef.current = tableSelection;
@@ -665,8 +670,9 @@ export function EditorWorkspace({
     setMeasuredLayout({ source, plans: nextPlans, snapshot: layoutSnapshot, diagnostics });
   }, [session]);
   const [inspectorDraft, setInspectorDraft] = React.useState<InspectorDraft>({ x: '', y: '', width: '', height: '' });
+  /** Set together with `setInspectorDraft` by every writer, never from render (see `tableTitleDraftRef`). */
   const inspectorDraftRef = React.useRef(inspectorDraft);
-  inspectorDraftRef.current = inspectorDraft;
+  /** Follows the render; the fields follow it in the same commit (layout effect below), never a task later. */
   const inspectorTargetRef = React.useRef<{
     pageId: string;
     objectId: string;
@@ -859,7 +865,9 @@ export function EditorWorkspace({
     textarea.setSelectionRange(end, end);
   }, [textEditObjectId]);
 
-  React.useEffect(() => {
+  // A layout effect, so the fields and `inspectorTargetRef` change in the same commit: in a passive effect a save
+  // confirmed in between found the new frame next to the old fields and took them for a typed size.
+  React.useLayoutEffect(() => {
     if (!selectedObject) {
       const empty = { x: '', y: '', width: '', height: '' };
       inspectorDraftRef.current = empty;
@@ -870,6 +878,11 @@ export function EditorWorkspace({
     inspectorDraftRef.current = next;
     setInspectorDraft(next);
   }, [selectedObject]);
+  // After every commit (and after the fields above follow the selection): whether a draft is pending is read from
+  // refs and from the render, which change without a publish. Automatic save only looks again on a publish, so
+  // when the answer changed, the workspace publishes; autosave never stays disarmed in silence.
+  const draftStateWorkspace = persistence?.runtime.workspace;
+  React.useLayoutEffect(() => { draftStateWorkspace?.syncDraftState(); });
 
   React.useEffect(() => {
     const cancelOnWindowBlur = () => {

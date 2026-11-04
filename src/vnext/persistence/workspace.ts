@@ -209,6 +209,8 @@ export class PersistenceWorkspace {
   private loadingAssetIds: ReadonlySet<string> = NO_LOADING_ASSETS;
   private savedAt: number | undefined;
   private retry: SaveRetryProjection | undefined;
+  /** What the authoring barrier answered when `snapshot` was built (see `syncDraftState`). */
+  private publishedPendingDraft = false;
   private snapshot: PersistenceWorkspaceSnapshot;
 
   constructor(
@@ -244,8 +246,8 @@ export class PersistenceWorkspace {
     this.blockedSource = undefined;
   }
 
-  private computeDirty(): boolean {
-    if (this.barrier.hasPendingDraft()) return true;
+  private computeDirty(pendingDraft: boolean): boolean {
+    if (pendingDraft) return true;
     const current = canonicalDocumentEquivalence(this.session.getSnapshot().document);
     return this.binding.kind === 'PERSISTED'
       ? current !== this.binding.acknowledgedEquivalence
@@ -253,7 +255,9 @@ export class PersistenceWorkspace {
   }
 
   private buildSnapshot(): PersistenceWorkspaceSnapshot {
-    const dirty = this.computeDirty();
+    const pendingDraft = this.barrier.hasPendingDraft();
+    this.publishedPendingDraft = pendingDraft;
+    const dirty = this.computeDirty(pendingDraft);
     return {
       session: this.session,
       binding: this.binding,
@@ -304,6 +308,17 @@ export class PersistenceWorkspace {
   notifyDraftStateChanged(): void {
     if (this.blockedSource === 'authoring') this.clearPhase();
     this.publish();
+  }
+
+  /**
+   * The barrier answers from editor state that can change in a render or an effect, with nobody publishing.
+   * Automatic save only looks again when this workspace publishes, so a draft that ended in silence left it
+   * disarmed on "Alterações não salvas" for good (j04 @1280). The editor calls this after every commit: when the
+   * barrier no longer gives the answer the current snapshot was built with, publish again.
+   */
+  syncDraftState(): void {
+    if (this.barrier.hasPendingDraft() === this.publishedPendingDraft) return;
+    this.notifyDraftStateChanged();
   }
 
   setAuthoringBlocked(message: string): void {
